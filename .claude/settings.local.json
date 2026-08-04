@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import ast; [ast.parse\\(open\\(f, encoding='utf-8'\\).read\\(\\), f\\) for f in ['app/main.py','app/core/config/settings.py','app/core/config/__init__.py','app/core/logging/logger.py']]\")"
+    ]
+  }
+}

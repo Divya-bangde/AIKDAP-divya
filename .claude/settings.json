@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker run *)",
+      "Bash(docker exec *)",
+      "Bash(break)",
+      "Bash(docker rm *)",
+      "Bash(rm -rf /tmp/aikdap_venv2)",
+      "Bash(python -m venv /tmp/aikdap_venv2)",
+      "Bash(\"/tmp/aikdap_venv2/Scripts/python.exe\" -m pip install --quiet fastapi pydantic-settings structlog python-dotenv \"sqlalchemy[asyncio]==2.0.43\" \"psycopg[binary]==3.2.9\" alembic==1.16.4 greenlet)",
+      "Bash(export DATABASE_URL=\"postgresql+psycopg://aikdap:aikdap@localhost:15433/aikdap_test\")",
+      "Bash(export APP_NAME=AIKDAP)",
+      "Bash(\"/c/Users/Divya Bangde/AppData/Local/Temp/aikdap_venv2/Scripts/python.exe\" \"C:/Users/DIVYAB~1/AppData/Local/Temp/claude/c--Users-Divya-Bangde-OneDrive-Desktop-My-projects-AIKDAP/e139018c-64cb-42e9-bbfe-5eb4075572b1/scratchpad/db_smoke_test.py\")",
+      "Bash(\"/c/Users/Divya Bangde/AppData/Local/Temp/aikdap_venv2/Scripts/python.exe\" -m alembic revision --autogenerate -m \"sprint2_smoke_test\")",
+      "Bash(\"/c/Users/Divya Bangde/AppData/Local/Temp/aikdap_venv2/Scripts/python.exe\" -m alembic upgrade head)",
+      "Bash(\"/c/Users/Divya Bangde/AppData/Local/Temp/aikdap_venv2/Scripts/python.exe\" -m alembic downgrade base)"
+    ]
+  }
+}
