@@ -17,6 +17,20 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from app.core.config import settings
 from app.database.base import Base
 
+# Model modules must be imported here so their tables register on
+# `Base.metadata` before autogenerate inspects it. Add new modules'
+# model imports alongside this one as they are implemented.
+from app.modules.assets.models import Asset  # noqa: F401
+from app.modules.auth.models import User  # noqa: F401
+from app.modules.knowledge_base.models import KnowledgeChunk  # noqa: F401
+from app.modules.projects.models import Project  # noqa: F401
+from app.modules.research.models import (  # noqa: F401
+    AgentMessage,
+    ResearchRun,
+    ResearchStep,
+)
+from app.modules.tasks.models import Task  # noqa: F401
+
 if sys.platform == "win32":
     # psycopg's async driver requires the selector event loop; asyncio's
     # default ProactorEventLoop on Windows cannot drive it.

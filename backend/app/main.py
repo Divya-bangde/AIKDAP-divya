@@ -13,6 +13,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.logging.logger import configure_logging, get_logger
+from app.modules.assets.router import router as assets_router
+from app.modules.auth.router import router as auth_router
+from app.modules.knowledge_base.router import router as knowledge_base_router
+from app.modules.projects.router import router as projects_router
+from app.modules.research.router import router as research_router
+from app.modules.tasks.router import router as tasks_router
 
 configure_logging()
 logger = get_logger(__name__)
@@ -50,9 +56,13 @@ app.add_middleware(
 )
 
 # Feature routers are registered here under the versioned API prefix
-# as they are implemented, e.g.:
-# from app.modules.health.router import router as health_router
-# app.include_router(health_router, prefix=settings.api_v1_prefix)
+# as they are implemented.
+app.include_router(auth_router, prefix=settings.api_v1_prefix)
+app.include_router(projects_router, prefix=settings.api_v1_prefix)
+app.include_router(assets_router, prefix=settings.api_v1_prefix)
+app.include_router(tasks_router, prefix=settings.api_v1_prefix)
+app.include_router(knowledge_base_router, prefix=settings.api_v1_prefix)
+app.include_router(research_router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/", tags=["Root"])

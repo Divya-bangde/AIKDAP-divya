@@ -1,7 +1,26 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -c \"import ast; [ast.parse\\(open\\(f, encoding='utf-8'\\).read\\(\\), f\\) for f in ['app/main.py','app/core/config/settings.py','app/core/config/__init__.py','app/core/logging/logger.py']]\")"
+      "Bash(python -c \"import ast; [ast.parse\\(open\\(f, encoding='utf-8'\\).read\\(\\), f\\) for f in ['app/main.py','app/core/config/settings.py','app/core/config/__init__.py','app/core/logging/logger.py']]\")",
+      "Bash(python -c \"import requests; print\\('ok', requests.__version__\\)\")",
+      "Bash(python \"C:/Users/DIVYAB~1/AppData/Local/Temp/claude/c--Users-Divya-Bangde-OneDrive-Desktop-My-projects-AIKDAP/e139018c-64cb-42e9-bbfe-5eb4075572b1/scratchpad/assets_e2e_test.py\")",
+      "Bash(python \"C:/Users/DIVYAB~1/AppData/Local/Temp/claude/c--Users-Divya-Bangde-OneDrive-Desktop-My-projects-AIKDAP/e139018c-64cb-42e9-bbfe-5eb4075572b1/scratchpad/tasks_e2e_test.py\")",
+      "Bash(curl -s http://localhost:8001/openapi.json)",
+      "Bash(python -c ' *)",
+      "Bash(MSYS_NO_PATHCONV=1 docker exec -d aikdap_backend sh -c \"celery -A app.workers.celery_app worker --loglevel=info --pool=solo > /tmp/celery.log 2>&1\")",
+      "Bash(MSYS_NO_PATHCONV=1 docker exec aikdap_backend cat /tmp/celery.log)",
+      "Bash(MSYS_NO_PATHCONV=1 docker exec aikdap_backend sh -c 'for p in /proc/[0-9]*; do pid=$\\(basename $p\\); cmd=$\\(tr '\\\\''\\\\0'\\\\'' '\\\\'' '\\\\'' < $p/cmdline 2>/dev/null\\); if echo \"$cmd\" | grep -q celery; then echo \"$pid: $cmd\"; fi; done')",
+      "Bash(MSYS_NO_PATHCONV=1 docker exec aikdap_backend sh -c 'kill -9 185 198 204 218 224 2>/dev/null; sleep 1; for p in /proc/[0-9]*; do pid=$\\(basename $p\\); cmd=$\\(tr '\\\\''\\\\0'\\\\'' '\\\\'' '\\\\'' < $p/cmdline 2>/dev/null\\); if echo \"$cmd\" | grep -q celery; then echo \"still running: $pid\"; fi; done; echo done')",
+      "Bash(MSYS_NO_PATHCONV=1 docker exec aikdap_backend sh -c \"cat /proc/280/cmdline 2>/dev/null | tr '\\\\0' ' '; echo\")",
+      "Bash(MSYS_NO_PATHCONV=1 docker exec aikdap_backend tail -30 /tmp/celery.log)",
+      "Bash(python \"C:/Users/DIVYAB~1/AppData/Local/Temp/claude/c--Users-Divya-Bangde-OneDrive-Desktop-My-projects-AIKDAP/e139018c-64cb-42e9-bbfe-5eb4075572b1/scratchpad/pipeline_e2e_test.py\")",
+      "Bash(MSYS_NO_PATHCONV=1 docker exec aikdap_backend tail -60 /tmp/celery.log)",
+      "Bash(MSYS_NO_PATHCONV=1 docker exec aikdap_backend sh -c 'for p in /proc/[0-9]*; do pid=$\\(basename $p\\); cmd=$\\(tr '\\\\''\\\\0'\\\\'' '\\\\'' '\\\\'' < $p/cmdline 2>/dev/null\\); if echo \"$cmd\" | grep -q '\\\\''celery -A'\\\\''; then kill -9 $pid 2>/dev/null; echo \"killed $pid\"; fi; done')",
+      "Bash(MSYS_NO_PATHCONV=1 docker exec aikdap_backend sh -c \"find /app/uploads -type f 2>/dev/null\")",
+      "Bash(MSYS_NO_PATHCONV=1 docker exec aikdap_backend sh -c \"rm -rf /app/uploads/*\")",
+      "Bash(MSYS_NO_PATHCONV=1 docker exec aikdap_backend tail -25 /tmp/celery.log)",
+      "Bash(echo \"grep exit: $? \\(no output above = clean\\)\")",
+      "Bash(docker compose *)"
     ]
   }
 }
