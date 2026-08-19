@@ -1,1 +1,104 @@
--r backend/requirements.txt
+# ===========================
+# Web Framework
+# ===========================
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+
+# ===========================
+# Configuration
+# ===========================
+pydantic==2.11.7
+pydantic-settings==2.10.1
+python-dotenv==1.1.1
+
+# ===========================
+# Database
+# ===========================
+sqlalchemy==2.0.43
+psycopg[binary]==3.2.9
+alembic==1.16.4
+
+# pgvector's SQLAlchemy `Vector` column type + psycopg codec
+# registration (Sprint 9C). No transitive dependencies of its own.
+pgvector==0.5.0
+
+# ===========================
+# Authentication & Security
+# ===========================
+python-jose[cryptography]==3.5.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.3.0
+
+# ===========================
+# Redis & Background Tasks
+# ===========================
+redis==6.4.0
+celery==5.5.3
+
+# ===========================
+# AI Framework
+# ===========================
+langchain==0.3.27
+langgraph==0.6.5
+langchain-openai==0.3.31
+langchain-community==0.3.27
+
+# LLM gateway / model routing.
+#
+# Pinned to 1.80.0 rather than the latest release on purpose: litellm
+# >= 1.96 requires openai>=2.20 and pydantic-settings>=2.14.1, which
+# conflict with langchain-openai 0.3.31 (openai<2.0.0) and would force
+# an unrelated upgrade of the settings library the whole app depends
+# on. 1.80.0 is the newest release compatible with the existing pins.
+litellm==1.80.0
+
+# ===========================
+# Vector Database
+# ===========================
+chromadb==1.0.20
+
+# ===========================
+# HTTP & Utilities
+# ===========================
+httpx==0.28.1
+requests==2.32.5
+orjson==3.11.2
+tenacity==9.1.2
+
+# ===========================
+# Data Processing
+# ===========================
+pandas==2.3.2
+numpy==2.3.2
+openpyxl==3.1.5
+python-multipart==0.0.20
+
+# ===========================
+# Validation & Serialization
+# ===========================
+email-validator==2.3.0
+
+# ===========================
+# Logging
+# ===========================
+structlog==25.4.0
+
+# ===========================
+# Testing
+# ===========================
+pytest==8.4.1
+pytest-asyncio==1.1.0
+pytest-cov==6.2.1
+
+# ===========================
+# Code Quality
+# ===========================
+black==25.1.0
+isort==6.0.1
+ruff==0.12.9
+mypy==1.17.1
+
+# ===========================
+# Development
+# ===========================
+watchfiles==1.1.0
