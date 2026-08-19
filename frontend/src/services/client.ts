@@ -7,9 +7,9 @@ import type { components } from "@/types/api";
  * `request()`/`requestForm()` here — see
  * `test_services_do_not_call_fetch_directly` for the guard. */
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
-if (!BASE_URL) {
+if (import.meta.env.DEV && !BASE_URL) {
   // Fails loudly at import time rather than producing confusing
   // "Failed to fetch relative URL" errors deep in a component tree.
   throw new Error(
