@@ -1,0 +1,79 @@
+import { useMutation } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
+import { type FormEvent, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { messageFor } from "@/lib/api-error";
+import * as authService from "@/services/auth";
+
+interface RegisterFormProps {
+  onRegistered: (email: string) => void;
+}
+
+export function RegisterForm({ onRegistered }: RegisterFormProps) {
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [password, setPassword] = useState("");
+
+  const registerMutation = useMutation({
+    mutationFn: authService.register,
+    onSuccess: () => onRegistered(email),
+  });
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    registerMutation.mutate({ email, password, full_name: fullName || null });
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="register-name">Full name (optional)</Label>
+        <Input
+          id="register-name"
+          value={fullName}
+          onChange={(event) => setFullName(event.target.value)}
+          placeholder="Jane Researcher"
+        />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="register-email">Email</Label>
+        <Input
+          id="register-email"
+          type="email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="you@example.com"
+        />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="register-password">Password</Label>
+        <Input
+          id="register-password"
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={8}
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          placeholder="At least 8 characters"
+        />
+      </div>
+
+      {registerMutation.isError && (
+        <p role="alert" className="text-sm text-destructive">
+          {messageFor(registerMutation.error)}
+        </p>
+      )}
+
+      <Button type="submit" disabled={registerMutation.isPending} className="mt-1">
+        {registerMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+        {registerMutation.isPending ? "Creating account…" : "Create account"}
+      </Button>
+    </form>
+  );
+}

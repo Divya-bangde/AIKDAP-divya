@@ -1,0 +1,33 @@
+# Secrets — never commit. `.env` holds live API keys (Gemini, Groq,
+# OpenAI) and database credentials; `.env.example` is the committed
+# template and must contain empty placeholders only.
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Test and tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Runtime artifacts
+backend/uploads/
+*.log
+
+# Frontend (Sprint 9K)
+# src/types/api.d.ts is generated (`npm run generate:api`) but
+# committed on purpose, like a lockfile — `npm run build` must work
+# without a live backend available to regenerate it.
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/*.tsbuildinfo
