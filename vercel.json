@@ -2,10 +2,10 @@
   "version": 2,
   "builds": [
     {
-      "src": "frontend/package.json",
+      "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "dist"
+        "distDir": "frontend/dist"
       }
     },
     {
@@ -27,16 +27,11 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "/(.*)",
-      "dest": "/frontend/$1",
-      "continue": true
-    },
-    {
       "handle": "filesystem"
     },
     {
-      "src": "/frontend/(.*)",
-      "dest": "/frontend/index.html"
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
