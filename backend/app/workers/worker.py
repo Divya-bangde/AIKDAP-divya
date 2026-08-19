@@ -19,6 +19,10 @@ the target module by convention, and `app = celery_app` is what makes
 `-A app.workers.worker` resolve correctly.
 """
 
+import asyncio
+
+from celery.signals import worker_ready
+
 from app.core.logging.logger import configure_logging, get_logger
 from app.workers.celery_app import celery_app
 
@@ -29,8 +33,21 @@ logger = get_logger(__name__)
 # their tasks on `celery_app` purely by being imported.
 import app.workers.tasks  # noqa: E402,F401
 import app.workers.scheduler  # noqa: E402,F401
+from app.workers.reconciliation import reconcile_stale_research_runs_on_startup  # noqa: E402
 
 app = celery_app
+
+
+@worker_ready.connect
+def _reconcile_on_startup(**_kwargs: object) -> None:
+    """Sprint 9J: recover any `ResearchRun` left at `RUNNING` by a
+    previous instance of this worker that never returned (crash, OOM,
+    container restart). Runs once, after Celery reports this process
+    ready to accept tasks — see `app.workers.reconciliation` for why
+    this replaces a Celery Beat schedule this project does not have.
+    """
+    asyncio.run(reconcile_stale_research_runs_on_startup())
+
 
 logger.info(
     "worker_process_initialized",

@@ -1,29 +1,41 @@
+import { motion } from "motion/react";
+import { Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusBadge } from "@/components/common/StatusBadge";
+import { ProcessingTimeline } from "@/features/assets/ProcessingTimeline";
+import { staggerContainer, staggerItem } from "@/lib/motion";
 import type { components } from "@/types/api";
 
-type AIProfile = components["schemas"]["AIProfile"];
+type AssetRead = components["schemas"]["AssetRead"];
 
 /** Renders exactly the fields `AIProfile` returns — nothing invented
  * while processing is still in flight (Phase 14/16: "Do not fabricate
  * metadata while processing"). A field that's `null`/empty shows as
- * "Not yet available" rather than being silently omitted, so it's
- * clear the absence is real backend state, not a rendering bug. */
-export function AiProfilePanel({ profile }: { profile: AIProfile }) {
+ * "Not provided" rather than being silently omitted, so it's clear the
+ * absence is real backend state, not a rendering bug. */
+export function AiProfilePanel({ asset }: { asset: AssetRead }) {
+  const profile = asset.ai_profile;
   const hasContent = profile.status === "completed";
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">AI Understanding</CardTitle>
-          <StatusBadge domain="aiProfile" value={profile.status} />
+    <Card className="sticky top-24">
+      <CardHeader className="flex-row items-center justify-between space-y-0">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-ai" />
+          <CardTitle>AI Understanding</CardTitle>
         </div>
+        <StatusBadge domain="aiProfile" value={profile.status} />
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+
+      <CardContent className="flex flex-col gap-5">
+        <div className="rounded-lg border border-border bg-sunken p-4">
+          <p className="mb-3 text-label uppercase text-muted-foreground">Ingestion pipeline</p>
+          <ProcessingTimeline asset={asset} />
+        </div>
+
         {profile.status === "failed" && profile.error && (
           <p className="text-sm text-destructive">{profile.error}</p>
         )}
@@ -35,62 +47,89 @@ export function AiProfilePanel({ profile }: { profile: AIProfile }) {
         )}
         {profile.status === "pending" && (
           <p className="text-sm text-muted-foreground">
-            AI understanding has not run for this document yet.
+            AI understanding has not completed for this document yet.
           </p>
         )}
 
         {hasContent && (
-          <>
-            <Field label="Summary">
-              <p className="text-sm text-foreground">
-                {profile.summary || "Not provided"}
-              </p>
-            </Field>
+          <motion.div
+            initial="hidden"
+            animate="visible"
+            variants={staggerContainer}
+            className="flex flex-col gap-5"
+          >
+            <motion.div variants={staggerItem}>
+              <Field label="Summary">
+                <p className="text-sm leading-relaxed text-foreground">
+                  {profile.summary || "Not provided"}
+                </p>
+              </Field>
+            </motion.div>
 
-            <Field label="Keywords">
-              {profile.keywords && profile.keywords.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {profile.keywords.map((keyword) => (
-                    <Badge key={keyword} variant="secondary">
-                      {keyword}
-                    </Badge>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">Not provided</p>
-              )}
-            </Field>
+            <motion.div variants={staggerItem}>
+              <Field label="Keywords">
+                {profile.keywords && profile.keywords.length > 0 ? (
+                  <motion.div
+                    initial="hidden"
+                    animate="visible"
+                    variants={staggerContainer}
+                    className="flex flex-wrap gap-1.5"
+                  >
+                    {profile.keywords.map((keyword) => (
+                      <motion.span key={keyword} variants={staggerItem}>
+                        <Badge variant="secondary">{keyword}</Badge>
+                      </motion.span>
+                    ))}
+                  </motion.div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Not provided</p>
+                )}
+              </Field>
+            </motion.div>
 
-            <Field label="Entities">
-              <p className="text-sm text-foreground">
-                {profile.entities && profile.entities.length > 0
-                  ? profile.entities.join(", ")
-                  : "Not provided"}
-              </p>
-            </Field>
+            <motion.div variants={staggerItem}>
+              <Field label="Entities">
+                {profile.entities && profile.entities.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {profile.entities.map((entity) => (
+                      <Badge key={entity} variant="outline">
+                        {entity}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Not provided</p>
+                )}
+              </Field>
+            </motion.div>
 
-            <Field label="Topics">
-              <p className="text-sm text-foreground">
-                {profile.topics && profile.topics.length > 0
-                  ? profile.topics.join(" · ")
-                  : "Not provided"}
-              </p>
-            </Field>
+            <motion.div variants={staggerItem}>
+              <Field label="Topics">
+                <p className="text-sm text-foreground">
+                  {profile.topics && profile.topics.length > 0
+                    ? profile.topics.join(" · ")
+                    : "Not provided"}
+                </p>
+              </Field>
+            </motion.div>
 
-            <div className="grid grid-cols-2 gap-4 border-t border-border pt-4 text-sm">
+            <motion.div
+              variants={staggerItem}
+              className="grid grid-cols-2 gap-4 border-t border-border pt-4 sm:grid-cols-3"
+            >
               <Field label="Language">
-                <p>{profile.language ?? "Not provided"}</p>
+                <p className="text-sm">{profile.language ?? "Not provided"}</p>
               </Field>
               <Field label="Generated by">
-                <p>{profile.generated_by ?? "Not provided"}</p>
+                <p className="font-mono text-xs">{profile.generated_by ?? "Not provided"}</p>
               </Field>
               {profile.confidence !== null && profile.confidence !== undefined && (
                 <Field label="Confidence">
-                  <p>{(profile.confidence * 100).toFixed(0)}%</p>
+                  <p className="tabular text-sm">{(profile.confidence * 100).toFixed(0)}%</p>
                 </Field>
               )}
-            </div>
-          </>
+            </motion.div>
+          </motion.div>
         )}
       </CardContent>
     </Card>
@@ -99,10 +138,8 @@ export function AiProfilePanel({ profile }: { profile: AIProfile }) {
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-1">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
+    <div className="flex flex-col gap-1.5">
+      <p className="text-label uppercase text-muted-foreground">{label}</p>
       {children}
     </div>
   );

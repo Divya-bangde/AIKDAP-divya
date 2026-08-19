@@ -1,7 +1,13 @@
 """Data-access layer for the `KnowledgeChunk` model.
 
 Contains only persistence operations; transaction boundaries (commit)
-and ownership rules live in `service.py`.
+and ownership rules live in `service.py`. The one exception is
+`search_similar`: it takes `owner_id` and joins against `Project`
+directly, enforcing ownership at the SQL level rather than trusting a
+separate pre-check the caller could forget — a stricter guarantee than
+`list_by_project`'s pattern (an explicit `project_id`, previously
+validated by the caller), appropriate for a new query that can
+optionally span every project a user owns.
 """
 
 import uuid
@@ -9,7 +15,9 @@ import uuid
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.assets.enums import EmbeddingStatus
 from app.modules.knowledge_base.models import KnowledgeChunk
+from app.modules.projects.models import Project
 
 
 class KnowledgeChunkRepository:
@@ -57,3 +65,41 @@ class KnowledgeChunkRepository:
         for chunk in chunks:
             await self._session.refresh(chunk)
         return chunks
+
+    async def search_similar(
+        self,
+        owner_id: uuid.UUID,
+        *,
+        query_vector: list[float],
+        project_id: uuid.UUID | None = None,
+        asset_id: uuid.UUID | None = None,
+        top_k: int = 10,
+    ) -> list[tuple[KnowledgeChunk, float]]:
+        """Rank chunks by cosine distance to `query_vector`, scoped to
+        projects the given user owns.
+
+        Returns `(chunk, distance)` pairs in ascending distance (most
+        similar first) — pgvector's `<=>` cosine-distance operator,
+        via `Vector.cosine_distance`, exposed directly rather than
+        computed in Python so the database does the ranking and
+        `top_k` limiting itself. Only chunks with a completed
+        embedding are eligible: a `PENDING`/`FAILED` row has no vector
+        to compare against, and a stale one from a previous provider
+        would silently corrupt ranking.
+        """
+        distance = KnowledgeChunk.embedding.cosine_distance(query_vector)
+        stmt = (
+            select(KnowledgeChunk, distance.label("distance"))
+            .join(Project, Project.id == KnowledgeChunk.project_id)
+            .where(Project.owner_id == owner_id)
+            .where(KnowledgeChunk.embedding.is_not(None))
+            .where(KnowledgeChunk.embedding_status == EmbeddingStatus.COMPLETED)
+        )
+        if project_id is not None:
+            stmt = stmt.where(KnowledgeChunk.project_id == project_id)
+        if asset_id is not None:
+            stmt = stmt.where(KnowledgeChunk.asset_id == asset_id)
+        stmt = stmt.order_by(distance.asc()).limit(top_k)
+
+        result = await self._session.execute(stmt)
+        return [(row[0], float(row[1])) for row in result.all()]

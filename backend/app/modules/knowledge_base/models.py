@@ -1,19 +1,24 @@
 """KnowledgeChunk ORM model — the atomic unit of the knowledge base.
 
 Each chunk is a slice of text extracted and split from one asset.
-`embedding_vector` is stored as JSONB (a plain list of floats) rather
-than a native `vector` column: adding a real embedding provider means
-adding the `pgvector` extension and migrating this column then,
-without speculatively depending on it now.
+
+`embedding` is a native pgvector column (Sprint 9C), replacing the
+JSONB placeholder Sprint 6 originally shipped here — that column's own
+docstring said adding a real embedding provider meant "adding the
+pgvector extension and migrating this column then," and no chunk in
+any environment had ever had a non-null value in it (verified before
+migrating), so this is that migration, not a second representation
+living alongside the first.
 """
 
 import uuid
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.config import settings
 from app.database.base import BaseModel
 from app.modules.assets.enums import EmbeddingStatus
 from app.modules.knowledge_base.enums import EmbeddingProviderName
@@ -60,4 +65,6 @@ class KnowledgeChunk(BaseModel):
         ),
         nullable=True,
     )
-    embedding_vector: Mapped[list[float] | None] = mapped_column(JSONB, nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(settings.embedding_dimension), nullable=True
+    )

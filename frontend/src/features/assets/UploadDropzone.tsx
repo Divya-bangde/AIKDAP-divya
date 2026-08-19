@@ -1,8 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "motion/react";
 import { Loader2, UploadCloud } from "lucide-react";
 import { type ChangeEvent, type DragEvent, useRef, useState } from "react";
 
 import { messageFor } from "@/lib/api-error";
+import { fadeIn } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import * as assetsService from "@/services/assets";
 
 /** Formats accepted here match `_PLAIN_TEXT_MIME_TYPES` in
@@ -40,48 +43,81 @@ export function UploadDropzone({ projectId }: { projectId: string }) {
     event.target.value = "";
   }
 
+  const uploading = uploadMutation.isPending;
+
   return (
     <div className="flex flex-col gap-2">
-      <div
+      {/* No role/tabIndex/onClick on this wrapper: a native file input
+       * nested inside a role="button" element is a real nested-interactive
+       * violation (confirmed live with axe-core -- a negative tabindex or
+       * aria-hidden on the input doesn't fix it, since assistive tech can
+       * still reach it). The `<label>` below is the single interactive
+       * control; the input keeps native keyboard/click behavior for free. */}
+      <motion.div
         onDragOver={(event) => {
           event.preventDefault();
           setIsDragging(true);
         }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") inputRef.current?.click();
-        }}
-        aria-label="Upload research document"
-        className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-10 text-center transition-colors ${
-          isDragging ? "border-primary bg-accent/50" : "border-border hover:border-primary/50"
-        }`}
-      >
-        {uploadMutation.isPending ? (
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        ) : (
-          <UploadCloud className="h-8 w-8 text-muted-foreground" />
+        animate={{ scale: isDragging ? 1.01 : 1 }}
+        transition={{ duration: 0.15 }}
+        className={cn(
+          "relative overflow-hidden rounded-xl border-2 border-dashed transition-colors duration-200",
+          isDragging
+            ? "border-primary bg-accent/40"
+            : uploading
+              ? "border-ai/50 bg-ai-soft/40"
+              : "border-border bg-sunken/60 hover:border-border-strong",
         )}
-        <div>
-          <p className="text-sm font-medium">
-            {uploadMutation.isPending ? "Uploading…" : "Drag & drop, or choose a file"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Supported formats: {SUPPORTED_EXTENSIONS.join(", ")}
-          </p>
-        </div>
+      >
+        <label
+          htmlFor="document-upload-input"
+          className="flex cursor-pointer flex-col items-center justify-center gap-3 p-8 text-center"
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={uploading ? "uploading" : "idle"}
+              variants={fadeIn}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              className="flex flex-col items-center gap-3"
+            >
+              <div
+                className={cn(
+                  "flex h-12 w-12 items-center justify-center rounded-xl",
+                  uploading ? "bg-ai text-ai-foreground" : "bg-card text-muted-foreground shadow-subtle",
+                )}
+              >
+                {uploading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <UploadCloud className="h-5 w-5" />
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium">
+                  {uploading ? "Uploading document…" : "Drag & drop, or choose a file"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {uploading
+                    ? "Extraction, understanding and embedding begin automatically"
+                    : `Supported formats: ${SUPPORTED_EXTENSIONS.join(", ")}`}
+                </p>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </label>
         <input
+          id="document-upload-input"
           ref={inputRef}
           type="file"
           accept={SUPPORTED_EXTENSIONS.join(",")}
           className="sr-only"
           onChange={handleChange}
-          aria-hidden="true"
         />
-      </div>
+      </motion.div>
 
       {uploadMutation.isError && (
         <p role="alert" className="text-sm text-destructive">

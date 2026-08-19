@@ -18,7 +18,13 @@ describe("Login page", () => {
   it("renders the AIKDAP branding and the login form", () => {
     renderWithProviders(<Login />);
 
-    expect(screen.getByRole("heading", { name: "AIKDAP" })).toBeInTheDocument();
+    /* Two level-one headings exist in the markup — one in the wide
+     * brand panel, one in the narrow-viewport header — because only
+     * ever one of them is displayed, and a phone would otherwise have
+     * no `h1` at all (axe flagged exactly that at 390px). jsdom applies
+     * no media queries, so both are present here. */
+    const wordmarks = screen.getAllByRole("heading", { level: 1, name: "AIKDAP" });
+    expect(wordmarks).toHaveLength(2);
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();

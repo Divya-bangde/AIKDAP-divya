@@ -9,6 +9,46 @@
       name="description"
       content="AIKDAP turns documents into grounded research."
     />
+    <!--
+      Resolves the theme before first paint.
+
+      Without this the document renders unstyled-light for one frame
+      while the JS bundle loads, so a dark-theme user sees a white
+      flash on every load — the single most noticeable way a themed app
+      feels cheap. Kept inline and tiny on purpose: it must run before
+      the bundle, so it cannot be an import.
+
+      It reads only its own two localStorage keys and only ever tests
+      whether a token *exists*; no token value is read, copied, or
+      logged. It never throws (private-mode browsers can make
+      localStorage access itself raise).
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("aikdap-theme");
+          var preference = stored ? JSON.parse(stored).state.preference : null;
+          var auth = localStorage.getItem("aikdap-auth");
+          var signedIn = false;
+          if (auth) signedIn = Boolean(JSON.parse(auth).state.accessToken);
+
+          // The public entry experience is dark-only, whatever the
+          // saved application preference is (Sprint 9K.3).
+          var onLanding = window.location.pathname === "/" && !signedIn;
+
+          var dark = onLanding
+            ? true
+            : preference
+              ? preference === "dark"
+              : window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+          document.documentElement.classList.toggle("dark", dark);
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        } catch (error) {
+          /* Any failure just means the app resolves the theme on mount. */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -40,6 +40,33 @@ class ResearchStepStatus(str, enum.Enum):
     SKIPPED = "skipped"
 
 
+class ResearchGroundingStatus(str, enum.Enum):
+    """How well the final answer is supported by retrieved evidence.
+
+    Distinct from `ResearchRunStatus`: a run can complete successfully
+    and still be honestly unable to answer. The two questions "did the
+    workflow execute" and "is the answer supported" have different
+    answers and must not be collapsed into one field.
+
+    Assigned by the backend from the validated citation set, never
+    copied from what the model claimed about itself — a model asserting
+    it was grounded is not evidence that it was.
+    """
+
+    #: Every citation the model returned corresponds to evidence that
+    #: was actually supplied to it.
+    GROUNDED = "grounded"
+    #: At least one valid citation, but the model also returned
+    #: citation ids that were never supplied (those were rejected).
+    PARTIALLY_GROUNDED = "partially_grounded"
+    #: The evidence does not support an answer: nothing was retrieved,
+    #: or the model reported it could not answer from what it was given.
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+    #: Synthesis itself could not run or produced an unusable response.
+    #: No answer and no citations are recorded in this state.
+    FAILED = "failed"
+
+
 class AgentMessageRole(str, enum.Enum):
     """Who produced a transcript entry.
 

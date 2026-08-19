@@ -30,6 +30,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database.base import BaseModel
 from app.modules.research.enums import (
     AgentMessageRole,
+    ResearchGroundingStatus,
     ResearchRunStatus,
     ResearchStepStatus,
 )
@@ -87,7 +88,28 @@ class ResearchRun(BaseModel):
     objective: Mapped[str | None] = mapped_column(Text, nullable=True)
     plan: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     final_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
-    citations: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    # A list of structured citation objects (see
+    # `app.agents.planner.state.Citation`): reference, title, source,
+    # provider, snippet, score, and whether the evidence is simulated.
+    # Stored as JSONB, so carrying structure rather than bare reference
+    # strings needs no schema change.
+    citations: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
+    # How well the answer is supported by the evidence that reached the
+    # synthesizer. A column rather than a key inside `citations`,
+    # because it is a property of the run and needs to be queryable
+    # ("show me every run that could not be answered"), which a value
+    # buried in a JSONB list is not. Nullable: a run that fails before
+    # synthesis has no grounding to report, and null says exactly that
+    # rather than implying a verdict.
+    grounding_status: Mapped[ResearchGroundingStatus | None] = mapped_column(
+        SQLEnum(
+            ResearchGroundingStatus,
+            name="research_grounding_status_enum",
+            native_enum=True,
+            values_callable=_enum_values,
+        ),
+        nullable=True,
+    )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # The Celery task actually carrying out this run, so a run can be

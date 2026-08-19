@@ -62,17 +62,15 @@ describe("UploadDropzone", () => {
     const file = new File(["ABC Poultry FY2026"], "abc_poultry.txt", { type: "text/plain" });
 
     renderWithProviders(<UploadDropzone projectId="project-1" />);
-    const input = screen.getByLabelText("Upload research document").querySelector(
-      "input[type=file]",
-    ) as HTMLInputElement;
+    const input = screen.getByLabelText(/Drag & drop, or choose a file/) as HTMLInputElement;
     await user.upload(input, file);
 
-    expect(await screen.findByText("Uploading…")).toBeInTheDocument();
+    expect(await screen.findByText("Uploading document…")).toBeInTheDocument();
     expect(assetsService.uploadAsset).toHaveBeenCalledWith("project-1", file);
 
     resolveUpload(makeAsset());
     await waitFor(() => {
-      expect(screen.queryByText("Uploading…")).not.toBeInTheDocument();
+      expect(screen.queryByText("Uploading document…")).not.toBeInTheDocument();
     });
   });
 
@@ -85,9 +83,7 @@ describe("UploadDropzone", () => {
     const file = new File(["bad"], "bad.txt", { type: "text/plain" });
 
     renderWithProviders(<UploadDropzone projectId="project-1" />);
-    const input = screen.getByLabelText("Upload research document").querySelector(
-      "input[type=file]",
-    ) as HTMLInputElement;
+    const input = screen.getByLabelText(/Drag & drop, or choose a file/) as HTMLInputElement;
     await user.upload(input, file);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(

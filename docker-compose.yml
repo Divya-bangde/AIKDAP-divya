@@ -1,6 +1,15 @@
 services:
   postgres:
-    image: postgres:17
+    # Sprint 9C: the stock `postgres:17` image does not ship pgvector
+    # at all (`pg_available_extensions` returned zero rows for
+    # 'vector' -- confirmed live before switching). `pgvector/pgvector`
+    # is the official image: identical to `postgres:17`, same major
+    # version, same data directory format, plus the extension's
+    # shared libraries. Swapping it is safe for the existing
+    # `postgres_data` volume -- no dump/restore needed -- and
+    # `CREATE EXTENSION` is still applied explicitly via Alembic, not
+    # assumed from the image alone.
+    image: pgvector/pgvector:pg17
     container_name: aikdap_postgres
     restart: unless-stopped
 

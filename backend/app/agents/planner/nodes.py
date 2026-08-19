@@ -2,11 +2,10 @@
 
 Two kinds of thing live here, in that order:
 
-1. **Abstraction points** — `AssetRetriever`, `WebResearchProvider`,
-   `Synthesizer` — plus the implementations shipped this sprint. These
-   are where real semantic search, a real search API, and a real LLM
-   are dropped in later. Every node depends on the abstract contract,
-   never on a concrete implementation.
+1. **Abstraction points** — `AssetRetriever` and `WebResearchProvider`,
+   plus the implementations they resolve to. `Synthesizer` lives in
+   `synthesis.py` alongside its two real implementations. Every node
+   depends on the abstract contract, never on a concrete one.
 2. **The nodes themselves** — thin functions that resolve their
    dependencies from the graph config, call one strategy, and return a
    partial `ResearchState` update.
@@ -18,11 +17,11 @@ consumes the graph's update stream and persists those into
 free of transaction management and gives the Explainable-AI trace a
 single writer.
 
-`KnowledgeBaseAssetRetriever` is the one strategy that reads the
-database. It does so through the existing repositories — a downward
-dependency onto the data layer, not a dependency on another feature
-module's service — and never opens a session or commits itself; the
-caller injects the session-bound instance.
+`SemanticAssetRetriever` is the one strategy that reads the database.
+It does so through the knowledge base's own service — the two-stage
+retrieval built in Sprints 9C/9D — rather than reimplementing ranking
+here, and never opens a session or commits itself; the caller injects
+the session-bound instance.
 """
 
 import uuid
@@ -47,35 +46,61 @@ from app.agents.planner.prompts import (
     render_synthesis_prompt,
 )
 from app.agents.planner.state import (
+    PROVENANCE_KEYS,
     RETRIEVAL_NODES,
     AgentMessagePayload,
+    Citation,
     ResearchNode,
     ResearchState,
     RetrievedDocument,
+    degraded_warnings,
+)
+
+# `Synthesizer` and its implementations live in their own module; they
+# are imported (not re-declared) here because `GraphDependencies` and
+# the synthesis node need them. The dependency runs one way —
+# `nodes -> synthesis` — mirroring `nodes -> planner`.
+from app.agents.planner.synthesis import (  # noqa: F401 - re-exported for callers
+    ExtractiveSynthesizer,
+    GroundedSynthesizer,
+    SynthesisResult,
+    Synthesizer,
+    get_synthesizer,
 )
 from app.core.logging.logger import get_logger
 from app.modules.assets.repository import AssetRepository
-from app.modules.knowledge_base.repository import KnowledgeChunkRepository
+from app.modules.knowledge_base.service import KnowledgeBaseService
+
+# The state's `status` field mirrors the persisted run status, so the
+# vocabulary is taken from the existing enum rather than duplicated
+# here. `enums` is a dependency-free leaf module, so importing it
+# introduces no cycle.
+from app.modules.research.enums import ResearchRunStatus
 
 logger = get_logger(__name__)
-
-#: How many chunks to pull from the knowledge base before ranking. A
-#: bounded window keeps a large project from loading its entire corpus
-#: into memory; a real vector index replaces both the window and the
-#: keyword ranking below.
-CANDIDATE_CHUNK_LIMIT = 500
 
 #: Longest excerpt carried per evidence item. Long enough to be
 #: quotable, short enough that the merged context stays readable.
 SNIPPET_CHARACTERS = 700
 
+#: How many candidates stage 1 retrieves per requested result. The
+#: reranker needs a pool wider than the final answer set to reorder;
+#: `max_results` is what the caller asked to *see*, not what retrieval
+#: should consider.
+CANDIDATE_MULTIPLIER = 4
+
 #: Upper bound on the merged working context. Stands in for the token
 #: budget a real model would impose.
 MAX_CONTEXT_CHARACTERS = 12_000
 
-#: Marks evidence that did not come from a real source, so nothing
-#: downstream can mistake it for genuine data.
-SIMULATED_SOURCE = "web"
+#: Source label for external evidence. Whether that evidence is real is
+#: carried per-document on `RetrievedDocument.simulated`, not inferred
+#: from this string — inferring it here is what previously caused every
+#: web reference to be dropped from the citation list.
+WEB_SOURCE = "web"
+
+#: Source label for evidence from the project's own knowledge base.
+ASSET_SOURCE = "asset"
 
 
 # ---------------------------------------------------------------------------
@@ -86,18 +111,20 @@ SIMULATED_SOURCE = "web"
 class AssetRetriever(ABC):
     """Contract for retrieving evidence from a project's own assets.
 
-    Integration point for semantic search: an implementation backed by
-    ChromaDB (or pgvector) replaces the keyword ranking below without
-    changing the node, the graph, or the API.
+    `owner_id` is part of the contract rather than something the caller
+    filters on afterwards: an implementation must scope its *query* to
+    the owner, so evidence the caller does not own is never loaded, let
+    alone sent to a model. Retrieving broadly and filtering later is
+    the failure mode this signature exists to prevent.
     """
 
     name: str = "abstract"
 
     @abstractmethod
     async def retrieve(
-        self, *, project_id: uuid.UUID, query: str, limit: int
+        self, *, owner_id: uuid.UUID, project_id: uuid.UUID, query: str, limit: int
     ) -> list[RetrievedDocument]:
-        """Return the most relevant evidence items for the query."""
+        """Return the most relevant evidence items the owner may see."""
 
 
 class WebResearchProvider(ABC):
@@ -114,98 +141,137 @@ class WebResearchProvider(ABC):
         """Return external evidence items for the query."""
 
 
-class Synthesizer(ABC):
-    """Contract for producing the final deliverable from evidence.
-
-    Integration point for a real LLM. Implementations must ground the
-    answer in the supplied documents and return the references they
-    actually used.
-    """
-
-    name: str = "abstract"
-
-    @abstractmethod
-    async def synthesize(
-        self,
-        *,
-        query: str,
-        objective: str,
-        context: str,
-        documents: list[RetrievedDocument],
-    ) -> tuple[str, list[str]]:
-        """Return the final answer and the citation keys it relies on."""
-
-
 # ---------------------------------------------------------------------------
-# Implementations shipped this sprint
+# Implementations
 # ---------------------------------------------------------------------------
 
 
-def relevance_score(text: str, keywords: list[str]) -> float:
-    """Fraction of the query's keywords present in the text.
+def build_citation(document: RetrievedDocument, position: int) -> Citation:
+    """Derive a structured citation from a retrieved document.
 
-    Deliberately simple and explainable — it is a placeholder for
-    vector similarity, and a score anyone can verify by eye is more
-    useful than a fake one that merely looks sophisticated.
+    Every field is read defensively: a retriever added in a future
+    sprint (or a partially-populated document from an external API)
+    must not be able to crash the run by omitting metadata. Missing
+    values degrade to explicit "unknown" markers rather than being
+    invented — an absent URL stays absent.
+
+    `simulated` defaults to `True` when a document does not say: an
+    unlabelled item is treated as unverified, never as trustworthy.
+
+    Optional provenance (`chunk_id`, `asset_id`, the retrieval and
+    rerank scores) is copied through only when the document carries it,
+    so a citation from a knowledge chunk stays traceable to that exact
+    row while one from a source with no such identity is not padded
+    with nulls that would imply an identity it lacks.
     """
-    if not keywords:
-        return 0.0
-    lowered = text.lower()
-    hits = sum(1 for keyword in keywords if keyword in lowered)
-    return round(hits / len(keywords), 4)
+    citation = Citation(
+        id=f"c{position}",
+        reference=document.get("reference") or "",
+        title=document.get("title") or "Untitled reference",
+        source=document.get("source") or "unknown",
+        provider=document.get("provider") or "unknown",
+        snippet=document.get("snippet") or "",
+        score=float(document.get("score") or 0.0),
+        simulated=bool(document.get("simulated", True)),
+    )
+    for key in PROVENANCE_KEYS:
+        if key in document:
+            citation[key] = document[key]  # type: ignore[literal-required]
+    return citation
 
 
-class KnowledgeBaseAssetRetriever(AssetRetriever):
-    """Retrieves real chunks from the project's knowledge base, ranked by
-    keyword overlap.
+class SemanticAssetRetriever(AssetRetriever):
+    """Retrieves evidence through the knowledge base's two-stage search.
 
-    The data is genuine — these are the chunks Sprint 6's processing
-    pipeline produced from the user's uploaded assets. What is
-    provisional is the *ranking*: keyword overlap, not embeddings,
-    because no embedding provider exists yet
-    (`app.modules.knowledge_base.embeddings.NullEmbeddingProvider`).
-    Chunks with no keyword overlap are dropped rather than returned
-    with a zero score: padding the context with irrelevant evidence
-    would degrade the answer.
+    Delegates to `KnowledgeBaseService.two_stage_search` rather than
+    ranking here: stage 1 (BGE-M3 embeddings + pgvector, Sprint 9C) and
+    stage 2 (cross-encoder reranking, Sprint 9D) already exist, are
+    tested, and enforce ownership in the query itself. Reimplementing
+    any of that in the research graph would be a second retrieval path
+    to keep in sync.
+
+    Ownership travels into the search, not around it: the service
+    validates the project against `owner_id` and the repository joins
+    on it, so a chunk belonging to another user is never a candidate —
+    and therefore can never reach the synthesis model.
+
+    Whether reranking actually ran is recorded on every document it
+    returns. When the reranker is unavailable (see
+    `app.modules.knowledge_base.reranking`), stage 1's results are used
+    as-is; nothing here substitutes another model or invents a rerank
+    score.
     """
 
-    name = "knowledge_base_keyword_v1"
+    name = "knowledge_base_semantic_v1"
 
     def __init__(self, session: AsyncSession) -> None:
-        self._chunks = KnowledgeChunkRepository(session)
+        self._service = KnowledgeBaseService(session)
         self._assets = AssetRepository(session)
 
     async def retrieve(
-        self, *, project_id: uuid.UUID, query: str, limit: int
+        self, *, owner_id: uuid.UUID, project_id: uuid.UUID, query: str, limit: int
     ) -> list[RetrievedDocument]:
-        """Rank the project's knowledge chunks against the query keywords."""
-        keywords = extract_keywords(query)
-        candidates = await self._chunks.list_by_project(
-            project_id, limit=CANDIDATE_CHUNK_LIMIT
+        """Return the owner's most relevant chunks, best first."""
+        outcome = await self._service.two_stage_search(
+            owner_id,
+            query=query,
+            project_id=project_id,
+            # Over-retrieve so stage 2 has a pool to reorder. `limit` is
+            # what the caller wants to see, not what retrieval should
+            # consider.
+            candidate_k=limit * CANDIDATE_MULTIPLIER,
+            top_k=limit,
         )
 
-        scored = [
-            (relevance_score(chunk.content, keywords), chunk)
-            for chunk in candidates
-        ]
-        relevant = sorted(
-            (item for item in scored if item[0] > 0),
-            key=lambda item: (-item[0], item[1].chunk_index),
-        )[:limit]
+        logger.info(
+            "research_semantic_retrieval",
+            project_id=str(project_id),
+            candidate_count=outcome.candidate_count,
+            result_count=len(outcome.hits),
+            reranking_status=outcome.reranking_status.value,
+            reranker_model=outcome.reranker_model,
+            # The gate's decision is part of the run's explanation: a
+            # research run with no answer must be able to show that
+            # evidence was retrieved and then rejected, rather than
+            # looking as though nothing was found.
+            rejected_count=len(outcome.rejected_hits),
+            relevance_threshold=outcome.relevance_threshold,
+        )
 
         documents: list[RetrievedDocument] = []
-        for score, chunk in relevant:
-            asset = await self._assets.get_by_id(chunk.asset_id)
+        for rank, hit in enumerate(outcome.hits, start=1):
+            asset = await self._assets.get_by_id(hit.chunk.asset_id)
             title = asset.title if asset is not None else "Unknown asset"
-            documents.append(
-                RetrievedDocument(
-                    source="asset",
-                    reference=f"asset:{chunk.asset_id}#chunk-{chunk.chunk_index}",
-                    title=f"{title} (chunk {chunk.chunk_index})",
-                    snippet=_truncate(chunk.content, SNIPPET_CHARACTERS),
-                    score=score,
-                )
+            document = RetrievedDocument(
+                source=ASSET_SOURCE,
+                provider=self.name,
+                reference=f"asset:{hit.chunk.asset_id}#chunk-{hit.chunk.chunk_index}",
+                title=f"{title} (chunk {hit.chunk.chunk_index})",
+                snippet=_truncate(hit.chunk.content, SNIPPET_CHARACTERS),
+                # `score` is the one cross-source comparable number the
+                # context builder ranks on. The two stage-specific
+                # scores are preserved separately below, unmodified.
+                score=round(1.0 - hit.retrieval_distance, 4),
+                simulated=False,
+                chunk_id=str(hit.chunk.id),
+                asset_id=str(hit.chunk.asset_id),
+                rank=rank,
+                retrieval_rank=hit.retrieval_rank,
+                retrieval_score=round(1.0 - hit.retrieval_distance, 6),
+                reranking_status=outcome.reranking_status.value,
             )
+            # Records the bar this chunk had to clear, so a stored
+            # citation says not just "this was retrieved" but "this was
+            # judged relevant, at this threshold".
+            if outcome.relevance_threshold is not None:
+                document["relevance_threshold"] = outcome.relevance_threshold
+            if asset is not None:
+                document["file_name"] = asset.file_name
+            # Absent, not zero, when stage 2 did not run: a missing
+            # measurement must not read as a low one.
+            if hit.rerank_score is not None:
+                document["rerank_score"] = hit.rerank_score
+            documents.append(document)
         return documents
 
 
@@ -231,92 +297,29 @@ class MockWebResearchProvider(WebResearchProvider):
             keyword = keywords[position % len(keywords)]
             documents.append(
                 RetrievedDocument(
-                    source=SIMULATED_SOURCE,
+                    source=WEB_SOURCE,
+                    provider=self.name,
                     reference=f"mock://web-research/{slug}/{position + 1}",
                     title=f"Simulated external reference on '{keyword}'",
+                    simulated=True,
                     snippet=(
                         "SIMULATED RESULT — no external search provider is configured "
                         f"for this deployment. A live provider would return material on "
                         f"'{keyword}' relevant to the request: {_truncate(query, 200)} "
                         "Treat this item as a placeholder, not as evidence."
                     ),
-                    # Descending, so ordering is stable and simulated
-                    # items never outrank real knowledge-base evidence.
+                    # Descending, so ordering within this provider's own
+                    # results is stable.
                     score=round(max(0.05, 0.5 - position * 0.05), 4),
+                    # The provider's own final ordering. The context
+                    # builder merges by this, so a retriever's ranking
+                    # survives the merge rather than being re-derived
+                    # from a score that is not comparable across
+                    # sources.
+                    rank=position + 1,
                 )
             )
         return documents
-
-
-class ExtractiveSynthesizer(Synthesizer):
-    """Builds the deliverable by extracting from the retrieved evidence.
-
-    Extractive rather than generative: every sentence in the answer is
-    lifted from a real document and attributed. That makes it honest in
-    the absence of an LLM — the output never contains a claim the
-    evidence does not support — while producing a genuinely useful
-    deliverable rather than a placeholder string.
-    """
-
-    name = "extractive_v1"
-
-    async def synthesize(
-        self,
-        *,
-        query: str,
-        objective: str,
-        context: str,
-        documents: list[RetrievedDocument],
-    ) -> tuple[str, list[str]]:
-        """Assemble a cited answer from the highest-scoring evidence."""
-        if not documents:
-            answer = (
-                f"## Objective\n{objective}\n\n"
-                "## Result\nNo evidence could be retrieved for this request. "
-                "The project's knowledge base returned no material matching the "
-                "query, and no external research source is configured. Upload and "
-                "process relevant assets, then re-run this research.\n"
-            )
-            return answer, []
-
-        ranked = sorted(documents, key=lambda doc: -doc["score"])
-        real = [doc for doc in ranked if doc["source"] != SIMULATED_SOURCE]
-        simulated = [doc for doc in ranked if doc["source"] == SIMULATED_SOURCE]
-
-        lines = ["## Objective", objective, "", "## Key findings"]
-        if real:
-            for position, document in enumerate(real, start=1):
-                lines.append(
-                    f"{position}. **{document['title']}** "
-                    f"(relevance {document['score']:.2f}) — "
-                    f"{_first_sentences(document['snippet'])} [{document['reference']}]"
-                )
-        else:
-            lines.append(
-                "1. No grounded evidence was available from the project's own assets; "
-                "every item below is simulated and cannot support a factual claim."
-            )
-
-        if simulated:
-            lines.extend(
-                [
-                    "",
-                    "## Unverified placeholders",
-                    (
-                        f"{len(simulated)} external reference(s) were produced by the "
-                        "simulated research provider and are excluded from the findings "
-                        "above. They are recorded for traceability only."
-                    ),
-                ]
-            )
-
-        lines.extend(["", "## Sources"])
-        for document in ranked:
-            marker = " *(simulated)*" if document["source"] == SIMULATED_SOURCE else ""
-            lines.append(f"- `{document['reference']}` — {document['title']}{marker}")
-
-        citations = [document["reference"] for document in real]
-        return "\n".join(lines), citations
 
 
 @dataclass(frozen=True)
@@ -339,9 +342,9 @@ def build_dependencies(session: AsyncSession) -> GraphDependencies:
     """Assemble the default dependency set for a database-backed run."""
     return GraphDependencies(
         planner=get_planner(),
-        asset_retriever=KnowledgeBaseAssetRetriever(session),
+        asset_retriever=SemanticAssetRetriever(session),
         web_provider=MockWebResearchProvider(),
-        synthesizer=ExtractiveSynthesizer(),
+        synthesizer=get_synthesizer(),
     )
 
 
@@ -407,34 +410,46 @@ async def router_node(state: ResearchState, config: RunnableConfig) -> dict[str,
     """
     plan = state.get("plan", {})
     steps = plan.get("steps", [])
-    valid_nodes = {node.value for node in RETRIEVAL_NODES}
-    route = [step["node"] for step in steps if step["node"] in valid_nodes]
+    # Only routable retrieval agents named by the plan are selected, so
+    # an unknown node in a plan can never cause the graph to dispatch
+    # to it. `RETRIEVAL_NODES` is the single source of truth for what
+    # is routable; the registry reads the same list.
+    routable = [node.value for node in RETRIEVAL_NODES]
+    selected = [step["node"] for step in steps if step["node"] in routable]
+    skipped = [name for name in routable if name not in selected]
 
     prompt = render_router_prompt(
         objective=state.get("objective", ""),
         steps=[f"{step['node']}: {step['title']}" for step in steps],
     )
     summary = (
-        f"Routing to {', '.join(route)}." if route else "No retrieval source enabled."
+        f"Routing to {', '.join(selected)}."
+        if selected
+        else "No retrieval source enabled."
     )
 
-    logger.info("research_node_router", run_id=state.get("run_id"), route=route)
+    logger.info(
+        "research_node_router",
+        run_id=state.get("run_id"),
+        selected_agents=selected,
+        skipped_agents=skipped,
+    )
 
     return {
-        "route": route,
+        "selected_agents": selected,
         "messages": [
             _message(
                 role="router",
                 agent_name="router",
                 content=summary,
-                metadata={"prompt": prompt, "route": route},
+                metadata={"selected_agents": selected, "skipped_agents": skipped, "prompt": prompt},
             )
         ],
         "step": {
             "node": ResearchNode.ROUTER.value,
             "title": "Route to retrieval agents",
             "summary": summary,
-            "output": {"route": route},
+            "output": {"selected_agents": selected, "skipped_agents": skipped},
         },
     }
 
@@ -442,13 +457,23 @@ async def router_node(state: ResearchState, config: RunnableConfig) -> dict[str,
 async def asset_retrieval_node(
     state: ResearchState, config: RunnableConfig
 ) -> dict[str, Any]:
-    """Retrieve evidence from the project's own knowledge base."""
+    """Retrieve evidence from the project's own knowledge base.
+
+    Scoped to the run's owner, not merely to its project: the owner is
+    carried in the shared state and passed into the retriever, so the
+    search itself is restricted rather than its results being filtered
+    afterwards.
+    """
     dependencies = _dependencies(config)
     documents = await dependencies.asset_retriever.retrieve(
+        owner_id=uuid.UUID(state["owner_id"]),
         project_id=uuid.UUID(state["project_id"]),
         query=state["query"],
         limit=state.get("max_results", 5),
     )
+    # Every document from one search shares the same status, so the
+    # first one is representative; absent when nothing was retrieved.
+    reranking_status = documents[0].get("reranking_status") if documents else None
     summary = (
         f"Retrieved {len(documents)} knowledge-base chunk(s)."
         if documents
@@ -460,23 +485,35 @@ async def asset_retrieval_node(
         run_id=state.get("run_id"),
         retriever=dependencies.asset_retriever.name,
         document_count=len(documents),
+        reranking_status=reranking_status,
     )
 
     return {
-        "documents": documents,
+        "retrieved_documents": documents,
         "messages": [
             _message(
                 role="agent",
                 agent_name=dependencies.asset_retriever.name,
                 content=summary,
-                metadata={"references": [doc["reference"] for doc in documents]},
+                metadata={
+                    "references": [doc["reference"] for doc in documents],
+                    "reranking_status": reranking_status,
+                },
             )
         ],
         "step": {
             "node": ResearchNode.ASSET_RETRIEVAL.value,
             "title": "Search the project knowledge base",
             "summary": summary,
-            "output": {"documents": documents},
+            "output": {
+                "documents": documents,
+                "document_count": len(documents),
+                "references": [doc.get("reference") for doc in documents],
+                # Recorded on the step so the trace shows whether stage
+                # 2 ran, without having to infer it from the documents.
+                "reranking_status": reranking_status,
+                "chunk_ids": [doc.get("chunk_id") for doc in documents],
+            },
         },
     }
 
@@ -502,7 +539,7 @@ async def web_research_node(
     )
 
     return {
-        "documents": documents,
+        "retrieved_documents": documents,
         "messages": [
             _message(
                 role="agent",
@@ -518,7 +555,15 @@ async def web_research_node(
             "node": ResearchNode.WEB_RESEARCH.value,
             "title": "Gather external references",
             "summary": summary,
-            "output": {"documents": documents, "simulated": True},
+            "output": {
+                "documents": documents,
+                "document_count": len(documents),
+                "references": [doc.get("reference") for doc in documents],
+                "provider": dependencies.web_provider.name,
+                "simulated_count": sum(
+                    1 for doc in documents if doc.get("simulated", True)
+                ),
+            },
         },
     }
 
@@ -532,29 +577,49 @@ async def context_builder_node(
     where their output becomes a single artifact the synthesis step can
     be held accountable to.
     """
-    documents = state.get("documents", [])
+    documents = state.get("retrieved_documents", [])
+
+    ordered = [
+        document
+        for _, document in sorted(
+            enumerate(documents), key=lambda item: _merge_key(item[1], item[0])
+        )
+    ]
 
     seen: set[str] = set()
     unique: list[RetrievedDocument] = []
-    for document in sorted(documents, key=lambda doc: -doc["score"]):
-        if document["reference"] in seen:
+    for document in ordered:
+        reference = document.get("reference") or ""
+        if reference in seen:
             continue
-        seen.add(document["reference"])
+        seen.add(reference)
         unique.append(document)
 
     blocks: list[str] = []
+    included: list[RetrievedDocument] = []
     used = 0
     for document in unique:
-        block = CONTEXT_BLOCK_TEMPLATE.format(**document)
+        block = _context_block(document)
         if used + len(block) > MAX_CONTEXT_CHARACTERS:
             break
         blocks.append(block)
+        included.append(document)
         used += len(block)
+
+    # Citations are built from exactly the documents that made it into
+    # the context, in the same order — so a citation always corresponds
+    # to evidence the synthesis step can actually see. This is where
+    # each document's provenance metadata is preserved rather than
+    # collapsed into the context string.
+    citations = [
+        build_citation(document, position)
+        for position, document in enumerate(included, start=1)
+    ]
 
     context = "\n\n".join(blocks)
     summary = (
         f"Merged {len(blocks)} of {len(documents)} item(s) into "
-        f"{len(context)} characters of context."
+        f"{len(context)} characters of context, carrying {len(citations)} citation(s)."
     )
 
     logger.info(
@@ -562,17 +627,19 @@ async def context_builder_node(
         run_id=state.get("run_id"),
         included=len(blocks),
         received=len(documents),
+        citation_count=len(citations),
         context_characters=len(context),
     )
 
     return {
         "context": context,
+        "citations": citations,
         "messages": [
             _message(
                 role="aggregator",
                 agent_name="context_builder",
                 content=summary,
-                metadata={"included_references": [doc["reference"] for doc in unique[: len(blocks)]]},
+                metadata={"citations": citations},
             )
         ],
         "step": {
@@ -583,6 +650,8 @@ async def context_builder_node(
                 "context_characters": len(context),
                 "included": len(blocks),
                 "received": len(documents),
+                "citation_count": len(citations),
+                "citations": citations,
             },
         },
     }
@@ -593,43 +662,120 @@ async def synthesis_node(state: ResearchState, config: RunnableConfig) -> dict[s
     dependencies = _dependencies(config)
     objective = state.get("objective", state["query"])
     context = state.get("context", "")
-    documents = state.get("documents", [])
+    documents = state.get("retrieved_documents", [])
+    # Citations come from the context builder, so synthesis cites
+    # exactly the evidence that reached it — not the raw retrieval
+    # output, which may have been de-duplicated or truncated to fit.
+    incoming = state.get("citations", [])
+    # Non-critical agents that failed earlier in the run. Synthesis
+    # must state that the evidence is incomplete rather than present
+    # partial results as if every source had been consulted.
+    warnings = degraded_warnings(state)
 
-    answer, citations = await dependencies.synthesizer.synthesize(
+    result = await dependencies.synthesizer.synthesize(
         query=state["query"],
         objective=objective,
         context=context,
         documents=documents,
+        citations=incoming,
+        warnings=warnings,
     )
-    prompt = render_synthesis_prompt(
+    answer = result.answer
+    citations = result.citations
+    # The prompt a model-backed synthesizer actually sent, when there
+    # was one; otherwise the rendered prompt this run would have used.
+    # Recording the real thing is what makes the model call auditable.
+    prompt = result.prompt or render_synthesis_prompt(
         objective=objective, query=state["query"], context=context
     )
-    summary = f"Synthesized the deliverable from {len(citations)} grounded citation(s)."
+    grounded_count = sum(1 for item in citations if not item["simulated"])
+    simulated_count = len(citations) - grounded_count
+    summary = (
+        f"Synthesized the deliverable from {len(citations)} citation(s) "
+        f"({grounded_count} grounded, {simulated_count} simulated); "
+        f"grounding status '{result.grounding_status.value}'."
+    )
 
     logger.info(
         "research_node_synthesis",
         run_id=state.get("run_id"),
         synthesizer=dependencies.synthesizer.name,
         citation_count=len(citations),
+        grounded_citations=grounded_count,
+        simulated_citations=simulated_count,
+        degraded_warnings=len(warnings),
         answer_characters=len(answer),
+        grounding_status=result.grounding_status.value,
+        evidence_supplied=result.evidence_supplied,
+        rejected_citations=len(result.rejected_citation_ids),
+        # Model metadata, not model output: safe to log, and the proof
+        # that the call went through the gateway.
+        llm_model=result.model,
+        llm_provider=result.provider,
+        llm_latency_ms=result.latency_ms,
+        # Sprint 9G: whether the configured provider answered, or a
+        # fallback did after it failed.
+        llm_fallback_used=result.fallback_used,
+        llm_primary_model=result.primary_model,
+        llm_primary_error_type=result.primary_error_type,
+        llm_attempts=result.llm_attempts,
     )
 
     return {
         "final_answer": answer,
         "citations": citations,
+        "grounding_status": result.grounding_status.value,
+        # The graph's terminal node, so this is where the shared state
+        # records the run reaching a successful end. The database row
+        # remains authoritative; this mirrors it for any node or test
+        # inspecting the final state directly.
+        "status": ResearchRunStatus.COMPLETED.value,
         "messages": [
             _message(
                 role="aggregator",
                 agent_name=dependencies.synthesizer.name,
                 content=answer,
-                metadata={"prompt": prompt, "citations": citations},
+                metadata={
+                    "prompt": prompt,
+                    "citations": citations,
+                    "grounding_status": result.grounding_status.value,
+                    "model": result.model,
+                    "provider": result.provider,
+                    "latency_ms": result.latency_ms,
+                },
             )
         ],
         "step": {
             "node": ResearchNode.SYNTHESIS.value,
             "title": "Synthesize the deliverable",
             "summary": summary,
-            "output": {"citations": citations, "answer_characters": len(answer)},
+            "output": {
+                "citations": citations,
+                "citation_count": len(citations),
+                "grounded_citations": grounded_count,
+                "simulated_citations": simulated_count,
+                "answer_characters": len(answer),
+                "grounding_status": result.grounding_status.value,
+                # How many evidence items the model was actually given.
+                # With `rejected_citation_ids`, this is the auditable
+                # record of the FINAL_CITATIONS ⊆ EVIDENCE_SENT
+                # invariant: anything rejected is listed, not hidden.
+                "evidence_supplied": result.evidence_supplied,
+                "rejected_citation_ids": result.rejected_citation_ids,
+                "model": result.model,
+                "provider": result.provider,
+                "latency_ms": result.latency_ms,
+                # Sprint 9G. Additive: `model`/`provider` above keep
+                # meaning "what answered", so nothing reading the
+                # existing trace changes. These say how we got there —
+                # a run that completed through a fallback must be
+                # readable as such months later, not silently
+                # attributed to the model that was configured.
+                "fallback_used": result.fallback_used,
+                "primary_model": result.primary_model,
+                "primary_error_type": result.primary_error_type,
+                "llm_attempts": result.llm_attempts,
+            },
         },
     }
 
@@ -640,23 +786,25 @@ async def synthesis_node(state: ResearchState, config: RunnableConfig) -> dict[s
 
 
 def route_after_router(state: ResearchState) -> str:
-    """Dispatch to the first retrieval node on the route, if any.
+    """Dispatch to the first selected retrieval agent, if any.
 
-    Retrieval nodes run in sequence rather than in parallel: they share
-    one database session, and a deterministic order keeps the stored
-    step trace reproducible.
+    Retrieval agents run in sequence rather than in parallel: they
+    share one database session, and the stored step trace is persisted
+    in execution order — sequencing keeps both deterministic. An agent
+    the router did not select is never entered, so no unnecessary work
+    is performed.
     """
-    route = state.get("route", [])
-    if ResearchNode.ASSET_RETRIEVAL.value in route:
+    selected = state.get("selected_agents", [])
+    if ResearchNode.ASSET_RETRIEVAL.value in selected:
         return ResearchNode.ASSET_RETRIEVAL.value
-    if ResearchNode.WEB_RESEARCH.value in route:
+    if ResearchNode.WEB_RESEARCH.value in selected:
         return ResearchNode.WEB_RESEARCH.value
     return ResearchNode.CONTEXT_BUILDER.value
 
 
 def route_after_asset_retrieval(state: ResearchState) -> str:
-    """Continue to web research if it is on the route, else merge context."""
-    if ResearchNode.WEB_RESEARCH.value in state.get("route", []):
+    """Continue to web research if it was selected, else merge context."""
+    if ResearchNode.WEB_RESEARCH.value in state.get("selected_agents", []):
         return ResearchNode.WEB_RESEARCH.value
     return ResearchNode.CONTEXT_BUILDER.value
 
@@ -675,6 +823,68 @@ def _dependencies(config: RunnableConfig) -> GraphDependencies:
             "config['configurable']['dependencies']."
         )
     return dependencies
+
+
+def _warning_section(warnings: list[str]) -> str:
+    """Render degraded-mode notices, or nothing when the run was clean."""
+    if not warnings:
+        return ""
+    body = "\n".join(f"- {warning}" for warning in warnings)
+    return f"\n## Incomplete evidence\n{body}\n"
+
+
+def _merge_key(document: RetrievedDocument, arrival: int) -> tuple[int, int, int]:
+    """Ordering for the merged context: real evidence first, then by the
+    retriever's own rank.
+
+    Sorting purely by `score` — as this did before the retrieval
+    pipeline became real — compares numbers from different retrievers
+    that mean different things, which let a simulated web result
+    outrank a genuine knowledge chunk whenever the mock's fixed score
+    happened to be higher. Two rules fix that without inventing a
+    common scale:
+
+    1. Evidence from the project's own assets ranks above external
+       evidence, matching the planner's stated preference.
+    2. Within a source, the retriever's own final ordering (`rank`) is
+       authoritative — so when the reranker reorders candidates, that
+       order survives the merge rather than being undone by a re-sort
+       on stage-1 similarity.
+
+    `arrival` breaks ties for retrievers that supply no rank, keeping
+    the merge deterministic.
+    """
+    priority = 0 if document.get("source") == ASSET_SOURCE else 1
+    rank = document.get("rank")
+    return (priority, rank if isinstance(rank, int) else arrival, arrival)
+
+
+def document_score(document: RetrievedDocument) -> float:
+    """Read a document's relevance score without assuming it is present.
+
+    Ranking must not crash on a document produced by a retriever that
+    omits the field; an unscored item simply sorts last.
+    """
+    try:
+        return float(document.get("score") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _context_block(document: RetrievedDocument) -> str:
+    """Render one evidence block for the merged context.
+
+    Uses explicit lookups rather than `template.format(**document)`, so
+    a document missing a field degrades to a placeholder instead of
+    raising `KeyError` mid-run.
+    """
+    return CONTEXT_BLOCK_TEMPLATE.format(
+        reference=document.get("reference") or "unknown",
+        title=document.get("title") or "Untitled reference",
+        source=document.get("source") or "unknown",
+        score=document_score(document),
+        snippet=document.get("snippet") or "",
+    )
 
 
 def _message(

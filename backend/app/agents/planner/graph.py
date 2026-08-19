@@ -1,6 +1,13 @@
-"""Assembly of the research LangGraph workflow.
+"""The LangGraph orchestrator: builds and compiles the research workflow.
 
-Topology (frozen for this sprint)::
+Responsibilities are deliberately narrow — graph construction, node
+registration, conditional transitions, and compilation. No agent
+business logic lives here; every node comes from `AGENT_REGISTRY` and
+is wrapped by `tracking.instrument` so execution tracking and the
+failure policy are applied uniformly rather than reimplemented per
+agent.
+
+Topology::
 
     START
       -> planner
@@ -13,18 +20,18 @@ Topology (frozen for this sprint)::
       -> synthesis
       -> END
 
-Retrieval nodes are chained conditionally rather than fanned out in
-parallel. Both would be valid LangGraph, but they share a single
-database session and the run's step trace is persisted in execution
-order — sequencing keeps both deterministic. The fan-out version stays
-available: `ResearchState.documents` already uses an additive reducer,
-so parallel branches would merge correctly if a future sprint needs the
-latency win.
+Retrieval agents are chained conditionally rather than fanned out in
+parallel. Both are valid LangGraph, but they share a single database
+session and the run's step trace is persisted in execution order —
+sequencing keeps both deterministic. Fan-out remains available:
+`retrieved_documents` and `intermediate_results` already carry
+reducers, so parallel branches would merge correctly if a future sprint
+needs the latency win.
 
-The compiled graph holds no per-run state: strategies and the database
-session are injected per invocation via
-`config["configurable"]["dependencies"]`, so one compiled instance is
-safely shared across concurrent runs.
+The compiled graph holds no per-run state. Strategies, the database
+session, and the execution tracker are injected per invocation through
+`config["configurable"]`, so one compiled instance is safely shared
+across concurrent runs.
 """
 
 from functools import lru_cache
@@ -33,39 +40,34 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from app.agents.planner.nodes import (
-    asset_retrieval_node,
-    context_builder_node,
-    planner_node,
     route_after_asset_retrieval,
     route_after_router,
-    router_node,
-    synthesis_node,
-    web_research_node,
 )
+from app.agents.planner.registry import AGENT_REGISTRY, get_node_spec
 from app.agents.planner.state import ResearchNode, ResearchState
+from app.agents.planner.tracking import instrument
 
 
 def build_research_graph() -> StateGraph:
-    """Construct the uncompiled research graph.
+    """Construct the uncompiled research graph from the agent registry.
 
     Separate from `get_research_graph` so tests (and any future variant
-    that needs a checkpointer or an interrupt) can compile the same
+    needing a checkpointer or an interrupt) can compile the same
     topology with different options.
     """
     builder: StateGraph = StateGraph(ResearchState)
 
-    builder.add_node(ResearchNode.PLANNER.value, planner_node)
-    builder.add_node(ResearchNode.ROUTER.value, router_node)
-    builder.add_node(ResearchNode.ASSET_RETRIEVAL.value, asset_retrieval_node)
-    builder.add_node(ResearchNode.WEB_RESEARCH.value, web_research_node)
-    builder.add_node(ResearchNode.CONTEXT_BUILDER.value, context_builder_node)
-    builder.add_node(ResearchNode.SYNTHESIS.value, synthesis_node)
+    # Nodes come from the registry, so registering an agent is enough
+    # to make it available here — only its edges remain an explicit
+    # decision below.
+    for name, spec in AGENT_REGISTRY.items():
+        builder.add_node(name, instrument(spec))
 
     builder.add_edge(START, ResearchNode.PLANNER.value)
     builder.add_edge(ResearchNode.PLANNER.value, ResearchNode.ROUTER.value)
 
-    # The router picks the first enabled retrieval source, or skips
-    # straight to context building when none is enabled.
+    # The router dispatches to the first selected retrieval agent, or
+    # skips straight to context building when none was selected.
     builder.add_conditional_edges(
         ResearchNode.ROUTER.value,
         route_after_router,
@@ -100,3 +102,12 @@ def get_research_graph() -> CompiledStateGraph:
     compiled graph carries no run-specific state.
     """
     return build_research_graph().compile()
+
+
+def workflow_node_order() -> list[str]:
+    """The registered agents in graph order.
+
+    Used by the execution service to record agents that never ran as
+    `skipped`, so a trace never silently omits a node.
+    """
+    return [spec.name for spec in (get_node_spec(name) for name in AGENT_REGISTRY)]

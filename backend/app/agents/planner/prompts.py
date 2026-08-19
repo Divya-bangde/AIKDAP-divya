@@ -73,6 +73,91 @@ CONTEXT_BLOCK_TEMPLATE = """[{reference}] {title} (source={source}, relevance={s
 {snippet}"""
 
 
+# ---------------------------------------------------------------------------
+# Grounded synthesis (Sprint 9E)
+# ---------------------------------------------------------------------------
+#
+# The templates above describe the run for the audit trail. The ones
+# below are sent verbatim to a real model through the LLM gateway, so
+# they are written as instructions to that model rather than as a
+# description of the workflow.
+
+GROUNDED_SYNTHESIS_SYSTEM_PROMPT = """You are the AIKDAP research synthesis engine.
+
+Answer the user's question using ONLY the supplied evidence.
+The supplied evidence is the sole source of truth for this response.
+
+Rules:
+- Do not invent facts, numbers, entities, dates, or conclusions.
+- Do not use outside knowledge to fill gaps, even if you are confident it is correct.
+- Every factual claim must be traceable to one or more supplied evidence items.
+- Cite evidence by its exact id (for example c1, c2) inline, immediately after the claim it supports.
+- Only cite ids that appear in the supplied evidence. Never invent an id.
+- If the evidence does not contain enough information to answer, say so plainly and do not answer anyway.
+- Do not pad the answer with background the evidence does not contain.
+
+Respond with a single JSON object and nothing else:
+
+{
+  "answer": "the answer in markdown, with inline [c1]-style citations",
+  "citation_ids": ["the ids you actually relied on"],
+  "grounding_status": "grounded" | "insufficient_evidence"
+}
+
+Use "insufficient_evidence" when the evidence cannot answer the question.
+In that case, "answer" must explain what is missing and "citation_ids" must be empty."""
+
+GROUNDED_SYNTHESIS_USER_TEMPLATE = """Question:
+{query}
+
+Objective:
+{objective}
+
+Evidence:
+{evidence}
+
+Answer the question using only the evidence above."""
+
+#: One evidence item as the synthesis model sees it. The id here is the
+#: citation id, and it is the only handle the model is given — so a
+#: returned id can always be checked against what was supplied.
+GROUNDED_EVIDENCE_BLOCK_TEMPLATE = """[{id}] {title} (source={source})
+{snippet}"""
+
+
+def render_grounded_evidence(citations: list[dict]) -> str:
+    """Render the evidence block list exactly as the model will see it.
+
+    Reads each field defensively for the same reason `_context_block`
+    does: a citation assembled from a partially-populated document must
+    degrade to a placeholder rather than raise mid-run.
+    """
+    if not citations:
+        return "(no evidence retrieved)"
+    return "\n\n".join(
+        GROUNDED_EVIDENCE_BLOCK_TEMPLATE.format(
+            id=citation.get("id") or "unknown",
+            title=citation.get("title") or "Untitled reference",
+            source=citation.get("source") or "unknown",
+            snippet=citation.get("snippet") or "",
+        )
+        for citation in citations
+    )
+
+
+def render_grounded_synthesis_prompt(
+    *, objective: str, query: str, evidence: str
+) -> str:
+    """Render the user half of the grounded synthesis request.
+
+    The system half is `GROUNDED_SYNTHESIS_SYSTEM_PROMPT`; they are kept
+    separate because the gateway sends them as distinct messages.
+    """
+    return GROUNDED_SYNTHESIS_USER_TEMPLATE.format(
+        objective=objective, query=query, evidence=evidence
+    )
+
+
 def render_planner_prompt(*, query: str, sources: list[str], max_results: int) -> str:
     """Render the full planner prompt exactly as it would be sent."""
     return "\n\n".join(

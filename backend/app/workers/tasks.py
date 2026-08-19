@@ -21,21 +21,31 @@ error-reporting mechanism.
 and `update_processing_status` are standalone, individually invokable
 steps — useful for future composition (e.g. a Celery `chain()`, or a
 future Planner triggering just one phase) even though nothing calls
-them yet. `generate_ai_metadata` and `generate_embeddings` are honest
-placeholders: no LLM or embedding provider is called, matching the
-"do not implement real OCR or real embedding providers" constraint.
+them yet. `generate_ai_metadata` (Sprint 9B, Qwen) and
+`generate_embeddings` (Sprint 9C, BGE-M3) both run real local models
+now; each shares its underlying service/provider with the inline
+pipeline call in `AssetProcessingService.process_asset` rather than
+reimplementing it — this file adds only the standalone-invocation
+bridge.
 """
 
 import asyncio
 import functools
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from typing import Any, TypeVar
 
+from app.core.config import settings
+from app.core.llm import LLMError
 from app.core.logging.logger import get_logger
 from app.database.session import async_session_factory
-from app.modules.assets.enums import AssetProcessingStatus
+from app.modules.assets.ai_profile import AIProfile, AIProfileStatus
+from app.modules.assets.enums import AssetProcessingStatus, EmbeddingStatus
+from app.modules.assets.processing.document_understanding import (
+    DocumentUnderstandingError,
+    get_document_understanding_service,
+)
 from app.modules.assets.processing.extractors import (
     ExtractionNotSupportedError,
     get_text_extractor,
@@ -44,6 +54,7 @@ from app.modules.assets.processing.pipeline import get_asset_processing_service
 from app.modules.assets.repository import AssetRepository
 from app.modules.assets.storage import get_storage_provider
 from app.modules.knowledge_base.embeddings import get_embedding_provider
+from app.modules.knowledge_base.repository import KnowledgeChunkRepository
 from app.modules.research.service import ResearchExecutionService
 from app.workers.celery_app import celery_app
 
@@ -96,13 +107,38 @@ def log_task_execution(func: _F) -> _F:
     return wrapper  # type: ignore[return-value]
 
 
+def _run_task_loop(coroutine: Coroutine[Any, Any, Any]) -> Any:
+    """Drive one Celery task body to completion, then reset LiteLLM's
+    global logging worker before this loop closes (Sprint 9J).
+
+    The single choke point every task below runs through instead of a
+    bare `asyncio.run(...)`, so the fix lives in exactly one place
+    rather than being repeated at each of the six call sites. The
+    reset itself is `reset_litellm_logging_worker_for_task_boundary`
+    in `app.core.llm.gateway` — kept there rather than here so this
+    module never imports `litellm` directly, preserving the
+    containment invariant `test_litellm_is_imported_only_by_the_gateway`
+    checks (see that function's docstring for the full root-cause
+    explanation of what is being reset and why).
+    """
+    from app.core.llm.gateway import reset_litellm_logging_worker_for_task_boundary
+
+    async def _wrapped() -> Any:
+        try:
+            return await coroutine
+        finally:
+            await reset_litellm_logging_worker_for_task_boundary()
+
+    return asyncio.run(_wrapped())
+
+
 @celery_app.task(name="workers.process_uploaded_asset", bind=True, max_retries=3, default_retry_delay=30)
 @log_task_execution
 def process_uploaded_asset(self, asset_id: str) -> dict[str, str]:
     """Run the full extract -> chunk -> (future) embed pipeline for one
     asset. This is the task actually enqueued after upload/reprocess."""
     try:
-        asyncio.run(_run_pipeline(uuid.UUID(asset_id)))
+        _run_task_loop(_run_pipeline(uuid.UUID(asset_id)))
     except Exception as exc:
         raise self.retry(exc=exc) from exc
     return {"status": "ok", "asset_id": asset_id}
@@ -123,7 +159,7 @@ def extract_document_text(self, asset_id: str) -> dict[str, str | int]:
     future composition; `process_uploaded_asset` runs the same
     extractor internally as part of the full pipeline today."""
     try:
-        text = asyncio.run(_extract_text(uuid.UUID(asset_id)))
+        text = _run_task_loop(_extract_text(uuid.UUID(asset_id)))
     except ExtractionNotSupportedError as exc:
         # Not retried: an unsupported MIME type won't become supported
         # by waiting, unlike a transient DB/network failure.
@@ -148,34 +184,127 @@ async def _extract_text(asset_id: uuid.UUID) -> str:
 @celery_app.task(name="workers.generate_ai_metadata", bind=True, max_retries=3, default_retry_delay=30)
 @log_task_execution
 def generate_ai_metadata(self, asset_id: str) -> dict[str, str]:
-    """Placeholder for future AI-generated metadata (summary, keywords,
-    entities, topics — see `app.modules.assets.ai_profile.AIProfile`).
-    No LLM is called. Exists so a stable task name is available for a
-    future sprint to implement against, and so a future scheduler can
-    already reference it by name."""
-    logger.info(
-        "generate_ai_metadata_placeholder",
-        asset_id=asset_id,
-        reason="AI metadata generation is not implemented yet.",
-    )
-    return {"status": "not_implemented", "asset_id": asset_id}
+    """Run local Qwen document understanding for one asset in isolation.
+
+    Standalone step for future composition (a Celery `chain()`, or a
+    caller that wants to re-run just this stage) — the automatic
+    pipeline (`process_uploaded_asset` -> `AssetProcessingService.
+    process_asset`) already runs the same underlying
+    `QwenDocumentUnderstandingService` inline after extraction
+    succeeds. Both entry points call the one implementation; nothing
+    is duplicated between them.
+
+    Requires the asset to already have extracted text available (i.e.
+    `processing_status` has reached at least `CHUNKING`/`COMPLETED`);
+    this task does not run extraction itself.
+    """
+    try:
+        result = _run_task_loop(_generate_ai_metadata(uuid.UUID(asset_id)))
+    except Exception as exc:
+        raise self.retry(exc=exc) from exc
+    return {"asset_id": asset_id, **result}
+
+
+async def _generate_ai_metadata(asset_id: uuid.UUID) -> dict[str, str]:
+    async with async_session_factory() as session:
+        repository = AssetRepository(session)
+        asset = await repository.get_by_id(asset_id)
+        if asset is None:
+            raise ValueError(f"Asset {asset_id} not found.")
+
+        storage = get_storage_provider()
+        content = await storage.read(asset.storage_path)
+        extractor = get_text_extractor(asset.mime_type)
+        text = await extractor.extract(content)
+
+        profile = AIProfile.model_validate(asset.ai_profile or {})
+        understanding = get_document_understanding_service()
+        try:
+            metadata = await understanding.analyze(text)
+        except DocumentUnderstandingError as exc:
+            profile.status = AIProfileStatus.FAILED
+            profile.error = str(exc)
+            status = "failed"
+        except LLMError as exc:
+            profile.status = AIProfileStatus.UNAVAILABLE
+            profile.error = str(exc)
+            status = "unavailable"
+        else:
+            profile.summary = metadata.summary
+            profile.keywords = metadata.keywords
+            profile.entities = metadata.entities
+            profile.topics = metadata.topics
+            profile.language = metadata.language
+            profile.generated_by = settings.qwen_model
+            profile.status = AIProfileStatus.COMPLETED
+            profile.error = None
+            status = "completed"
+
+        asset.ai_profile = profile.model_dump(mode="json")
+        await session.commit()
+        return {"status": status}
 
 
 @celery_app.task(name="workers.generate_embeddings", bind=True, max_retries=3, default_retry_delay=30)
 @log_task_execution
 def generate_embeddings(self, asset_id: str) -> dict[str, str]:
-    """Placeholder for future embedding generation. Chunks produced by
-    `process_uploaded_asset` sit at `embedding_status=PENDING`; this is
-    the future home for calling `EmbeddingProvider.embed()` once a real
-    provider replaces `NullEmbeddingProvider`."""
-    provider = get_embedding_provider()
-    logger.info(
-        "generate_embeddings_placeholder",
-        asset_id=asset_id,
-        provider=provider.name.value,
-        reason="No embedding provider is configured yet; chunks remain PENDING.",
-    )
-    return {"status": "not_implemented", "asset_id": asset_id, "provider": provider.name.value}
+    """Generate BGE-M3 embeddings for one asset's existing knowledge
+    chunks, in isolation.
+
+    Standalone step for future composition — the automatic pipeline
+    (`process_uploaded_asset` -> `AssetProcessingService.
+    process_asset`) already runs the same `EmbeddingProvider.embed()`
+    call inline, right after chunking. Both entry points call the one
+    provider from `get_embedding_provider()`; nothing is duplicated.
+
+    Requires the asset to already have chunks (i.e. extraction/chunking
+    has already run); this task does not extract or chunk.
+    """
+    try:
+        result = _run_task_loop(_generate_embeddings(uuid.UUID(asset_id)))
+    except Exception as exc:
+        raise self.retry(exc=exc) from exc
+    return {"asset_id": asset_id, **result}
+
+
+async def _generate_embeddings(asset_id: uuid.UUID) -> dict[str, str]:
+    async with async_session_factory() as session:
+        asset = await AssetRepository(session).get_by_id(asset_id)
+        if asset is None:
+            raise ValueError(f"Asset {asset_id} not found.")
+
+        chunks = await KnowledgeChunkRepository(session).list_by_project(
+            asset.project_id, asset_id=asset_id
+        )
+        if not chunks:
+            return {"status": "no_chunks", "chunk_count": "0"}
+
+        provider = get_embedding_provider()
+        for chunk in chunks:
+            chunk.embedding_status = EmbeddingStatus.PROCESSING
+        await session.commit()
+
+        try:
+            vectors = await provider.embed([chunk.content for chunk in chunks])
+        except Exception as exc:
+            for chunk in chunks:
+                chunk.embedding_status = EmbeddingStatus.FAILED
+            await session.commit()
+            logger.warning(
+                "generate_embeddings_failed",
+                asset_id=str(asset_id),
+                chunk_count=len(chunks),
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+            )
+            return {"status": "failed", "chunk_count": str(len(chunks))}
+
+        for chunk, vector in zip(chunks, vectors, strict=True):
+            chunk.embedding = vector
+            chunk.embedding_status = EmbeddingStatus.COMPLETED
+            chunk.embedding_provider = provider.name
+        await session.commit()
+        return {"status": "completed", "chunk_count": str(len(chunks)), "provider": provider.name.value}
 
 
 @celery_app.task(name="workers.update_processing_status", bind=True, max_retries=3, default_retry_delay=10)
@@ -186,7 +315,7 @@ def update_processing_status(self, asset_id: str, status: str, error: str | None
     that reports progress without running the full
     `AssetProcessingService.process_asset` flow."""
     try:
-        asyncio.run(_update_status(uuid.UUID(asset_id), AssetProcessingStatus(status), error))
+        _run_task_loop(_update_status(uuid.UUID(asset_id), AssetProcessingStatus(status), error))
     except Exception as exc:
         raise self.retry(exc=exc) from exc
     return {"status": "ok", "asset_id": asset_id, "processing_status": status}
@@ -219,7 +348,7 @@ def execute_research_run(self, run_id: str) -> dict[str, str]:
     would fail identically three more times.
     """
     try:
-        asyncio.run(_run_research(uuid.UUID(run_id)))
+        _run_task_loop(_run_research(uuid.UUID(run_id)))
     except Exception as exc:
         raise self.retry(exc=exc) from exc
     return {"status": "ok", "run_id": run_id}

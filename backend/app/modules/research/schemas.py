@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.modules.research.enums import (
     AgentMessageRole,
+    ResearchGroundingStatus,
     ResearchRunStatus,
     ResearchStepStatus,
 )
@@ -80,7 +81,13 @@ class ResearchRunRead(BaseModel):
     objective: str | None
     plan: dict[str, Any] | None
     final_answer: str | None
-    citations: list[str] | None
+    citations: list[dict[str, Any]] | None
+    #: How well `final_answer` is supported by the cited evidence.
+    #: `None` when the run never reached synthesis. Distinct from
+    #: `status`: a run can be `completed` and
+    #: `insufficient_evidence` at the same time, which is the honest
+    #: answer to an unanswerable question.
+    grounding_status: ResearchGroundingStatus | None
     error_message: str | None
     celery_task_id: str | None
     started_at: datetime | None

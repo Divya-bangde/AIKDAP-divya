@@ -1,0 +1,303 @@
+import type { Transition, Variants } from "motion/react";
+
+/** AIKDAP's motion vocabulary (Sprint 9K.2).
+ *
+ * Every animation in the product is composed from the variants below
+ * rather than defined inline, so timing and easing stay consistent and
+ * a change to the product's "feel" happens in one file.
+ *
+ * The rules this encodes:
+ *
+ * 1. **Motion communicates state, not decoration.** Entrances
+ *    establish hierarchy (what arrived, in what order); transitions
+ *    show continuity (this card became this page); status animation
+ *    reflects what the backend actually reports.
+ * 2. **Transform and opacity only.** Both are compositor-friendly, so
+ *    animation never triggers layout and never costs a reflow.
+ * 3. **Fast enough to feel responsive.** Nothing decorative runs
+ *    longer than `duration.slow`; navigation is never gated on an
+ *    animation finishing.
+ * 4. **Distance is small.** 8–16px of travel reads as intentional;
+ *    large movement reads as a template.
+ *
+ * Reduced motion is handled globally by `<MotionConfig reducedMotion="user">`
+ * in `App.tsx`, which strips transform/layout animation for users who
+ * ask for it while leaving opacity — so content still appears, it just
+ * doesn't travel. CSS-driven decoration is disabled separately in
+ * `index.css`. */
+
+export const duration = {
+  fast: 0.15,
+  base: 0.25,
+  slow: 0.4,
+} as const;
+
+/** Decelerating curve for entrances — quick to start, gentle to settle. */
+export const ease = [0.22, 1, 0.36, 1] as const;
+/** Symmetric curve for state changes and exits. */
+export const easeInOut = [0.4, 0, 0.2, 1] as const;
+
+export const transition: Transition = { duration: duration.base, ease };
+export const fastTransition: Transition = { duration: duration.fast, ease };
+
+/** Shared-layout spring, used for the project card → workspace
+ * transition and the active-nav indicator. Spring rather than duration
+ * because these follow a real element between two positions and should
+ * feel physical, not timed. */
+export const layoutSpring: Transition = {
+  type: "spring",
+  stiffness: 400,
+  damping: 38,
+  mass: 0.8,
+};
+
+export const pageEnter: Variants = {
+  hidden: { opacity: 0, y: 8 },
+  visible: { opacity: 1, y: 0, transition },
+  exit: { opacity: 0, y: -4, transition: fastTransition },
+};
+
+/** The route-level transition applied by the application shell to
+ * whichever page is currently routed (Sprint 9K.4).
+ *
+ * Two deliberate choices:
+ *
+ * 1. **Enter is opacity-only.** The pages themselves already rise 8px
+ *    via `pageEnter`. Adding travel here too would compound into ~18px
+ *    of movement, past the 16px this system allows, and read as a
+ *    slide. The shell supplies the departure the pages never had; the
+ *    pages supply the arrival.
+ * 2. **Short, and shorter on the way out.** Leaving is not information,
+ *    so it gets 160ms. Navigation is never gated on either.
+ *
+ * Applied inside a `sync`-mode `AnimatePresence`, so the outgoing and
+ * incoming pages are briefly mounted together — which is what allows a
+ * `layoutId` element (a project card becoming a workspace header) to
+ * animate between them. `mode="wait"` would unmount the source before
+ * the target existed and silently break every shared-element
+ * transition in the product. */
+export const routeTransition: Variants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.22, ease } },
+  exit: { opacity: 0, y: -8, transition: { duration: 0.16, ease: easeInOut } },
+};
+
+export const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition },
+};
+
+export const fadeIn: Variants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition },
+};
+
+export const scaleIn: Variants = {
+  hidden: { opacity: 0, scale: 0.96 },
+  visible: { opacity: 1, scale: 1, transition },
+};
+
+/** Parent of a list whose children should arrive in sequence. Pair
+ * with `staggerItem` on each child. The 40ms step is deliberately
+ * small: enough to read as ordered, short enough that a ten-item list
+ * still finishes in under half a second. */
+export const staggerContainer: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.04, delayChildren: 0.04 },
+  },
+};
+
+export const staggerItem: Variants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition },
+};
+
+/** Side panel (evidence drawer). Enters from the right on desktop. */
+export const drawerVariants: Variants = {
+  hidden: { opacity: 0, x: 24 },
+  visible: { opacity: 1, x: 0, transition: { duration: duration.base, ease } },
+  exit: { opacity: 0, x: 24, transition: fastTransition },
+};
+
+export const overlayVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: fastTransition },
+  exit: { opacity: 0, transition: fastTransition },
+};
+
+/** Expanding a collapsed region (a pipeline stage's detail). Animates
+ * height because that is the property that actually communicates
+ * "this opened"; kept to small regions so the layout cost is bounded. */
+export const expandVariants: Variants = {
+  hidden: { opacity: 0, height: 0 },
+  visible: { opacity: 1, height: "auto", transition },
+  exit: { opacity: 0, height: 0, transition: fastTransition },
+};
+
+/** A status badge changing value: the new value scales in rather than
+ * swapping instantly, so a state change is noticed without a flash. */
+export const statusChange: Variants = {
+  hidden: { opacity: 0, scale: 0.85 },
+  visible: { opacity: 1, scale: 1, transition: fastTransition },
+  exit: { opacity: 0, scale: 0.85, transition: { duration: 0.1 } },
+};
+
+/** Standard interactive feedback for cards and tiles. Applied via
+ * `whileHover`/`whileTap` so it never affects layout. */
+export const hoverLift = {
+  whileHover: { y: -2, transition: fastTransition },
+  whileTap: { y: 0, scale: 0.995, transition: { duration: 0.1 } },
+} as const;
+
+/* ---- Cinematic entry (Sprint 9K.3) ---------------------------------
+ *
+ * The landing page is the one place allowed a longer, orchestrated
+ * sequence — it is a brand moment rather than a working surface. Even
+ * so it stays bounded: the whole reveal completes in roughly 1.2s, and
+ * the CTA is interactive from the first frame, so nobody ever waits on
+ * an animation to use the page (Phase 5). */
+
+/** Parent of the landing composition. Children arrive in a deliberate
+ * order: structure, then identity, then meaning, then action. */
+export const landingReveal: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.12, delayChildren: 0.08 },
+  },
+};
+
+/** One element of the landing sequence. Slightly more travel and a
+ * slower settle than the in-app `fadeUp`, which is what makes it read
+ * as cinematic rather than as a normal UI transition. */
+export const landingItem: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.55, ease },
+  },
+};
+
+/** The wordmark itself: a fractionally larger scale change so the
+ * identity lands with a little more weight than the copy around it. */
+export const heroReveal: Variants = {
+  hidden: { opacity: 0, y: 16, scale: 0.985 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { duration: 0.7, ease },
+  },
+};
+
+/* ---- Landing → sign-in handoff (Sprint 9K.4, Phase 17) -------------
+ *
+ * The two pages share a backdrop that does not move, so the handoff is
+ * carried entirely by the content: the brand side resolves first, then
+ * the sign-in surface arrives. ~420ms end to end, inside the brief's
+ * 350–500ms window. */
+
+export const loginBrandReveal: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { duration: 0.35, ease, staggerChildren: 0.07, delayChildren: 0.05 },
+  },
+};
+
+/** The wordmark settles *inward* — it arrives slightly oversized and
+ * contracts to the application's scale, which is the shape of the
+ * landing page's hero-sized AIKDAP becoming a workspace header. */
+export const loginWordmark: Variants = {
+  hidden: { opacity: 0, scale: 1.09, y: -5 },
+  visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.5, ease } },
+};
+
+/** SVG link in the knowledge-network motif, drawn on with `pathLength`.
+ * Indexed so the network assembles outward rather than all at once. */
+export const knowledgeLink = (index: number): Variants => ({
+  hidden: { pathLength: 0, opacity: 0 },
+  visible: {
+    pathLength: 1,
+    opacity: 1,
+    transition: { duration: 0.8, ease, delay: 0.35 + index * 0.07 },
+  },
+});
+
+/** Node in the knowledge-network motif. */
+export const knowledgeNode = (index: number): Variants => ({
+  hidden: { opacity: 0, scale: 0 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: { duration: 0.4, ease, delay: 0.5 + index * 0.06 },
+  },
+});
+
+/* ---- Scroll storytelling (Sprint 9K.4) -----------------------------
+ *
+ * The entry experience became a scrolling document, which needs a
+ * different kind of motion from either the hero reveal or the working
+ * UI: content that responds to *arriving* rather than to loading.
+ *
+ * Every one of these is used with `whileInView` and
+ * `viewport={{ once: true }}`. Once means once — a section that
+ * re-animates every time it scrolls back into view turns a page into a
+ * fairground, and makes it impossible to re-read a sentence.
+ *
+ * The reader is never waiting on any of this: all content is in the
+ * DOM and readable from the moment it is scrolled to; these variants
+ * only affect how it arrives. Under reduced motion, `MotionConfig`
+ * drops the travel and keeps the opacity. */
+
+/** Where a section starts animating: slightly *after* its top edge
+ * enters, so the reveal happens in the reader's field of view rather
+ * than off the bottom of the screen where it is wasted. */
+export const inViewOnce = { once: true, margin: "0px 0px -15% 0px" } as const;
+
+/** A section's contents, arriving in reading order. */
+export const sectionReveal: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.08, delayChildren: 0.05 } },
+};
+
+export const sectionItem: Variants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease } },
+};
+
+/** A stage in an explanatory diagram. Slightly slower and further than
+ * `staggerItem`, because these are read one at a time rather than
+ * scanned as a group. */
+export const diagramStage = (index: number): Variants => ({
+  hidden: { opacity: 0, y: 14 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.45, ease, delay: index * 0.09 },
+  },
+});
+
+/** A connector between two diagram stages, drawn on rather than faded
+ * in — the drawing is what communicates direction of flow. Vertical
+ * connectors scale from the top, so `originY: 0` must be set on the
+ * element using this. */
+export const diagramConnector = (index: number): Variants => ({
+  hidden: { scaleY: 0, opacity: 0 },
+  visible: {
+    scaleY: 1,
+    opacity: 1,
+    transition: { duration: 0.35, ease, delay: 0.1 + index * 0.09 },
+  },
+});
+
+/** The theme toggle's icon swap. Small and quick — a control, not a
+ * flourish; deliberately no full rotation. */
+export const themeIcon: Variants = {
+  hidden: { opacity: 0, scale: 0.6, rotate: -35 },
+  visible: { opacity: 1, scale: 1, rotate: 0, transition: fastTransition },
+  exit: { opacity: 0, scale: 0.6, rotate: 35, transition: { duration: 0.12 } },
+};

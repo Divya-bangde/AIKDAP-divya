@@ -21,13 +21,16 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.planner.graph import get_research_graph
+from app.agents.planner.graph import get_research_graph, workflow_node_order
 from app.agents.planner.nodes import build_dependencies
+from app.agents.planner.registry import get_node_spec
 from app.agents.planner.state import ResearchNode
+from app.agents.planner.tracking import TRACKER_CONFIG_KEY, NodeExecutionTracker
 from app.core.logging.logger import get_logger
 from app.modules.projects.repository import ProjectRepository
 from app.modules.research.enums import (
     AgentMessageRole,
+    ResearchGroundingStatus,
     ResearchRunStatus,
     ResearchStepStatus,
 )
@@ -169,10 +172,12 @@ class ResearchService:
 class ResearchExecutionService:
     """Worker-scoped execution of the LangGraph research workflow.
 
-    Consumes the graph's update stream rather than awaiting a single
-    result, so each node's output is persisted the moment it completes.
-    A run that fails halfway therefore still carries a complete record
-    of everything that succeeded before it.
+    Owns the run lifecycle (`pending -> running -> completed|failed`)
+    and delegates per-node tracking to `ResearchStepTracker`, which the
+    orchestrator calls as each agent starts and finishes. Steps are
+    therefore written *while* the graph runs, not reconstructed after
+    it: a run in progress is observable through the API, and a run that
+    fails halfway keeps a complete record of everything before it.
 
     Never raises for workflow failures: like the asset processing
     pipeline, the row is the source of truth for "did this succeed",
@@ -194,131 +199,104 @@ class ResearchExecutionService:
             logger.warning("research_run_missing", run_id=str(run_id))
             return
 
-        started_at = datetime.now(timezone.utc)
         run.status = ResearchRunStatus.RUNNING
-        run.started_at = started_at
+        run.started_at = datetime.now(timezone.utc)
         run.error_message = None
         await self._session.commit()
 
-        logger.info("research_run_started", run_id=str(run.id), query=run.query)
+        logger.info(
+            "research_run_started",
+            run_id=str(run.id),
+            status=run.status.value,
+            query=run.query,
+        )
 
         monotonic_start = time.monotonic()
-        cursor = ExecutionCursor(monotonic_start)
-        final_state: dict[str, Any] = {}
+        tracker = ResearchStepTracker(self._session, run.id)
 
         try:
-            async for node_name, delta in self._stream(run):
-                await self._record_step(run, node_name, delta, cursor)
-                _absorb(final_state, delta)
+            final_state = await self._invoke_graph(run, tracker)
         except Exception as exc:  # noqa: BLE001 - recorded on the run, not swallowed
-            # The graph may have failed mid-statement; roll back before
-            # writing the failure or the commit below fails too.
+            # A critical node aborted the graph. It may have failed
+            # mid-statement, so roll back before writing the failure or
+            # that commit fails too.
             await self._session.rollback()
             await self._fail(run_id, monotonic_start, exc)
             return
 
-        await self._record_skipped(run, cursor)
+        # Re-fetch rather than reuse the instance the graph ran against,
+        # for the same reason `_fail` does: a *non-critical* node
+        # failure also rolls the session back mid-run, and a rollback
+        # expires every object in it. Reading an expired attribute
+        # afterwards triggers a lazy load that async SQLAlchemy cannot
+        # service, which surfaces as `MissingGreenlet` — a run that
+        # degraded successfully would then die while writing its own
+        # record.
+        run = await self._runs.get_by_id(run_id)
+        if run is None:
+            logger.error("research_run_vanished_mid_execution", run_id=str(run_id))
+            return
+
+        await self._record_skipped(run, tracker)
         await self._complete(run, monotonic_start, final_state)
 
-    async def _stream(self, run: ResearchRun):
-        """Yield `(node_name, state_delta)` for each node as it completes."""
-        graph = get_research_graph()
+    async def _invoke_graph(
+        self, run: ResearchRun, tracker: "ResearchStepTracker"
+    ) -> dict[str, Any]:
+        """Execute the compiled graph and return its final state.
+
+        The strategies, the database session, and the tracker are all
+        injected per run through the graph config — the compiled graph
+        itself holds no run-specific state.
+        """
         initial_state = {
             "run_id": str(run.id),
             "project_id": str(run.project_id),
             "owner_id": str(run.owner_id),
+            "task_id": str(run.task_id) if run.task_id else None,
             "query": run.query,
             "include_assets": run.include_assets,
             "include_web": run.include_web,
             "max_results": run.max_results,
+            "status": ResearchRunStatus.RUNNING.value,
         }
-        config = {"configurable": {"dependencies": build_dependencies(self._session)}}
+        config = {
+            "configurable": {
+                "dependencies": build_dependencies(self._session),
+                TRACKER_CONFIG_KEY: tracker,
+            }
+        }
+        return await get_research_graph().ainvoke(initial_state, config=config)
 
-        async for update in graph.astream(
-            initial_state, config=config, stream_mode="updates"
-        ):
-            for node_name, delta in update.items():
-                yield node_name, delta
-
-    async def _record_step(
-        self,
-        run: ResearchRun,
-        node_name: str,
-        delta: dict[str, Any],
-        cursor: "ExecutionCursor",
+    async def _record_skipped(
+        self, run: ResearchRun, tracker: "ResearchStepTracker"
     ) -> None:
-        """Persist one completed node as a step plus its transcript entries."""
-        report = delta.get("step") or {}
-        completed_at = datetime.now(timezone.utc)
-        duration_ms = cursor.elapsed_ms()
-
-        step = await self._steps.create(
-            ResearchStep(
-                run_id=run.id,
-                step_index=cursor.next_step_index(),
-                node_name=node_name,
-                title=report.get("title", node_name),
-                status=ResearchStepStatus.COMPLETED,
-                summary=report.get("summary"),
-                output_payload=report.get("output"),
-                started_at=cursor.step_started_at,
-                completed_at=completed_at,
-                duration_ms=duration_ms,
-            )
-        )
-
-        await self._messages.bulk_create(
-            [
-                AgentMessage(
-                    run_id=run.id,
-                    step_id=step.id,
-                    sequence=cursor.next_message_sequence(),
-                    role=AgentMessageRole(payload["role"]),
-                    agent_name=payload["agent_name"],
-                    content=payload["content"],
-                    message_metadata=payload.get("metadata") or {},
-                )
-                for payload in delta.get("messages", [])
-            ]
-        )
-
-        # Commit per node: a run still executing is observable through
-        # the API, and a later failure cannot erase completed steps.
-        await self._session.commit()
-        cursor.close_step(completed_at)
-        cursor.record_execution(node_name)
-
-        logger.info(
-            "research_step_recorded",
-            run_id=str(run.id),
-            node=node_name,
-            step_index=step.step_index,
-            duration_ms=duration_ms,
-        )
-
-    async def _record_skipped(self, run: ResearchRun, cursor: "ExecutionCursor") -> None:
-        """Record the nodes that never ran, and why.
+        """Record the agents that never ran, and why.
 
         A trace that only shows what executed hides the decision that
         mattered; the constitution requires routing itself to be
-        explainable.
+        explainable, and no registered node may silently disappear from
+        a run's trace.
         """
         skipped = [
-            node for node in ResearchNode if node.value not in cursor.executed_nodes
+            name for name in workflow_node_order() if name not in tracker.executed_nodes
         ]
-        for node in skipped:
+        for name in skipped:
             await self._steps.create(
                 ResearchStep(
                     run_id=run.id,
-                    step_index=cursor.next_step_index(),
-                    node_name=node.value,
-                    title=f"Skipped: {node.value}",
+                    step_index=tracker.next_step_index(),
+                    node_name=name,
+                    title=f"Skipped: {name}",
                     status=ResearchStepStatus.SKIPPED,
-                    summary=_skip_reason(node, run),
+                    summary=_skip_reason(ResearchNode(name), run),
                     started_at=None,
                     completed_at=None,
                     duration_ms=None,
                 )
+            )
+            logger.info(
+                "research_step_skipped", run_id=str(run.id), node=name, status="skipped"
             )
         if skipped:
             await self._session.commit()
@@ -332,6 +310,12 @@ class ResearchExecutionService:
         run.plan = final_state.get("plan")
         run.final_answer = final_state.get("final_answer")
         run.citations = final_state.get("citations") or []
+        # Read back as an enum so an unexpected value fails here rather
+        # than being written to the column verbatim.
+        grounding = final_state.get("grounding_status")
+        run.grounding_status = (
+            ResearchGroundingStatus(grounding) if grounding else None
+        )
         run.completed_at = datetime.now(timezone.utc)
         run.duration_ms = _elapsed_ms(monotonic_start)
         await self._session.commit()
@@ -339,8 +323,10 @@ class ResearchExecutionService:
         logger.info(
             "research_run_completed",
             run_id=str(run.id),
+            status=run.status.value,
             duration_ms=run.duration_ms,
             citation_count=len(run.citations or []),
+            grounding_status=run.grounding_status.value if run.grounding_status else None,
         )
 
     async def _fail(
@@ -378,21 +364,36 @@ class ResearchExecutionService:
         )
 
 
-class ExecutionCursor:
-    """Tracks ordering and per-step timing across one run's stream.
+class ResearchStepTracker(NodeExecutionTracker):
+    """Writes the `research_steps` trace as the graph executes.
 
-    Kept as a small object rather than a handful of loop variables so
-    `_record_step` stays a single-responsibility method and the timing
-    rule lives in one place: a step's duration is the wall time since
-    the previous step closed (or since the run started, for the first).
+    The database-backed implementation of the orchestrator's tracking
+    contract. It is the only writer of step rows, so step ordering,
+    timing, and the transcript all follow one rule rather than being
+    reconstructed by whoever happens to observe the graph.
+
+    Each node produces exactly one row, moving `running -> completed`
+    or `running -> failed`. The `running` row is committed before the
+    node executes, which is what makes an in-flight run observable
+    through `GET /research/runs/{id}`.
+
+    No second execution-tracking table is introduced: this uses the
+    existing `research_steps` and `agent_messages` models and the
+    existing `ResearchStepStatus` enum values.
     """
 
-    def __init__(self, monotonic_start: float) -> None:
-        self._monotonic_start = monotonic_start
-        self._boundary = monotonic_start
+    def __init__(self, session: AsyncSession, run_id: uuid.UUID) -> None:
+        self._session = session
+        self._run_id = run_id
+        self._steps = ResearchStepRepository(session)
+        self._messages = AgentMessageRepository(session)
         self._step_index = 0
         self._message_sequence = 0
-        self.step_started_at: datetime = datetime.now(timezone.utc)
+        # Stored as a plain UUID, not an ORM instance: a rollback in
+        # the failure path expires every object in the session, and
+        # touching an expired attribute would trigger a lazy load that
+        # async SQLAlchemy cannot service.
+        self._current_step_id: uuid.UUID | None = None
         self.executed_nodes: list[str] = []
 
     def next_step_index(self) -> int:
@@ -401,36 +402,107 @@ class ExecutionCursor:
         self._step_index += 1
         return index
 
-    def next_message_sequence(self) -> int:
+    async def on_node_start(self, node: str) -> None:
+        """Open a `running` step row before the agent executes."""
+        spec = get_node_spec(node)
+        step = await self._steps.create(
+            ResearchStep(
+                run_id=self._run_id,
+                step_index=self.next_step_index(),
+                node_name=node,
+                title=spec.title,
+                status=ResearchStepStatus.RUNNING,
+                started_at=datetime.now(timezone.utc),
+            )
+        )
+        self._current_step_id = step.id
+        self.executed_nodes.append(node)
+        await self._session.commit()
+
+    async def on_node_success(
+        self, node: str, update: dict[str, Any], duration_ms: int
+    ) -> None:
+        """Close the step as completed and persist the agent transcript."""
+        step = await self._current_step()
+        if step is None:
+            return
+
+        report = update.get("step") or {}
+        step.status = ResearchStepStatus.COMPLETED
+        step.summary = report.get("summary")
+        step.output_payload = report.get("output")
+        step.completed_at = datetime.now(timezone.utc)
+        step.duration_ms = duration_ms
+
+        await self._messages.bulk_create(
+            [
+                AgentMessage(
+                    run_id=self._run_id,
+                    step_id=step.id,
+                    sequence=self._next_message_sequence(),
+                    role=AgentMessageRole(payload["role"]),
+                    agent_name=payload["agent_name"],
+                    content=payload["content"],
+                    message_metadata=payload.get("metadata") or {},
+                )
+                for payload in update.get("messages", [])
+            ]
+        )
+        # Commit per node: a later failure cannot erase completed steps.
+        await self._session.commit()
+
+    async def on_node_failure(
+        self, node: str, error: BaseException, duration_ms: int, critical: bool
+    ) -> None:
+        """Close the step as failed, recording the error verbatim.
+
+        Rolls back first: the exception may have come from a failed
+        statement, leaving the session unusable for the write below.
+        The `running` row was already committed by `on_node_start`, so
+        the rollback discards nothing that matters.
+        """
+        await self._session.rollback()
+        step = await self._current_step()
+        if step is None:
+            return
+
+        message = f"{type(error).__name__}: {error}"
+        step.status = ResearchStepStatus.FAILED
+        step.summary = (
+            f"{'Critical' if critical else 'Non-critical'} failure in '{node}'."
+        )
+        step.error_message = message
+        step.completed_at = datetime.now(timezone.utc)
+        step.duration_ms = duration_ms
+
+        # The failure is part of the explainable trace, not only a log
+        # line, so it is recorded in the transcript too.
+        await self._messages.bulk_create(
+            [
+                AgentMessage(
+                    run_id=self._run_id,
+                    step_id=step.id,
+                    sequence=self._next_message_sequence(),
+                    role=AgentMessageRole.SYSTEM,
+                    agent_name=node,
+                    content=message,
+                    message_metadata={"critical": critical, "node": node},
+                )
+            ]
+        )
+        await self._session.commit()
+
+    async def _current_step(self) -> ResearchStep | None:
+        """Re-fetch the step opened by `on_node_start`."""
+        if self._current_step_id is None:
+            return None
+        return await self._session.get(ResearchStep, self._current_step_id)
+
+    def _next_message_sequence(self) -> int:
         """Return the next transcript position and advance the counter."""
         sequence = self._message_sequence
         self._message_sequence += 1
         return sequence
-
-    def elapsed_ms(self) -> int:
-        """Milliseconds spent in the step currently being closed."""
-        return int((time.monotonic() - self._boundary) * 1000)
-
-    def close_step(self, completed_at: datetime) -> None:
-        """Move the timing boundary to the end of the step just recorded."""
-        self._boundary = time.monotonic()
-        self.step_started_at = completed_at
-
-    def record_execution(self, node_name: str) -> None:
-        """Note that a node actually ran."""
-        self.executed_nodes.append(node_name)
-
-
-def _absorb(final_state: dict[str, Any], delta: dict[str, Any]) -> None:
-    """Accumulate the scalar fields the run needs from a node's update.
-
-    Only last-write-wins fields are carried: the additive channels
-    (`documents`, `messages`) are consumed as they stream and are not
-    needed again once persisted.
-    """
-    for field in ("plan", "objective", "final_answer", "citations", "context"):
-        if field in delta:
-            final_state[field] = delta[field]
 
 
 def _elapsed_ms(monotonic_start: float) -> int:

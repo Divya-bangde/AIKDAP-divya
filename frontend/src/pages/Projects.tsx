@@ -3,10 +3,13 @@ import { FolderKanban } from "lucide-react";
 
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
+import { PageTransition, Stagger, StaggerItem } from "@/components/motion/PageTransition";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateProjectDialog } from "@/features/projects/CreateProjectDialog";
-import { ProjectCard } from "@/features/projects/ProjectCard";
+import { ProjectCard, type ProjectStats } from "@/features/projects/ProjectCard";
+import * as assetsService from "@/services/assets";
 import * as projectsService from "@/services/projects";
+import * as researchService from "@/services/research";
 
 export function Projects() {
   const projectsQuery = useQuery({
@@ -14,22 +17,57 @@ export function Projects() {
     queryFn: projectsService.listProjects,
   });
 
+  // One unfiltered fetch each, then grouped by `project_id` on the
+  // client — rather than N requests, one per card. Both endpoints are
+  // already owner-scoped by the backend.
+  const assetsQuery = useQuery({
+    queryKey: ["assets", "all"],
+    queryFn: () => assetsService.listAssets(),
+  });
+  const runsQuery = useQuery({
+    queryKey: ["research", "runs", "all"],
+    queryFn: () => researchService.listResearchRuns(),
+  });
+
+  /** Real per-project counts, or `undefined` while unknown.
+   *
+   * `undefined` matters: the card renders nothing at all rather than
+   * "0 documents" for a project whose assets simply haven't loaded (or
+   * failed to load). A zero that means "we don't know yet" is exactly
+   * the kind of fabricated figure this product doesn't ship. */
+  function statsFor(projectId: string): ProjectStats {
+    return {
+      documents: assetsQuery.isSuccess
+        ? assetsQuery.data.filter((asset) => asset.project_id === projectId).length
+        : undefined,
+      groundedAnswers: runsQuery.isSuccess
+        ? runsQuery.data.filter(
+            (run) => run.project_id === projectId && run.grounding_status === "grounded",
+          ).length
+        : undefined,
+    };
+  }
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+    <PageTransition>
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
-          <p className="text-sm text-muted-foreground">
-            Every research project you own, in one place.
+          <p className="text-label uppercase text-muted-foreground">Workspace</p>
+          <h1 className="mt-1 font-display text-display">Projects</h1>
+          <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+            Each project is its own knowledge base. Documents uploaded here are the only
+            evidence AIKDAP will answer from.
           </p>
         </div>
         <CreateProjectDialog />
       </div>
 
+      <h2 className="sr-only">Your projects</h2>
+
       {projectsQuery.isLoading && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-40" />
+            <Skeleton key={i} className="h-48" />
           ))}
         </div>
       )}
@@ -45,12 +83,14 @@ export function Projects() {
       )}
 
       {projectsQuery.isSuccess && projectsQuery.data.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Stagger className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {projectsQuery.data.map((project) => (
-            <ProjectCard key={project.id} project={project} />
+            <StaggerItem key={project.id} className="h-full">
+              <ProjectCard project={project} stats={statsFor(project.id)} />
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       )}
-    </div>
+    </PageTransition>
   );
 }

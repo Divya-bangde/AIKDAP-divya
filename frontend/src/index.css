@@ -1,74 +1,143 @@
+/* Must precede the Tailwind directives: CSS requires @import to come
+ * before any other rule, and Tailwind's directives expand into rules. */
+@import "./styles/fonts.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* AIKDAP design system (Sprint 9K.2).
+ *
+ * One palette, defined once here as HSL channel triplets and consumed
+ * through Tailwind tokens — never as hardcoded colours in components.
+ *
+ * The aesthetic target is a technical intelligence console: calm,
+ * layered, precise. Depth comes from three deliberate surface levels
+ * plus hairline borders, not from glass or glow. Colour is used
+ * sparingly so that when something IS coloured, it means something.
+ *
+ * Accessibility note (do not regress): `--success` and `--warning`
+ * were darkened in Sprint 9K.1 after axe-core measured the original
+ * values at 3.88:1 / 3.00:1 against white badge text, below WCAG AA's
+ * 4.5:1. The values below preserve that fix. */
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    /* Base canvas. Slightly cool and off-white rather than pure white,
+     * so that white cards read as raised surfaces without needing a
+     * heavy shadow. */
+    --background: 220 24% 97%;
     --foreground: 222 47% 11%;
 
+    /* Three surface levels, used consistently:
+     *   card      — the standard raised panel
+     *   elevated  — panels that float above cards (drawers, popovers)
+     *   sunken    — inset wells (code, evidence, metric strips) */
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
+    --elevated: 0 0% 100%;
+    --sunken: 220 24% 96%;
 
     --primary: 243 75% 59%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 14% 96%;
+    --secondary: 220 18% 94%;
     --secondary-foreground: 222 47% 11%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
+    --muted: 220 18% 94%;
+    --muted-foreground: 220 9% 42%;
 
     --accent: 243 75% 96%;
     --accent-foreground: 243 75% 40%;
 
-    --success: 152 60% 36%;
+    /* The AI / processing state. Deliberately its own hue — not the
+     * primary indigo and not success green — so "the model is working
+     * on this" is never confused with "this is selected" or "this
+     * finished". Used for live pipeline stages and model attribution. */
+    --ai: 190 95% 30%;
+    --ai-foreground: 0 0% 100%;
+    --ai-soft: 190 70% 95%;
+
+    --success: 152 60% 30%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 42%;
+    --warning: 38 92% 30%;
     --warning-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 72% 45%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
+    --border: 220 16% 90%;
+    --border-strong: 220 14% 80%;
+    --input: 220 16% 88%;
     --ring: 243 75% 59%;
 
-    --radius: 0.625rem;
+    --radius: 0.75rem;
+
+    /* Elevation is a theme concern, not a fixed constant: on a light
+     * canvas depth comes from soft dark shadows, on a dark canvas it
+     * comes from deeper, tighter shadows plus lighter surfaces. Defined
+     * here as whole shadow strings so Tailwind's `shadow-*` utilities
+     * resolve per theme rather than baking one theme's values in. */
+    --shadow-subtle: 0 1px 2px 0 hsl(222 47% 11% / 0.04), 0 1px 3px 0 hsl(222 47% 11% / 0.03);
+    --shadow-raised: 0 2px 4px -1px hsl(222 47% 11% / 0.05), 0 8px 16px -4px hsl(222 47% 11% / 0.06);
+    --shadow-float: 0 8px 24px -6px hsl(222 47% 11% / 0.12), 0 16px 48px -12px hsl(222 47% 11% / 0.10);
   }
 
+  /* Dark theme.
+   *
+   * Not "light with a black background": the surface levels are
+   * re-derived so that elevation reads as *lighter* (the opposite of
+   * the light theme, where elevation reads as whiter-than-canvas but
+   * gains a shadow). Backgrounds carry a slight blue cast rather than
+   * being neutral grey — neutral dark greys look muddy next to the
+   * indigo primary and the cyan AI accent.
+   *
+   * Semantic roles are held constant across both themes (Phase 24/25):
+   * indigo = selection/navigation, cyan = active model processing,
+   * green = completed, amber = warning, red = error. Cyan is never
+   * used for "selected" or "done". */
   .dark {
-    --background: 222 47% 7%;
-    --foreground: 210 20% 96%;
+    --background: 224 47% 5%;
+    --foreground: 210 25% 96%;
 
-    --card: 222 40% 10%;
-    --card-foreground: 210 20% 96%;
+    --card: 223 42% 8%;
+    --card-foreground: 210 25% 96%;
+    --elevated: 222 38% 11%;
+    --sunken: 225 45% 6.5%;
 
-    --primary: 243 82% 68%;
-    --primary-foreground: 222 47% 7%;
+    --primary: 243 80% 70%;
+    --primary-foreground: 224 47% 6%;
 
-    --secondary: 222 30% 15%;
-    --secondary-foreground: 210 20% 96%;
+    --secondary: 222 26% 15%;
+    --secondary-foreground: 210 25% 96%;
 
-    --muted: 222 30% 15%;
-    --muted-foreground: 220 12% 65%;
+    --muted: 222 26% 15%;
+    --muted-foreground: 218 14% 68%;
 
-    --accent: 243 40% 20%;
-    --accent-foreground: 234 90% 85%;
+    --accent: 243 38% 19%;
+    --accent-foreground: 236 92% 88%;
 
-    --success: 152 55% 45%;
-    --success-foreground: 222 47% 7%;
+    --ai: 187 88% 56%;
+    --ai-foreground: 224 47% 6%;
+    --ai-soft: 190 62% 13%;
 
-    --warning: 38 92% 55%;
-    --warning-foreground: 222 47% 7%;
+    --success: 152 52% 48%;
+    --success-foreground: 224 47% 6%;
 
-    --destructive: 0 70% 58%;
-    --destructive-foreground: 222 47% 7%;
+    --warning: 38 92% 58%;
+    --warning-foreground: 224 47% 6%;
 
-    --border: 222 25% 18%;
-    --input: 222 25% 18%;
-    --ring: 243 82% 68%;
+    --destructive: 0 72% 62%;
+    --destructive-foreground: 224 47% 6%;
+
+    --border: 222 24% 16%;
+    --border-strong: 222 20% 27%;
+    --input: 222 24% 19%;
+    --ring: 243 80% 70%;
+
+    --shadow-subtle: 0 1px 2px 0 hsl(224 60% 2% / 0.5), 0 1px 3px 0 hsl(224 60% 2% / 0.4);
+    --shadow-raised: 0 2px 6px -1px hsl(224 60% 2% / 0.6), 0 10px 20px -6px hsl(224 60% 2% / 0.55);
+    --shadow-float: 0 10px 30px -8px hsl(224 60% 2% / 0.75), 0 20px 60px -16px hsl(224 60% 2% / 0.65);
   }
 
   * {
@@ -76,6 +145,282 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background font-sans text-foreground antialiased;
+    /* Inter's alternate glyph set: single-storey `a` off, straight-tail
+     * `l`, open `4`, single-storey `g`. These are the forms that keep
+     * `l` and `1` distinguishable in chunk ids and model names — a
+     * legibility choice, not a stylistic one. */
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    text-rendering: optimizeLegibility;
+  }
+
+  /* The display face is applied by role, never globally. Anything set
+   * in it is brand voice; everything else is interface. */
+  .font-display {
+    font-feature-settings: normal;
+  }
+
+  /* Every measurement in this product (scores, ranks, counts, latency)
+   * renders in tabular figures so columns of numbers line up and don't
+   * jitter as they update. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* The shell's background texture: a very low-contrast grid that
+   * gives large empty areas some structure without becoming a visible
+   * pattern. Pure CSS — no image, no canvas, no runtime cost.
+   *
+   * The fade is a top-to-bottom linear mask rather than a radial one:
+   * a radial ellipse sized in percentages produces a visible elliptical
+   * seam on wide or tall containers (it did, on both the login panel
+   * and the dashboard, in the Sprint 9K.2 browser pass). A linear fade
+   * has no edge to notice at any aspect ratio. */
+  .app-grid-surface {
+    background-image:
+      linear-gradient(to right, hsl(var(--border) / 0.45) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.45) 1px, transparent 1px);
+    background-size: 44px 44px;
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 55%);
+    mask-image: linear-gradient(to bottom, #000 0%, transparent 55%);
+  }
+
+  /* ---- Cinematic entry (Sprint 9K.3) --------------------------------
+   *
+   * These three classes belong to the landing page only. They are
+   * deliberately heavier than anything in the application shell: the
+   * entry screen is a brand moment and is allowed presence the working
+   * UI is not. All are pure CSS/SVG — no canvas, no WebGL, no runtime
+   * cost beyond compositing. */
+
+  /* A fine structural grid, fading out toward the edges so it reads as
+   * depth rather than as wallpaper. */
+  .landing-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--foreground) / 0.055) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--foreground) / 0.055) 1px, transparent 1px);
+    background-size: 64px 64px;
+    -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 45%, #000 20%, transparent 78%);
+    mask-image: radial-gradient(ellipse 90% 70% at 50% 45%, #000 20%, transparent 78%);
+  }
+
+  /* A hairline that fades out at both ends — the entry experience's
+   * section divider. Reads as a drawn rule rather than a border. */
+  .editorial-rule {
+    background-image: linear-gradient(
+      to right,
+      transparent,
+      hsl(var(--foreground) / 0.14) 15%,
+      hsl(var(--foreground) / 0.14) 85%,
+      transparent
+    );
+  }
+
+  /* Two very wide, very low-opacity washes — one indigo, one cyan —
+   * that give the dark canvas a sense of light without becoming a
+   * gradient background or a glow effect. */
+  .landing-aurora::before,
+  .landing-aurora::after {
+    content: "";
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(120px);
+    pointer-events: none;
+  }
+
+  /* Driven by the palette tokens rather than literal colours, so the
+   * same backdrop can sit behind the always-dark landing page and
+   * behind a light-theme login screen — which is what lets the two
+   * pages read as one continuous surface across the auth boundary
+   * (Sprint 9K.4, Phase 17). */
+  .landing-aurora::before {
+    width: 46rem;
+    height: 30rem;
+    top: -14rem;
+    left: 50%;
+    transform: translateX(-60%);
+    background: hsl(var(--primary) / 0.16);
+  }
+
+  .landing-aurora::after {
+    width: 38rem;
+    height: 26rem;
+    bottom: -12rem;
+    left: 50%;
+    transform: translateX(-20%);
+    background: hsl(var(--ai) / 0.1);
+  }
+
+  /* A slow breath on the halo behind the network's apex — the one
+   * moving thing on the page once the reveal has settled. 3.4s and a
+   * shallow opacity range, so it registers as alive rather than as an
+   * animation demanding attention.
+   *
+   * Applied to a dedicated decorative circle that Motion does not
+   * control: putting it on a variant-driven element would mean a CSS
+   * animation and Motion's inline styles both writing `opacity`. */
+  .landing-pulse {
+    animation: landing-breathe 3.4s ease-in-out infinite;
+  }
+
+  @keyframes landing-breathe {
+    0%,
+    100% {
+      opacity: 0.35;
+    }
+    50% {
+      opacity: 0.9;
+    }
+  }
+
+  /* Darkens the frame so the centre composition holds the eye. */
+  .landing-vignette {
+    background: radial-gradient(ellipse 75% 65% at 50% 45%, transparent 35%, hsl(224 60% 3% / 0.85) 100%);
+  }
+
+  /* Indeterminate activity for a step the backend reports as running.
+   * It communicates "work is in progress", never a percentage — the
+   * backend does not report progress, so neither does this. */
+  .ai-pulse-ring {
+    box-shadow: 0 0 0 0 hsl(var(--ai) / 0.5);
+    animation: ai-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes ai-pulse {
+    0% {
+      box-shadow: 0 0 0 0 hsl(var(--ai) / 0.45);
+    }
+    70% {
+      box-shadow: 0 0 0 8px hsl(var(--ai) / 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 hsl(var(--ai) / 0);
+    }
+  }
+
+  /* Travelling highlight along a pipeline connector while the stage
+   * below it is running. */
+  .ai-flow-line {
+    background-image: linear-gradient(
+      to bottom,
+      hsl(var(--ai) / 0.9) 0%,
+      hsl(var(--ai) / 0.05) 60%,
+      transparent 100%
+    );
+    animation: ai-flow 1.6s linear infinite;
+  }
+
+  @keyframes ai-flow {
+    0% {
+      transform: translateY(-100%);
+    }
+    100% {
+      transform: translateY(200%);
+    }
+  }
+
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--secondary)) 37%,
+      hsl(var(--muted)) 63%
+    );
+    background-size: 400% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0 50%;
+    }
+  }
+}
+
+/* Theme transition (Sprint 9K.4).
+ *
+ * Switching theme used to be a single frame: the class flipped and
+ * every colour in the document changed at once. Correct, but it read
+ * as a glitch rather than as a change.
+ *
+ * The fix uses the View Transitions API, which is the only mechanism
+ * that can show the *old* and *new* rendering of a page at the same
+ * time. The browser snapshots both, and the script in `useTheme.ts`
+ * animates a `clip-path` circle on the new snapshot outward from the
+ * toggle button — so the new theme is genuinely revealed, rather than
+ * the page being wiped with a flat colour.
+ *
+ * Two things must be neutralised for that to work. The default
+ * cross-fade is disabled (`animation: none`), because a cross-fade
+ * under an expanding clip reads as mud; and the default
+ * `mix-blend-mode: plus-lighter` is reset to `normal`, since the two
+ * snapshots are deliberately stacked opaquely rather than blended.
+ *
+ * Deliberately NOT `transition: all` on every element: that would
+ * animate colour on every hover, focus and state change in the
+ * product, cost a paint on each one, and make the whole UI feel
+ * laggy — the exact failure mode the sprint brief calls out.
+ *
+ * Browsers without the API fall back to an instant switch, which is
+ * the previous behaviour and is fine. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* The outgoing theme sits underneath; the incoming theme is clipped
+ * open on top of it. */
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+/* Reduced motion (Sprint 9K.2, mandatory).
+ *
+ * Motion.dev's own animations are disabled via <MotionConfig
+ * reducedMotion="user"> in App.tsx; this block covers the CSS-driven
+ * decoration above, which Motion knows nothing about.
+ *
+ * Decorative loops (pulse, flow, shimmer) stop entirely. Functional
+ * state is untouched: a running stage still renders as running, in
+ * colour, with its label — only the movement is removed. */
+@media (prefers-reduced-motion: reduce) {
+  .ai-pulse-ring,
+  .ai-flow-line,
+  .shimmer {
+    animation: none !important;
+  }
+
+  /* The landing's knowledge-network motif keeps its structure — nodes,
+   * links and labels all remain — but stops travelling. */
+  .landing-pulse {
+    animation: none !important;
+  }
+
+  .ai-flow-line {
+    transform: none;
+    opacity: 0.6;
+  }
+
+  .shimmer {
+    background: hsl(var(--muted));
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
