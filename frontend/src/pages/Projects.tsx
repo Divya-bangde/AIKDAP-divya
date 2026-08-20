@@ -3,10 +3,11 @@ import { FolderKanban } from "lucide-react";
 
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
+import { ProjectGridSkeleton } from "@/components/common/Skeletons";
 import { PageTransition, Stagger, StaggerItem } from "@/components/motion/PageTransition";
-import { Skeleton } from "@/components/ui/skeleton";
 import { CreateProjectDialog } from "@/features/projects/CreateProjectDialog";
 import { ProjectCard, type ProjectStats } from "@/features/projects/ProjectCard";
+import { isGroundedAnswer } from "@/features/research/research-presentation";
 import * as assetsService from "@/services/assets";
 import * as projectsService from "@/services/projects";
 import * as researchService from "@/services/research";
@@ -42,7 +43,7 @@ export function Projects() {
         : undefined,
       groundedAnswers: runsQuery.isSuccess
         ? runsQuery.data.filter(
-            (run) => run.project_id === projectId && run.grounding_status === "grounded",
+            (run) => run.project_id === projectId && isGroundedAnswer(run),
           ).length
         : undefined,
     };
@@ -64,13 +65,7 @@ export function Projects() {
 
       <h2 className="sr-only">Your projects</h2>
 
-      {projectsQuery.isLoading && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-48" />
-          ))}
-        </div>
-      )}
+      {projectsQuery.isLoading && <ProjectGridSkeleton />}
 
       {projectsQuery.isError && <ErrorState error={projectsQuery.error} />}
 

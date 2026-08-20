@@ -1,21 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import { FileText, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
-import { StatusBadge } from "@/components/common/StatusBadge";
+import { ProjectWorkspaceSkeleton, RowListSkeleton } from "@/components/common/Skeletons";
 import { PageTransition } from "@/components/motion/PageTransition";
 import { AnimatedNumber } from "@/components/motion/AnimatedNumber";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DocumentsSection } from "@/features/assets/DocumentsSection";
 import { allSettled, knowledgeState } from "@/features/assets/asset-state";
 import { ProjectHeader } from "@/features/projects/ProjectHeader";
+import { ResearchHistoryList } from "@/features/research/ResearchHistoryList";
 import { usePolling } from "@/hooks/usePolling";
 import { fadeUp } from "@/lib/motion";
 import * as assetsService from "@/services/assets";
@@ -66,12 +65,7 @@ export function ProjectDetail() {
   });
 
   if (projectQuery.isLoading) {
-    return (
-      <div className="flex flex-col gap-4">
-        <Skeleton className="h-24" />
-        <Skeleton className="h-64" />
-      </div>
-    );
+    return <ProjectWorkspaceSkeleton />;
   }
 
   if (projectQuery.isError) {
@@ -148,35 +142,9 @@ export function ProjectDetail() {
         <TabsContent value="research">
           <motion.div initial="hidden" animate="visible" variants={fadeUp}>
             {runsQuery.isLoading ? (
-              <Skeleton className="h-32" />
-            ) : runs.length === 0 ? (
-              <EmptyState
-                icon={Search}
-                title="No research runs in this project yet."
-                description="Ask a question to produce a grounded, cited answer."
-              />
+              <RowListSkeleton label="Loading research history" />
             ) : (
-              <Card>
-                <CardContent className="flex flex-col gap-1 p-3">
-                  {runs.map((run) => (
-                    <Link
-                      key={run.id}
-                      to={`/research/${run.id}`}
-                      className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-sunken"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <span className="line-clamp-1 text-sm font-medium">{run.query}</span>
-                      </div>
-                      {run.grounding_status ? (
-                        <StatusBadge domain="grounding" value={run.grounding_status} />
-                      ) : (
-                        <StatusBadge domain="researchRun" value={run.status} />
-                      )}
-                    </Link>
-                  ))}
-                </CardContent>
-              </Card>
+              <ResearchHistoryList runs={runs} />
             )}
           </motion.div>
         </TabsContent>

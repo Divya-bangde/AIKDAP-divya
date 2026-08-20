@@ -76,10 +76,29 @@ export const pageEnter: Variants = {
  * animate between them. `mode="wait"` would unmount the source before
  * the target existed and silently break every shared-element
  * transition in the product. */
+/** Direction-aware: `custom` is a signed depth delta computed in
+ * `RoutedPage` from the two routes' path-segment counts (positive =
+ * moving to a deeper route, negative = shallower, 0 = a lateral move
+ * between siblings at the same depth).
+ *
+ * The asymmetry is the point (Sprint 9K.4 revisit): Dashboard →
+ * Project should read as *entering* something, Project → Research as
+ * moving further in, and back navigation should read as retreating —
+ * not as the same fade playing in reverse. Kept to 8-10px of travel,
+ * within the vocabulary's existing bound, so it registers as directed
+ * rather than as a slide. */
 export const routeTransition: Variants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.22, ease } },
-  exit: { opacity: 0, y: -8, transition: { duration: 0.16, ease: easeInOut } },
+  hidden: (direction: number) => ({
+    opacity: 0,
+    x: direction > 0 ? 10 : direction < 0 ? -10 : 0,
+    scale: direction === 0 ? 1 : 0.99,
+  }),
+  visible: { opacity: 1, x: 0, scale: 1, transition: { duration: 0.24, ease } },
+  exit: (direction: number) => ({
+    opacity: 0,
+    x: direction >= 0 ? -8 : 8,
+    transition: { duration: 0.16, ease: easeInOut },
+  }),
 };
 
 export const fadeUp: Variants = {
@@ -112,6 +131,11 @@ export const staggerContainer: Variants = {
 export const staggerItem: Variants = {
   hidden: { opacity: 0, y: 10 },
   visible: { opacity: 1, y: 0, transition },
+  // Sprint 9K.9: only takes effect where a caller wraps the list in its
+  // own `AnimatePresence` (e.g. `ResearchHistoryList` filtering a run
+  // out of view) — everywhere else `StaggerItem` is used, the list
+  // never shrinks, so this clause is simply never reached.
+  exit: { opacity: 0, y: -6, transition: fastTransition },
 };
 
 /** Side panel (evidence drawer). Enters from the right on desktop. */
@@ -149,6 +173,22 @@ export const statusChange: Variants = {
 export const hoverLift = {
   whileHover: { y: -2, transition: fastTransition },
   whileTap: { y: 0, scale: 0.995, transition: { duration: 0.1 } },
+  /* Motion gives any element carrying `whileTap` a `tabIndex` of 0, on
+   * the reasonable assumption that a thing with press feedback is a
+   * custom button. Everywhere `hoverLift` is used that assumption is
+   * wrong: it decorates a *wrapper* whose real control is the link
+   * inside it (project cards, recent-project rows), or a metric tile
+   * with no control at all (the dashboard's four KPI cards).
+   *
+   * Left alone that put five focusable-but-inert stops on the Command
+   * Center — tabbing landed on each KPI tile, where Enter did nothing,
+   * and on each project row twice: once on the wrapper, once on the
+   * link it contains (counted in a real browser, Sprint 9K.6).
+   *
+   * Opting the wrapper out of the tab order removes the dead stops and
+   * costs nothing: hover and press feedback are pointer affordances,
+   * and the genuinely interactive element inside is still reached. */
+  tabIndex: -1,
 } as const;
 
 /* ---- Cinematic entry (Sprint 9K.3) ---------------------------------

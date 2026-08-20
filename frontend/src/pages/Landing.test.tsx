@@ -51,6 +51,21 @@ describe("Landing", () => {
     expect(screen.getByRole("link", { name: /enter aikdap/i })).toHaveAttribute("href", "/login");
   });
 
+  it("gives the hero a secondary way in for a visitor not ready to sign up (Sprint 9K.7)", () => {
+    mockSystemDark(false);
+    renderWithProviders(<Harness />, { route: "/" });
+
+    // Before this, the hero had exactly one exit — straight to login —
+    // so "let me see how it works first" had nowhere to go without
+    // scrolling and hoping. It points at section 03's own id, which
+    // `LandingNav`'s in-page links already use.
+    const explore = screen.getByRole("link", { name: /explore how it works/i });
+    expect(explore).toHaveAttribute("href", "#pipeline");
+    // Real from the first render, same as the primary CTA — not gated
+    // behind the lazy-loaded story chunk resolving.
+    expect(explore).toBeEnabled();
+  });
+
   it("forces dark even when the user's saved preference is light", async () => {
     mockSystemDark(false);
     useThemeStore.setState({ preference: "light", override: null });
@@ -128,6 +143,37 @@ describe("Landing", () => {
       "Ground",
       "Synthesize",
     ]);
+  });
+
+  it("closes on a footer that offers a way in and invents nothing", async () => {
+    mockSystemDark(false);
+    renderWithProviders(<Harness />, { route: "/" });
+
+    const footer = await screen.findByRole("contentinfo");
+    expect(footer).toBeInTheDocument();
+
+    // A second way in, for a reader who has scrolled past every section.
+    const signIn = screen.getAllByRole("link", { name: /^sign in$/i });
+    expect(signIn.length).toBeGreaterThan(0);
+    expect(signIn[0]).toHaveAttribute("href", "/login");
+
+    // Every in-page link points at a section that actually exists.
+    const anchors = [...footer.querySelectorAll('a[href^="#"]')];
+    expect(anchors.length).toBeGreaterThan(0);
+    for (const anchor of anchors) {
+      const id = anchor.getAttribute("href")!.slice(1);
+      expect(document.getElementById(id), `#${id} should exist on the page`).not.toBeNull();
+    }
+
+    /* The details a template footer fabricates and this one must not:
+     * no invented company, no address, no copyright holder, and no
+     * social accounts that do not exist. */
+    const text = footer.textContent ?? "";
+    expect(text).not.toMatch(/©|\(c\)|all rights reserved/i);
+    expect(text).not.toMatch(/\b(twitter|linkedin|github|facebook|instagram)\b/i);
+    expect(text).not.toMatch(/\b(inc\.|ltd\.|llc|gmbh)\b/i);
+    expect(footer.querySelector('a[href^="mailto:"]')).toBeNull();
+    expect(footer.querySelector('a[href^="http"]')).toBeNull();
   });
 
   it("never presents its diagrams as measurements of a running system", async () => {

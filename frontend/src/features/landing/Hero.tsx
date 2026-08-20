@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { AikdapMark } from "@/components/common/AikdapMark";
 import { KnowledgeNetwork } from "@/features/landing/KnowledgeNetwork";
 import { heroReveal, landingItem, landingReveal } from "@/lib/motion";
 
@@ -31,7 +32,11 @@ export function Hero() {
       className="relative mx-auto flex min-h-[100svh] w-full max-w-6xl flex-col justify-center gap-16 px-6 pb-24 pt-32 md:px-10 lg:flex-row lg:items-center lg:justify-between lg:gap-20 lg:pb-32"
     >
       <div className="flex max-w-2xl flex-col items-start">
-        <motion.p variants={landingItem} className="text-eyebrow uppercase text-ai">
+        <motion.div variants={landingItem}>
+          <AikdapMark className="h-11 w-11 rounded-xl shadow-float" />
+        </motion.div>
+
+        <motion.p variants={landingItem} className="mt-6 text-eyebrow uppercase text-ai">
           AI-Driven Knowledge Discovery
         </motion.p>
 
@@ -71,7 +76,18 @@ export function Hero() {
           ))}
         </motion.ul>
 
-        <motion.div variants={landingItem} className="mt-12">
+        {/* Two CTAs, deliberately unequal in weight (Sprint 9K.7): a
+         * visitor ready to act has "Enter AIKDAP"; one who wants to
+         * understand the system first has a real, quieter way to keep
+         * reading rather than being funneled straight to login. Before
+         * this the hero had exactly one exit, which meant "I want to
+         * see how it works before I sign up" had no answer above the
+         * fold — the only way to find out was to scroll and hope.
+         * `#pipeline` is section 03's own id, already used by
+         * `LandingNav`'s in-page links; `scroll-mt-20` on every section
+         * (see `LandingSection`) is what keeps the fixed header from
+         * covering the heading it lands on. */}
+        <motion.div variants={landingItem} className="mt-12 flex flex-wrap items-center gap-4">
           <Link
             to="/login"
             className="group inline-flex items-center gap-3 rounded-xl bg-foreground px-7 py-4 font-display text-base font-medium tracking-tight text-background shadow-float transition-colors duration-200 hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -82,6 +98,16 @@ export function Hero() {
               className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
             />
           </Link>
+          <a
+            href="#pipeline"
+            className="group inline-flex items-center gap-2 rounded-xl border border-border-strong px-6 py-4 font-display text-base font-medium tracking-tight text-foreground transition-colors duration-200 hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            Explore how it works
+            <ArrowRight
+              aria-hidden="true"
+              className="h-4 w-4 rotate-90 transition-transform duration-200 group-hover:translate-y-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-y-0"
+            />
+          </a>
         </motion.div>
       </div>
 

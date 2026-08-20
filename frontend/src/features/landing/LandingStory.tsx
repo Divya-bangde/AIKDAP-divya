@@ -3,6 +3,7 @@ import { ArrowRight, ListTree, Quote, SlidersHorizontal } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { FlowChain } from "@/features/landing/FlowChain";
+import { LandingFooter } from "@/features/landing/LandingFooter";
 import { LandingItem, LandingSection } from "@/features/landing/LandingSection";
 import { PipelineRail, type PipelineStage } from "@/features/landing/PipelineRail";
 import { ProviderRouting } from "@/features/landing/ProviderRouting";
@@ -377,6 +378,8 @@ export default function LandingStory() {
           </motion.p>
         </div>
       </motion.section>
+
+      <LandingFooter />
     </>
   );
 }

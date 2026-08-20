@@ -10,6 +10,18 @@ export default {
       screens: { "2xl": "1400px" },
     },
     extend: {
+      spacing: {
+        /* The icon step between `4` (16px) and `5` (20px), used for an
+         * icon sitting in a 36–40px tile.
+         *
+         * Four components already asked for `h-4.5 w-4.5` — but 4.5 is
+         * not in Tailwind's default scale, so those classes generated no
+         * CSS at all and the icons silently fell back to lucide's own
+         * 24px default: oversized, and inconsistent with every other
+         * icon-in-a-tile in the product. Declaring the step makes the
+         * intent real rather than deleting it. */
+        4.5: "1.125rem",
+      },
       colors: {
         border: "hsl(var(--border))",
         "border-strong": "hsl(var(--border-strong))",

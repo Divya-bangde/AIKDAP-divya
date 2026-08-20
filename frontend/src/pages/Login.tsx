@@ -3,6 +3,7 @@ import { ArrowDown, Brain, FileText, Lightbulb, Quote } from "lucide-react";
 import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 
+import { AikdapMark } from "@/components/common/AikdapMark";
 import { LoginForm } from "@/features/auth/LoginForm";
 import { RegisterForm } from "@/features/auth/RegisterForm";
 import { EntryBackdrop } from "@/features/landing/EntryBackdrop";
@@ -60,12 +61,7 @@ export function Login() {
             to="/"
             className="inline-flex items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <span
-              aria-hidden="true"
-              className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary font-display text-lg font-semibold text-primary-foreground shadow-raised"
-            >
-              A
-            </span>
+            <AikdapMark className="h-11 w-11 rounded-xl shadow-raised" />
             <span>
               {/* The wordmark arrives fractionally larger and settles —
                * the visual echo of the landing page's oversized
@@ -126,9 +122,7 @@ export function Login() {
           className="w-full max-w-sm"
         >
           <div className="mb-8 flex flex-col items-center gap-3 text-center lg:hidden">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary font-display text-lg font-semibold text-primary-foreground">
-              A
-            </div>
+            <AikdapMark className="h-11 w-11 rounded-xl" />
             <div>
               {/* The desktop brand panel's own `h1` is `display: none`
                * below `lg`, so without this the page had no level-one

@@ -2,12 +2,15 @@ import { motion } from "motion/react";
 import { AlertTriangle, Loader2 } from "lucide-react";
 
 import { ErrorState } from "@/components/common/ErrorState";
+import { ResearchRunSkeleton } from "@/components/common/Skeletons";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ResearchPipeline } from "@/features/research/ResearchPipeline";
+import { researchLayoutId } from "@/features/research/ResearchHistoryList";
 import { ResearchResult } from "@/features/research/ResearchResult";
+import { runOutcome } from "@/features/research/research-presentation";
 import { usePolling } from "@/hooks/usePolling";
-import { fadeUp } from "@/lib/motion";
+import { fadeUp, layoutSpring } from "@/lib/motion";
 import * as researchService from "@/services/research";
 import type { components } from "@/types/api";
 
@@ -30,12 +33,7 @@ export function ResearchRunView({ runId }: { runId: string }) {
   });
 
   if (runQuery.isLoading) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin text-ai" />
-        Loading research run…
-      </div>
-    );
+    return <ResearchRunSkeleton />;
   }
 
   if (runQuery.isError) {
@@ -46,6 +44,7 @@ export function ResearchRunView({ runId }: { runId: string }) {
   if (!run) return null;
 
   const isRunning = !isTerminal(run);
+  const outcome = runOutcome(run);
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,12 +64,39 @@ export function ResearchRunView({ runId }: { runId: string }) {
                 <p className="text-label uppercase text-muted-foreground">Research query</p>
                 {/* The query is this page's subject, so it is the page's
                  * single `h1` — axe flagged the run view as having no
-                 * level-one heading when this was an `h2`. */}
-                <h1 className="mt-1 text-title">{run.query}</h1>
+                 * level-one heading when this was an `h2`.
+                 *
+                 * It also carries the `layoutId` of the row that was
+                 * clicked in the project's research history, so arriving
+                 * here animates that question into the heading rather
+                 * than swapping one page for another: the run reads as
+                 * the history item expanded, which is what it is. */}
+                <motion.h1
+                  layoutId={researchLayoutId(run.id)}
+                  transition={layoutSpring}
+                  className="mt-1 text-title"
+                >
+                  {run.query}
+                </motion.h1>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {isRunning && <Loader2 className="h-3.5 w-3.5 animate-spin text-ai" />}
-                <StatusBadge domain="researchRun" value={run.status} />
+                {/* Once the backend has decided an outcome, that outcome —
+                 * not the bare fact that the async job finished — is what
+                 * belongs in the page's most prominent badge.
+                 *
+                 * `run.status === "completed"` only means the pipeline
+                 * ran to the end; it says nothing about whether an answer
+                 * came out of it. Showing it alone put an identical green
+                 * "Completed" pill here for a fully grounded answer AND
+                 * for a deliberate insufficient-evidence decline — the
+                 * one outcome this product exists to make unmistakable
+                 * (confirmed side-by-side in a real browser, Sprint
+                 * 9K.7). `runOutcome` (Sprint 9K.9) is the one place this
+                 * resolution now lives — Dashboard and
+                 * `ResearchHistoryList` render the same outcome for the
+                 * same run through the same function. */}
+                <StatusBadge domain={outcome.domain} value={outcome.value} />
               </div>
             </div>
           </CardHeader>

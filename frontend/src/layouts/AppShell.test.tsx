@@ -50,6 +50,37 @@ describe("AppShell", () => {
     expect(useAuthStore.getState().accessToken).toBeNull();
   });
 
+  it("lets its content column shrink below its content's intrinsic width", async () => {
+    useAuthStore.setState({ accessToken: "tok", refreshToken: "ref", user: null });
+    vi.mocked(authService.currentUser).mockResolvedValue({
+      id: "u1",
+      email: "researcher@example.com",
+      full_name: null,
+      is_active: true,
+      created_at: new Date().toISOString(),
+    });
+
+    renderWithProviders(
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route path="/" element={<div>Dashboard content</div>} />
+        </Route>
+      </Routes>,
+    );
+
+    /* A flex item defaults to `min-width: auto` and so refuses to
+     * shrink below its content. Without `min-w-0` this column stayed
+     * 450px wide inside a 390px viewport and every authenticated page
+     * scrolled sideways (measured in a real browser, Sprint 9K.6).
+     *
+     * jsdom does no layout, so the overflow itself cannot be asserted
+     * here — what this pins is the class that prevents it, which is
+     * the thing a future edit would silently drop. */
+    const column = document.querySelector("main")?.parentElement;
+    expect(column).not.toBeNull();
+    expect(column).toHaveClass("min-w-0");
+  });
+
   it("moves one navigation indicator between links rather than swapping four", async () => {
     useAuthStore.setState({ accessToken: "tok", refreshToken: "ref", user: null });
     vi.mocked(authService.currentUser).mockResolvedValue({

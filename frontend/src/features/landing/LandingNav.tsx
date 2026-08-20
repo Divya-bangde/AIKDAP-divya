@@ -1,6 +1,8 @@
 import { motion, useScroll, useSpring, useTransform } from "motion/react";
 import { Link } from "react-router-dom";
 
+import { AikdapMark } from "@/components/common/AikdapMark";
+
 const SECTIONS = [
   { href: "#pipeline", label: "Pipeline" },
   { href: "#grounding", label: "Grounding" },
@@ -61,12 +63,7 @@ export function LandingNav() {
           to="/"
           className="flex items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <span
-            aria-hidden="true"
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary font-display text-sm font-semibold text-primary-foreground"
-          >
-            A
-          </span>
+          <AikdapMark className="h-8 w-8 rounded-lg" />
           <span className="font-display text-base font-medium tracking-tight text-foreground">
             AIKDAP
           </span>

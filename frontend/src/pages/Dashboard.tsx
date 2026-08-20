@@ -16,9 +16,12 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { PageTransition, Stagger, StaggerItem } from "@/components/motion/PageTransition";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ActiveWorkPanel } from "@/features/command-center/ActiveWorkPanel";
+import { activeWork } from "@/features/command-center/active-work";
 import { PipelineOverview } from "@/features/command-center/PipelineOverview";
 import { SummaryCard } from "@/features/command-center/SummaryCard";
-import { formatRelativeTime } from "@/lib/format";
+import { isGroundedAnswer, runOutcome } from "@/features/research/research-presentation";
+import { formatDuration, formatRelativeTime } from "@/lib/format";
 import { hoverLift } from "@/lib/motion";
 import * as assetsService from "@/services/assets";
 import * as projectsService from "@/services/projects";
@@ -38,11 +41,23 @@ export function Dashboard() {
   const recentProjects = projectsQuery.data?.slice(0, 4) ?? [];
   const recentRuns = runsQuery.data?.slice(0, 5) ?? [];
 
+  // Real project name per run, looked up rather than re-fetched — the
+  // dashboard already holds the full project list.
+  const projectNameById = new Map(
+    (projectsQuery.data ?? []).map((project) => [project.id, project.name]),
+  );
+
+  // "What AIKDAP is doing right now", distinct from "what it did
+  // recently" below — the one tier the previous dashboard collapsed
+  // into a single "recent" list (Sprint 9K.5).
+  const active = activeWork(runsQuery.data ?? [], assetsQuery.data ?? [], projectsQuery.data ?? []);
+  const activeLoading = runsQuery.isLoading || assetsQuery.isLoading || projectsQuery.isLoading;
+
   // Counted from the real `grounding_status` the backend stores on each
   // run — not inferred from `status`, which only says the run finished.
-  const groundedRuns = runsQuery.data?.filter(
-    (run) => run.grounding_status === "grounded",
-  ).length;
+  // `isGroundedAnswer` is the shared rule (Sprint 9K.10); the count it
+  // produces is identical to what this line computed inline before.
+  const groundedRuns = runsQuery.data?.filter(isGroundedAnswer).length;
 
   return (
     <PageTransition>
@@ -119,6 +134,8 @@ export function Dashboard() {
         </StaggerItem>
       </Stagger>
 
+      <ActiveWorkPanel items={active} isLoading={activeLoading} />
+
       <PipelineOverview />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -182,25 +199,59 @@ export function Dashboard() {
               <EmptyState icon={Search} title="Ask your first research question." />
             ) : (
               <Stagger className="flex flex-col gap-1">
-                {recentRuns.map((run) => (
-                  <StaggerItem key={run.id}>
-                    <Link
-                      to={`/research/${run.id}`}
-                      className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-sunken"
-                    >
-                      <span className="line-clamp-1 min-w-0 flex-1 text-sm font-medium">
-                        {run.query}
-                      </span>
-                      <div className="flex shrink-0 items-center gap-2">
-                        {run.grounding_status ? (
-                          <StatusBadge domain="grounding" value={run.grounding_status} />
-                        ) : (
-                          <StatusBadge domain="researchRun" value={run.status} />
-                        )}
-                      </div>
-                    </Link>
-                  </StaggerItem>
-                ))}
+                {recentRuns.map((run) => {
+                  const isTerminal = run.status === "completed" || run.status === "failed";
+                  const outcome = runOutcome(run);
+                  // A real count, not a guess: `citations` is already
+                  // part of `GET /research/runs` — no extra fetch, and
+                  // never shown for zero (a "0 citations" line would
+                  // read as reassurance for an answer that has none).
+                  const citationCount = run.citations?.length ?? 0;
+                  return (
+                    <StaggerItem key={run.id}>
+                      <motion.div {...hoverLift}>
+                        <Link
+                          to={`/research/${run.id}`}
+                          className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-sunken"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="line-clamp-1 block text-sm font-medium">
+                              {run.query}
+                            </span>
+                            {/* The dashboard aggregates runs across every
+                             * project, so — unlike the project workspace's
+                             * own research tab — which project each run
+                             * belongs to is real information, not noise. */}
+                            <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+                              {projectNameById.get(run.project_id) && (
+                                <span className="truncate">{projectNameById.get(run.project_id)}</span>
+                              )}
+                              <span aria-hidden="true">·</span>
+                              <span>{formatRelativeTime(run.created_at)}</span>
+                              {isTerminal && run.duration_ms !== null && (
+                                <>
+                                  <span aria-hidden="true">·</span>
+                                  <span className="tabular">{formatDuration(run.duration_ms)}</span>
+                                </>
+                              )}
+                              {citationCount > 0 && (
+                                <>
+                                  <span aria-hidden="true">·</span>
+                                  <span className="tabular">
+                                    {citationCount} citation{citationCount === 1 ? "" : "s"}
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          </span>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <StatusBadge domain={outcome.domain} value={outcome.value} />
+                          </div>
+                        </Link>
+                      </motion.div>
+                    </StaggerItem>
+                  );
+                })}
               </Stagger>
             )}
           </CardContent>

@@ -67,8 +67,15 @@ describe("ResearchRunView polling (Phase 19)", () => {
 
     renderWithProviders(<ResearchRunView runId="run-1" />);
 
-    expect(await screen.findByText("Plan the research run")).toBeInTheDocument();
-    expect(screen.getByText("running")).toBeInTheDocument();
+    // Sprint 9K.8: the plain-language presentation title is now the
+    // primary text; the backend's own "Plan the research run" moved
+    // into the collapsed technical detail (covered in
+    // ResearchPipeline.test.tsx).
+    expect(await screen.findByText("Understanding your question")).toBeInTheDocument();
+    // Sprint 9K.9: the header badge now reads through the shared
+    // `runOutcome` presentation layer, which renders a non-terminal run
+    // as "In Progress" rather than the bare backend value "running".
+    expect(screen.getByText("In Progress")).toBeInTheDocument();
     await waitFor(() => expect(getRun).toHaveBeenCalledTimes(1));
   });
 
@@ -85,7 +92,32 @@ describe("ResearchRunView polling (Phase 19)", () => {
     renderWithProviders(<ResearchRunView runId="run-1" />);
 
     expect(await screen.findByText("ABC Poultry faces feed cost inflation.")).toBeInTheDocument();
-    expect(screen.getByText("Grounded")).toBeInTheDocument();
+    // "Grounded" now appears twice: the page header (Sprint 9K.7 — the
+    // run's real outcome, not just the fact the job finished) and the
+    // result card's own status badge (pre-existing). Both are the same
+    // honest answer to the same question, so two is correct here.
+    expect(screen.getAllByText("Grounded").length).toBe(2);
+  });
+
+  it("shows the run's real outcome in the header, not just that the job finished (Sprint 9K.7)", async () => {
+    vi.mocked(researchService.getResearchRun).mockResolvedValue(
+      makeRun({
+        status: "completed",
+        grounding_status: "insufficient_evidence",
+        final_answer: null,
+        citations: [],
+      }),
+    );
+
+    renderWithProviders(<ResearchRunView runId="run-1" />);
+
+    /* Two matches: the header's own badge (Sprint 9K.7) and the result
+     * card's pre-existing safety-outcome title. Both are the same
+     * honest answer to "what happened", which is the point — a run
+     * that produced no answer must never carry the same badge text
+     * ("Completed") as one that did. */
+    await waitFor(() => expect(screen.getAllByText("Insufficient Evidence").length).toBe(2));
+    expect(screen.queryByText("Completed")).not.toBeInTheDocument();
   });
 
   it("shows the real backend failure message, not a generic error, when a run fails", async () => {

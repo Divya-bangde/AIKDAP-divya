@@ -142,6 +142,22 @@
 
   * {
     @apply border-border;
+
+    /* Focus rings are drawn with a 2px gap between the control and the
+     * ring, and Tailwind fills that gap with `--tw-ring-offset-color`,
+     * which defaults to `#fff`. Nothing in the product overrode it, so
+     * every `ring-offset-2` control that didn't remember to also say
+     * `ring-offset-background` — the shared Button, the workspace tabs,
+     * document cards, both native selects — drew a hard white halo on
+     * the dark theme's near-black canvas (measured: `#fff` against
+     * `rgb(7 10 19)`).
+     *
+     * Binding it to the canvas token once, here, makes the gap read as
+     * a gap in both themes and makes focus look the same everywhere in
+     * the product rather than depending on which component remembered.
+     * Utilities still win over this, so a surface that genuinely needs a
+     * different offset can still ask for one. */
+    --tw-ring-offset-color: hsl(var(--background));
   }
 
   body {

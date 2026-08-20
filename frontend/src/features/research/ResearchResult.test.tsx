@@ -141,7 +141,7 @@ describe("ResearchResult", () => {
     expect(screen.queryByText(/confidence/i)).not.toBeInTheDocument();
   });
 
-  it("shows provider/model and fallback information only when the backend supplies it", () => {
+  it("keeps provider/model/fallback detail collapsed by default (Sprint 9K.8, Phase 8)", () => {
     const run = makeRun({
       grounding_status: "grounded",
       final_answer: "Answer via fallback.",
@@ -155,7 +155,12 @@ describe("ResearchResult", () => {
           title: "Synthesize the deliverable",
           status: "completed",
           summary: null,
-          output_payload: { provider: "groq", model: "openai/gpt-oss-120b", fallback_used: true },
+          output_payload: {
+            provider: "groq",
+            model: "openai/gpt-oss-120b",
+            fallback_used: true,
+            primary_error_type: "LLMQuotaExhaustedError",
+          },
           error_message: null,
           started_at: null,
           completed_at: null,
@@ -167,9 +172,113 @@ describe("ResearchResult", () => {
 
     render(<ResearchResult run={run} />);
 
+    // Provider/model no longer sit inline on the main answer card —
+    // they live behind the same technical disclosure the pipeline
+    // steps use, so an executive reading the answer isn't stopped by
+    // "gemini-flash-latest" and "Fallback used: No" before the point.
+    expect(screen.queryByText("groq")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Fallback used:/)).not.toBeInTheDocument();
+  });
+
+  it("shows provider, model and a real fallback narrative once technical details are expanded", async () => {
+    const run = makeRun({
+      grounding_status: "grounded",
+      final_answer: "Answer via fallback.",
+      citations: [{ id: "c1", title: "Doc" }],
+      steps: [
+        {
+          id: "step-1",
+          run_id: "run-1",
+          step_index: 5,
+          node_name: "synthesis",
+          title: "Synthesize the deliverable",
+          status: "completed",
+          summary: null,
+          output_payload: {
+            provider: "groq",
+            model: "openai/gpt-oss-120b",
+            fallback_used: true,
+            primary_error_type: "LLMQuotaExhaustedError",
+          },
+          error_message: null,
+          started_at: null,
+          completed_at: null,
+          duration_ms: null,
+          created_at: new Date().toISOString(),
+        },
+      ],
+    });
+    const user = userEvent.setup();
+
+    render(<ResearchResult run={run} />);
+    await user.click(screen.getByRole("button", { name: "Technical details" }));
+
     expect(screen.getByText("groq")).toBeInTheDocument();
+    expect(screen.getByText("openai/gpt-oss-120b")).toBeInTheDocument();
     expect(screen.getByText(/Fallback used:/)).toBeInTheDocument();
     expect(screen.getByText("Yes")).toBeInTheDocument();
+    // The narrative is built only from real fields the backend
+    // returned — never a claim the run itself didn't make.
+    expect(screen.getByText(/Primary provider was unavailable/)).toHaveTextContent(
+      "LLMQuotaExhaustedError",
+    );
+  });
+
+  it("never claims a fallback narrative unless the backend actually reports fallback_used", async () => {
+    const run = makeRun({
+      grounding_status: "grounded",
+      final_answer: "Answer, no fallback.",
+      citations: [{ id: "c1", title: "Doc" }],
+      steps: [
+        {
+          id: "step-1",
+          run_id: "run-1",
+          step_index: 5,
+          node_name: "synthesis",
+          title: "Synthesize the deliverable",
+          status: "completed",
+          summary: null,
+          output_payload: { provider: "gemini", model: "gemini-flash-latest", fallback_used: false },
+          error_message: null,
+          started_at: null,
+          completed_at: null,
+          duration_ms: null,
+          created_at: new Date().toISOString(),
+        },
+      ],
+    });
+    const user = userEvent.setup();
+
+    render(<ResearchResult run={run} />);
+    await user.click(screen.getByRole("button", { name: "Technical details" }));
+
+    expect(screen.getByText("gemini")).toBeInTheDocument();
+    expect(screen.getByText("No")).toBeInTheDocument();
+    expect(screen.queryByText(/Primary provider was unavailable/)).not.toBeInTheDocument();
+  });
+
+  it("says how much evidence supports a grounded answer, using the real citation count", () => {
+    const run = makeRun({
+      grounding_status: "grounded",
+      final_answer: "Answer.",
+      citations: [{ id: "c1", title: "Doc" }, { id: "c2", title: "Doc 2" }],
+    });
+
+    render(<ResearchResult run={run} />);
+
+    expect(screen.getByText(/Supported by 2 evidence items/)).toBeInTheDocument();
+  });
+
+  it("never claims evidence support when there are no citations", () => {
+    const run = makeRun({
+      grounding_status: "grounded",
+      final_answer: "Answer with no citations returned.",
+      citations: [],
+    });
+
+    render(<ResearchResult run={run} />);
+
+    expect(screen.queryByText(/Supported by/)).not.toBeInTheDocument();
   });
 
   it("opens the evidence drawer with the citation's real retrieval detail", async () => {

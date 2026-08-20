@@ -41,10 +41,21 @@ const MAPS: Record<string, Record<string, (value: string) => { variant: Variant;
     not_applicable: badge("muted", "Not applicable"),
   },
   researchRun: {
-    pending: badge("muted"),
-    running: badge("secondary"),
+    // Sprint 9K.9: a bare "Pending"/"Running" answers "what job state is
+    // this" — the question every list surface actually needs answered
+    // is simpler: is AIKDAP still working on it. Both read as "In
+    // Progress" for that reason; the exact lifecycle state remains the
+    // real, unrelabelled `status` value inspectable in Technical Details.
+    pending: badge("muted", "In Progress"),
+    running: badge("secondary", "In Progress"),
     completed: badge("success"),
-    failed: badge("destructive"),
+    // "Failed" alone doesn't say what failed — the pipeline never
+    // reached synthesis, so there is no answer and no grounding
+    // question to ask. See `grounding.failed` below for the sibling
+    // case (synthesis ran but produced nothing usable): both are
+    // "AIKDAP could not complete this research" to a reader who isn't
+    // tracing which enum fired, so both render identically.
+    failed: badge("destructive", "Research Failed"),
     cancelled: badge("warning"),
   },
   researchStep: {
@@ -63,7 +74,14 @@ const MAPS: Record<string, Record<string, (value: string) => { variant: Variant;
     grounded: badge("success", "Grounded"),
     partially_grounded: badge("warning", "Partially Grounded"),
     insufficient_evidence: badge("muted", "Insufficient Evidence"),
-    failed: badge("destructive", "Failed"),
+    // Synthesis ran but produced nothing usable — the same user-facing
+    // story as `researchRun.failed` above (no answer came out of this
+    // run), so it gets the same words. The technical distinction
+    // between "never reached synthesis" and "synthesis itself failed"
+    // stays real and inspectable (raw `status`/`grounding_status`), it
+    // just isn't a distinction a reader needs made twice in different
+    // words for the same outcome.
+    failed: badge("destructive", "Research Failed"),
   },
   health: {
     healthy: badge("success"),
@@ -90,4 +108,12 @@ export type StatusDomain = keyof typeof MAPS;
 export function statusBadge(domain: StatusDomain, value: string) {
   const resolver = MAPS[domain][value];
   return resolver ? resolver(value) : { variant: "outline" as Variant, label: value };
+}
+
+/** Whether `value` is a status this domain actually recognises, as
+ * opposed to `statusBadge`'s neutral fallback for an unknown one — used
+ * where a caller needs to know the difference (e.g. resolving a raw
+ * status string against more than one domain). */
+export function hasStatus(domain: StatusDomain, value: string): boolean {
+  return value in MAPS[domain];
 }

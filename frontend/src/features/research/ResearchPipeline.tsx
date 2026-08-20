@@ -1,8 +1,10 @@
 import { AnimatePresence, motion } from "motion/react";
 import { Check, CircleDashed, Loader2, SkipForward, X } from "lucide-react";
 
-import { expandVariants, statusChange } from "@/lib/motion";
+import { TechnicalDetails } from "@/components/common/TechnicalDetails";
+import { statusChange } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { presentationFor } from "@/features/research/research-presentation";
 import { stepMetrics } from "@/features/research/step-metrics";
 import type { components } from "@/types/api";
 
@@ -40,6 +42,17 @@ const LABEL_STYLE: Record<string, string> = {
  * backend reports it, or draws a stage as complete because a later one
  * started. A skipped node renders as "Skipped", never as "Completed".
  *
+ * Two information layers per step (Sprint 9K.8), not two different
+ * pipelines: the default view is `presentationFor(step.node_name)` —
+ * static, plain-language copy about what a stage of this kind does —
+ * plus the real status and timing. The backend's own title, its real
+ * `summary` for *this* run, and every metric `stepMetrics` extracts
+ * live inside a collapsed `TechnicalDetails` disclosure, unchanged
+ * from what they showed before this sprint — moved, not removed. An
+ * error is the one exception: it stays outside the disclosure,
+ * unconditionally visible, because a failure isn't something either
+ * audience should have to click to find.
+ *
  * Motion is used to (a) reveal each stage as it arrives, (b) pulse the
  * node that is genuinely `running`, and (c) run a travelling highlight
  * down the connector *above a running stage only*. Every one of those
@@ -63,6 +76,7 @@ export function ResearchPipeline({ steps }: { steps: ResearchStepRead[] }) {
         {ordered.map((step, index) => {
           const Icon = STEP_ICON[step.status] ?? CircleDashed;
           const metrics = stepMetrics(step);
+          const presentation = presentationFor(step.node_name);
           const nextIsRunning = ordered[index + 1]?.status === "running";
           const isLast = index === ordered.length - 1;
 
@@ -96,7 +110,10 @@ export function ResearchPipeline({ steps }: { steps: ResearchStepRead[] }) {
 
               <div className={cn("min-w-0 flex-1", !isLast && "pb-5")}>
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <p className="text-sm font-medium leading-tight">{step.title}</p>
+                  {/* The plain-language title is primary; the backend's
+                   * own step title moves into the technical disclosure
+                   * below rather than disappearing. */}
+                  <p className="text-sm font-medium leading-tight">{presentation.title}</p>
                   <div className="flex items-center gap-3">
                     {step.duration_ms !== null && step.duration_ms !== undefined && (
                       <span className="tabular font-mono text-[10px] text-muted-foreground">
@@ -121,9 +138,9 @@ export function ResearchPipeline({ steps }: { steps: ResearchStepRead[] }) {
                   </div>
                 </div>
 
-                {step.summary && (
+                {presentation.description && (
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    {step.summary}
+                    {presentation.description}
                   </p>
                 )}
 
@@ -133,20 +150,22 @@ export function ResearchPipeline({ steps }: { steps: ResearchStepRead[] }) {
                   </p>
                 )}
 
-                <AnimatePresence initial={false}>
-                  {metrics.length > 0 && (
-                    <motion.div
-                      variants={expandVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                      className="overflow-hidden"
-                    >
-                      <div className="mt-2.5 flex flex-wrap gap-1.5">
+                <TechnicalDetails id={step.id} className="mt-2.5">
+                  <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-sunken p-3">
+                    <p className="font-mono text-[11px] text-muted-foreground">
+                      {step.node_name} · {step.title}
+                    </p>
+
+                    {step.summary && (
+                      <p className="text-xs leading-relaxed text-foreground">{step.summary}</p>
+                    )}
+
+                    {metrics.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
                         {metrics.map((metric) => (
                           <span
                             key={metric.label}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-sunken px-2 py-1"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1"
                           >
                             <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
                               {metric.label}
@@ -162,9 +181,13 @@ export function ResearchPipeline({ steps }: { steps: ResearchStepRead[] }) {
                           </span>
                         ))}
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        No additional technical detail was recorded for this step.
+                      </p>
+                    )}
+                  </div>
+                </TechnicalDetails>
               </div>
             </motion.li>
           );
