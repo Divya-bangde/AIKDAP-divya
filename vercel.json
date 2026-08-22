@@ -7,25 +7,9 @@
       "config": {
         "distDir": "frontend/dist"
       }
-    },
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python"
     }
   ],
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/docs",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/openapi.json",
-      "dest": "/api/index.py"
-    },
     {
       "handle": "filesystem"
     },
