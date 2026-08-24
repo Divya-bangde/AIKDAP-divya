@@ -16,6 +16,7 @@ redis        `PING` on the broker connection.
 worker       A Celery control ping. One broadcast, short deadline.
 reranker     `GET /health` on llama-server. Loads nothing, scores
              nothing.
+ollama       `GET /` on the Ollama runtime. Loads no model.
 LLM          **Nothing at all.** Read from the provider health
              registry, which the gateway populates from traffic it was
              already sending. Phase 12's requirement, and the reason
@@ -37,6 +38,7 @@ import asyncio
 import time
 from typing import TYPE_CHECKING
 
+import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -192,11 +194,12 @@ class HealthService:
         sequential network round trips would make the endpoint slower
         than most of what it monitors.
         """
-        postgres, redis_health, worker, reranker = await asyncio.gather(
+        postgres, redis_health, worker, reranker, ollama = await asyncio.gather(
             self._check_postgres(),
             self._check_redis(),
             self._check_worker(),
             self._check_reranker(),
+            self._check_ollama(),
         )
 
         services: dict[str, ComponentHealth] = {
@@ -204,6 +207,7 @@ class HealthService:
             "redis": redis_health,
             "worker": worker,
             "reranker": reranker,
+            "ollama": ollama,
         }
         # Free: no provider is contacted. See the module docstring.
         for key, role in _keyed_providers(describe_providers()).items():
@@ -373,6 +377,48 @@ class HealthService:
             detail=health.detail,
             latency_ms=health.latency_ms,
             meta={"model": health.model, "endpoint": health.endpoint},
+        )
+
+    async def _check_ollama(self) -> ComponentHealth:
+        """Liveness of the host Ollama runtime (BGE-M3 embeddings, Qwen
+        document understanding) — Sprint 11.2.
+
+        A `GET` on Ollama's own root route, exactly the same shape as
+        the reranker's check above: it only confirms the server is
+        listening, loading no model and burning no GPU/CPU time on
+        every health poll.
+
+        Reported as `unavailable` rather than critical (not in
+        `CRITICAL_COMPONENTS`) — embedding and document-understanding
+        degrade without it, but projects, assets, and existing search
+        results keep working.
+        """
+        endpoint = f"{settings.ollama_base_url.rstrip('/')}/"
+        start = time.monotonic()
+        try:
+            async with httpx.AsyncClient(timeout=settings.ollama_health_timeout) as client:
+                response = await client.get(endpoint)
+        except httpx.HTTPError as exc:
+            logger.warning("health_ollama_failed", error_type=type(exc).__name__)
+            return ComponentHealth(
+                status=ComponentStatus.UNAVAILABLE,
+                detail=f"Could not reach Ollama: {type(exc).__name__}.",
+                latency_ms=int((time.monotonic() - start) * 1000),
+                meta={"endpoint": endpoint},
+            )
+
+        latency_ms = int((time.monotonic() - start) * 1000)
+        if response.status_code != 200:
+            return ComponentHealth(
+                status=ComponentStatus.UNAVAILABLE,
+                detail=f"Ollama returned HTTP {response.status_code}.",
+                latency_ms=latency_ms,
+                meta={"endpoint": endpoint},
+            )
+        return ComponentHealth(
+            status=ComponentStatus.HEALTHY,
+            latency_ms=latency_ms,
+            meta={"endpoint": endpoint},
         )
 
     # -- summary ------------------------------------------------------

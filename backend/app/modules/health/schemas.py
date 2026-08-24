@@ -107,5 +107,5 @@ class HealthResponse(BaseModel):
     version: str
     environment: str
     #: Keyed by component name: `postgres`, `redis`, `worker`,
-    #: `reranker`, and one entry per configured LLM provider.
+    #: `reranker`, `ollama`, and one entry per configured LLM provider.
     services: dict[str, ComponentHealth]

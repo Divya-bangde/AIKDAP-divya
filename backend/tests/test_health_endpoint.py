@@ -53,7 +53,7 @@ def configured(monkeypatch):
 
 @pytest.fixture
 def healthy_infrastructure(monkeypatch):
-    """Make Redis, Celery and the reranker all report healthy."""
+    """Make Redis, Celery, the reranker, and Ollama all report healthy."""
     from app.modules.health import service as service_module
 
     async def reranker_ok(**_kwargs):
@@ -74,6 +74,11 @@ def healthy_infrastructure(monkeypatch):
     monkeypatch.setattr(
         HealthService,
         "_check_worker",
+        AsyncMock(return_value=_component(ComponentStatus.HEALTHY)),
+    )
+    monkeypatch.setattr(
+        HealthService,
+        "_check_ollama",
         AsyncMock(return_value=_component(ComponentStatus.HEALTHY)),
     )
 
@@ -304,6 +309,11 @@ async def test_a_dead_reranker_degrades_the_report(
     monkeypatch.setattr(
         HealthService,
         "_check_worker",
+        AsyncMock(return_value=_component(ComponentStatus.HEALTHY)),
+    )
+    monkeypatch.setattr(
+        HealthService,
+        "_check_ollama",
         AsyncMock(return_value=_component(ComponentStatus.HEALTHY)),
     )
 

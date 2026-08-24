@@ -1,17 +1,28 @@
 """Sprint 9B: local Qwen document-understanding unit tests.
 
-Every test here is offline. `LLMGateway.generate` is replaced with a
-mock (via a fake `GatewayDouble`, mirroring the `AsyncMock` pattern
-`test_llm_gateway.py` uses for `litellm.acompletion`), so no test
-starts Ollama, loads a model, or depends on this host having a GPU or
-even Ollama installed. The real, unmocked connectivity proof is the
-separate live validation run recorded in the sprint report.
+Every test here is offline except one. `LLMGateway.generate` is
+replaced with a mock (via a fake `GatewayDouble`, mirroring the
+`AsyncMock` pattern `test_llm_gateway.py` uses for
+`litellm.acompletion`), so no test starts Ollama, loads a model, or
+depends on this host having a GPU or even Ollama installed.
+
+The one exception is
+`test_pipeline_maps_qwen_output_into_existing_ai_profile_fields`,
+which deliberately leaves the pipeline's embedding step unmocked to
+prove BGE-M3 embedding really completes against a live Ollama and
+that the AIProfile rollup reflects it (Sprint 9I). Sprint 11.2:
+that test is marked `@pytest.mark.live_ollama` and skips itself
+(not a failure) when Ollama is unreachable, so the rest of this
+otherwise-deterministic file never depends on host state.
 """
 
 import uuid
 from typing import Any
 
+import httpx
 import pytest
+
+from app.core.config import settings
 
 from app.core.llm.gateway import (
     LLMConnectionError,
@@ -316,9 +327,18 @@ def _make_asset(**overrides: Any) -> Asset:
 
 
 @pytest.mark.asyncio
+@pytest.mark.live_ollama
 async def test_pipeline_maps_qwen_output_into_existing_ai_profile_fields(session, project):
     """A real `process_asset()` run must populate `Asset.ai_profile` in place —
     the existing structure, not a second metadata model."""
+    try:
+        async with httpx.AsyncClient(timeout=settings.ollama_health_timeout) as client:
+            response = await client.get(f"{settings.ollama_base_url.rstrip('/')}/")
+        if response.status_code != 200:
+            pytest.skip(f"Ollama at {settings.ollama_base_url} returned HTTP {response.status_code}.")
+    except httpx.HTTPError as exc:
+        pytest.skip(f"Ollama at {settings.ollama_base_url} is unreachable: {type(exc).__name__}.")
+
     storage = FakeStorage()
     storage_path = await storage.save(
         project_id=project.id, filename="poultry.txt", content=TEST_DOCUMENT.encode()

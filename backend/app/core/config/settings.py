@@ -306,6 +306,12 @@ class Settings(BaseSettings):
     qwen_max_tokens: int = Field(default=1024, gt=0)
     qwen_timeout: float = Field(default=180.0, gt=0)
 
+    #: Timeout for `/health`'s Ollama liveness probe (Sprint 11.2) — a
+    #: plain GET on the root route, not a model call. Short on purpose,
+    #: matching `reranker_health_timeout`: a health check must be
+    #: cheaper than the thing it reports on.
+    ollama_health_timeout: float = Field(default=3.0, gt=0)
+
     #: Character budget for a single Qwen call. Longer extracted text is
     #: split with the existing `chunk_text()` utility and processed as
     #: multiple calls, then merged deterministically — see

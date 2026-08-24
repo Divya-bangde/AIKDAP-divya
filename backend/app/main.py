@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.core.llm.startup_validation import run_startup_validation
 from app.core.logging.logger import configure_logging, get_logger
 from app.modules.assets.router import router as assets_router
@@ -24,6 +24,42 @@ from app.modules.tasks.router import router as tasks_router
 
 configure_logging()
 logger = get_logger(__name__)
+
+
+def docs_urls_for(config: Settings) -> dict[str, str | None]:
+    """API-documentation route paths for the given configuration
+    (Sprint 11.3, SEC-2).
+
+    `None` disables the route entirely (FastAPI's own convention).
+    Development keeps `/docs`, `/redoc`, `/openapi.json` reachable;
+    production disables all three — nothing in this codebase depends
+    on them functionally, and the full API surface is not worth
+    exposing for a documentation convenience.
+    """
+    if config.is_production:
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    return {"docs_url": "/docs", "redoc_url": "/redoc", "openapi_url": "/openapi.json"}
+
+
+def validate_cors_configuration(config: Settings) -> None:
+    """Refuse an unsafe production CORS configuration (Sprint 11.2, SEC-1).
+
+    `CORSMiddleware`'s `allow_origins=... or ["*"]` fallback is fine in
+    development — a wide-open local API is not a real exposure — but
+    the same fallback in production combines a reflected wildcard
+    origin (Starlette echoes the request's actual `Origin` header
+    whenever `allow_credentials=True`, rather than sending a literal
+    `*`) with credentialed requests, letting any origin make an
+    authenticated cross-origin call. Failing loudly here means an
+    operator who forgets to set `BACKEND_CORS_ORIGINS` in production
+    finds out at startup, not from an incident.
+    """
+    if config.is_production and not config.backend_cors_origins:
+        raise RuntimeError(
+            "BACKEND_CORS_ORIGINS must be set to an explicit, comma-separated "
+            "list of allowed origins when APP_ENV=production — refusing to "
+            "start with the wildcard fallback and credentialed CORS enabled."
+        )
 
 
 @asynccontextmanager
@@ -46,15 +82,21 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logger.info("application_shutdown", app_name=settings.app_name)
 
 
+# Sprint 11.3 (SEC-2): interactive docs/schema expose the entire API
+# surface (every route, every request/response shape) to anyone who
+# can reach the host. Fine in development; gated in production, where
+# nothing in this codebase actually depends on these routes (confirmed:
+# no test, no frontend code, calls them) — a documentation convenience
+# is not worth the free reconnaissance in a real deployment.
 app = FastAPI(
     title=settings.app_name,
     description="AI Knowledge Discovery And Analytics Platform API",
     version=settings.app_version,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
     lifespan=lifespan,
+    **docs_urls_for(settings),
 )
+
+validate_cors_configuration(settings)
 
 app.add_middleware(
     CORSMiddleware,
