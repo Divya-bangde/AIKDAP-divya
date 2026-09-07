@@ -72,6 +72,7 @@ from app.core.config.settings import settings
 from app.core.llm.gateway import LLMGateway, get_llm_gateway
 from app.agents.planner.reformulation import reformulate_query
 from app.modules.assets.repository import AssetRepository
+from app.modules.knowledge_base.repository import KnowledgeChunkRepository
 from app.modules.knowledge_base.service import KnowledgeBaseService
 
 # The state's `status` field mirrors the persisted run status, so the
@@ -358,6 +359,17 @@ class GraphDependencies:
     web_provider: WebResearchProvider
     synthesizer: Synthesizer
     llm_gateway: LLMGateway
+    #: Sprint 16 Phase 8.10 blocker fix: a lightweight repository (no
+    #: embedding/reranker providers, unlike `KnowledgeBaseService`) used
+    #: only to resolve a citation's `chunk_id` back to its full,
+    #: untruncated `content` for claim verification. The ownership check
+    #: retrieval already performed on this same chunk_id, earlier in
+    #: this same run, is not repeated here -- see `_resolve_full_evidence_text`.
+    #: Optional (defaults to `None`, meaning "fall back to snippets")
+    #: only so existing fakes in tests that never touch this path do not
+    #: all need updating; every real, database-backed run gets one from
+    #: `build_dependencies`.
+    chunk_repository: KnowledgeChunkRepository | None = None
 
 
 def build_dependencies(session: AsyncSession) -> GraphDependencies:
@@ -368,6 +380,7 @@ def build_dependencies(session: AsyncSession) -> GraphDependencies:
         web_provider=MockWebResearchProvider(),
         synthesizer=get_synthesizer(),
         llm_gateway=get_llm_gateway(),
+        chunk_repository=KnowledgeChunkRepository(session),
     )
 
 
@@ -710,6 +723,9 @@ async def synthesis_node(state: ResearchState, config: RunnableConfig) -> dict[s
     # must state that the evidence is incomplete rather than present
     # partial results as if every source had been consulted.
     warnings = degraded_warnings(state)
+    full_evidence_text = await _resolve_full_evidence_text(
+        dependencies.chunk_repository, incoming
+    )
 
     result = await dependencies.synthesizer.synthesize(
         query=state["query"],
@@ -718,6 +734,7 @@ async def synthesis_node(state: ResearchState, config: RunnableConfig) -> dict[s
         documents=documents,
         citations=incoming,
         warnings=warnings,
+        full_evidence_text=full_evidence_text,
     )
     answer = result.answer
     citations = result.citations
@@ -894,6 +911,44 @@ def _dependencies(config: RunnableConfig) -> GraphDependencies:
             "config['configurable']['dependencies']."
         )
     return dependencies
+
+
+async def _resolve_full_evidence_text(
+    chunk_repository: KnowledgeChunkRepository | None, citations: list[Citation]
+) -> dict[str, str]:
+    """Full, untruncated chunk content for every citation with a `chunk_id`.
+
+    Sprint 16 Phase 8.10 blocker: `citation["snippet"]` is truncated to
+    `SNIPPET_CHARACTERS` (700) for the UI, but real chunks run to 1000
+    characters -- claim verification run against the snippet alone was
+    blind to the last ~30% of every chunk, which can only ever make a
+    true claim harder to confirm (UNVERIFIABLE/CONTRADICTED), never
+    easier to falsely support, but is still wrong: the model was shown
+    the full chunk, so the check must be too. `snippet` itself is left
+    untouched -- it stays exactly what the UI renders.
+
+    No ownership re-check: every `chunk_id` here already passed an
+    owner-scoped retrieval query earlier in this same run (see
+    `SemanticAssetRetriever.retrieve`), so re-validating it against a
+    user id here would only repeat a check this same request already
+    made. `chunk_repository` is `None` in tests/fakes that never
+    exercise this path -- see `GraphDependencies.chunk_repository`.
+    """
+    if chunk_repository is None:
+        return {}
+    full_text: dict[str, str] = {}
+    for citation in citations:
+        chunk_id = citation.get("chunk_id")
+        if not chunk_id or chunk_id in full_text:
+            continue
+        try:
+            parsed_id = uuid.UUID(chunk_id)
+        except ValueError:
+            continue
+        chunk = await chunk_repository.get_by_id(parsed_id)
+        if chunk is not None:
+            full_text[chunk_id] = chunk.content
+    return full_text
 
 
 def _warning_section(warnings: list[str]) -> str:

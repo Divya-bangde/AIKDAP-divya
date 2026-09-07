@@ -175,8 +175,19 @@ class Synthesizer(ABC):
         documents: list[RetrievedDocument],
         citations: list[Citation],
         warnings: list[str],
+        full_evidence_text: dict[str, str] | None = None,
     ) -> SynthesisResult:
-        """Return the answer, the citations it relies on, and how grounded it is."""
+        """Return the answer, the citations it relies on, and how grounded it is.
+
+        `full_evidence_text` (Sprint 16 Phase 8.10 blocker fix) maps a
+        citation's `chunk_id` to that chunk's full, untruncated content,
+        for implementations that verify claims against evidence text --
+        `citation["snippet"]` alone is truncated to `SNIPPET_CHARACTERS`
+        for the UI and must never be the sole text a claim is checked
+        against. Optional and defaulted so callers with nothing to
+        verify (`ExtractiveSynthesizer`, the evaluation harness's direct
+        dict-based calls) are unaffected.
+        """
 
 
 class ExtractiveSynthesizer(Synthesizer):
@@ -206,8 +217,14 @@ class ExtractiveSynthesizer(Synthesizer):
         documents: list[RetrievedDocument],
         citations: list[Citation],
         warnings: list[str],
+        full_evidence_text: dict[str, str] | None = None,
     ) -> SynthesisResult:
-        """Assemble a cited answer from the supplied citations."""
+        """Assemble a cited answer from the supplied citations.
+
+        `full_evidence_text` is unused: this path makes no claims for a
+        verifier to check against -- every sentence is a direct excerpt
+        of a citation, already attributed to it.
+        """
         if not citations:
             answer = (
                 f"## Objective\n{objective}\n\n"
@@ -334,6 +351,7 @@ class GroundedSynthesizer(Synthesizer):
         documents: list[RetrievedDocument],
         citations: list[Citation],
         warnings: list[str],
+        full_evidence_text: dict[str, str] | None = None,
     ) -> SynthesisResult:
         """Answer `query` from `citations`, then verify what came back."""
         supplied, withheld_simulated, withheld_budget = self._select_evidence(citations)
@@ -402,7 +420,9 @@ class GroundedSynthesizer(Synthesizer):
         status = _grounding_status(
             claimed_status=claimed_status, accepted=accepted, rejected=rejected
         )
-        verified_claims, claim_referenced_citations = _verify_claims(claimed_claims, supplied)
+        verified_claims, claim_referenced_citations = _verify_claims(
+            claimed_claims, supplied, full_evidence_text or {}
+        )
 
         if rejected:
             # Loud on purpose: a model inventing citation ids is the
@@ -617,7 +637,9 @@ def _grounding_status(
 
 
 def _verify_claims(
-    claims: list[SynthesisClaim], supplied: list[Citation]
+    claims: list[SynthesisClaim],
+    supplied: list[Citation],
+    full_evidence_text: dict[str, str] | None = None,
 ) -> tuple[list[dict], list[Citation]]:
     """Bind each claim to its cited evidence, then run the real Phase 8.5 checks.
 
@@ -635,17 +657,33 @@ def _verify_claims(
     checks stay the sole authority; nothing here re-implements or
     second-guesses them.
 
+    Verified against `full_evidence_text[chunk_id]` when available
+    (Sprint 16 Phase 8.10 blocker fix), falling back to the citation's
+    own `snippet` otherwise (non-asset evidence, or a lookup miss).
+    `citation["snippet"]` is truncated to `SNIPPET_CHARACTERS` for the
+    UI; the model was shown the full chunk, so verification must check
+    against the same text the model actually saw, not a ~30%-shorter
+    excerpt of it. `snippet` itself is never modified -- callers that
+    render it for display are unaffected.
+
     Returns `(verified_claims, referenced_citations)` -- the second is
     every real `Citation` any claim successfully resolved (Sprint 16
     Phase 8.8 Part B), deduplicated by id, so a caller can guarantee
     every id a claim references is actually retrievable rather than
     silently absent from the top-level citation set.
     """
+    full_evidence_text = full_evidence_text or {}
     verified: list[dict] = []
     referenced_by_id: dict[str, Citation] = {}
     for claim in claims:
         accepted, rejected = _validate_citation_ids(claim.source_reference_ids, supplied)
-        evidence = [(item["id"], item.get("snippet") or "") for item in accepted]
+        evidence = [
+            (
+                item["id"],
+                full_evidence_text.get(item.get("chunk_id", ""), item.get("snippet") or ""),
+            )
+            for item in accepted
+        ]
         for item in accepted:
             referenced_by_id.setdefault(item["id"], item)
 

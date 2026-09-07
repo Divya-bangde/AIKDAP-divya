@@ -112,6 +112,159 @@ async def test_supported_categorical_claim_is_verified(synthesizer, litellm_call
     assert result.verified_claims[0]["evidence_state"] == "verified"
 
 
+# ---------------------------------------------------------------------------
+# Sprint 16 Phase 8.10 blocker: verification was checking `snippet`
+# (truncated to `SNIPPET_CHARACTERS`, 700) instead of the chunk's full
+# content (up to 1000 characters) -- a claim citing text past that
+# cutoff was being checked against text the model was shown but the
+# verifier never saw. `full_evidence_text` (chunk_id -> full content) is
+# now threaded through `synthesize()` -> `_verify_claims`, resolved in
+# `nodes._resolve_full_evidence_text` from a real repository. `snippet`
+# itself is untouched -- these tests assert that explicitly too.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_verify_claims_reads_full_chunk_content_not_truncated_snippet(synthesizer, litellm_call):
+    """A claim citing a phrase past the snippet's cutoff is UNVERIFIABLE
+    without `full_evidence_text` and SUPPORTED with it -- the same
+    citation, same claim, only the evidence text resolution differs.
+    """
+    truncated_snippet = "JA4 fingerprints achieved 100% detection according to preliminary review only"
+    full_content = (
+        "JA4 fingerprints achieved 100% detection according to preliminary review "
+        "only; a fuller analysis confirmed the same 100% detection rate across "
+        "the entire evaluated corpus of network flows, confirming strong reliability."
+    )
+    documents = [asset_document(0, truncated_snippet)]
+    claim_text = "JA4 fingerprints achieved 100% detection across the entire evaluated corpus of network flows."
+    litellm_call.return_value = model_reply_with_claims(
+        claims=[
+            {
+                "claim_text": claim_text,
+                "claim_type": "categorical",
+                "source_reference_ids": ["c1"],
+            }
+        ]
+    )
+    citations = citations_from(documents)
+    chunk_id = citations[0]["chunk_id"]
+
+    without_full_text = await synthesizer.synthesize(
+        query="q",
+        objective="o",
+        context="c",
+        documents=documents,
+        citations=citations,
+        warnings=[],
+    )
+    assert without_full_text.verified_claims[0]["verdict"] == "unverifiable"
+    # `snippet` itself must never be rewritten -- only the text handed to
+    # the verifier changes.
+    assert without_full_text.citations[0]["snippet"] == truncated_snippet
+
+    with_full_text = await synthesizer.synthesize(
+        query="q",
+        objective="o",
+        context="c",
+        documents=documents,
+        citations=citations,
+        warnings=[],
+        full_evidence_text={chunk_id: full_content},
+    )
+    assert with_full_text.verified_claims[0]["verdict"] == "supported"
+    assert with_full_text.citations[0]["snippet"] == truncated_snippet
+
+
+@pytest.mark.asyncio
+async def test_synthesis_node_resolves_full_content_via_chunk_repository(synthesizer, litellm_call):
+    """End-to-end through `synthesis_node`: a fake repository stands in
+    for the database (matching `GraphDependencies`'s own documented
+    reason for being a dependency-injection point), proving the node
+    wiring -- not just `synthesize()` in isolation -- reaches the fix.
+    """
+    truncated_snippet = "the second phase introduced the allow"
+    full_content = "3.4.2 Phase 2 - the second phase introduced the allowlist, which removes known-benign flows."
+    documents = [asset_document(0, truncated_snippet)]
+    claim_text = "The second phase introduced the allowlist, which removes known-benign flows."
+    litellm_call.return_value = model_reply_with_claims(
+        claims=[
+            {
+                "claim_text": claim_text,
+                "claim_type": "categorical",
+                "source_reference_ids": ["c1"],
+            }
+        ]
+    )
+    citations = citations_from(documents)
+    chunk_id = citations[0]["chunk_id"]
+
+    class FakeChunkRepository:
+        async def get_by_id(self, requested_id):
+            if str(requested_id) == chunk_id:
+                return SimpleNamespace(content=full_content)
+            return None
+
+    dependencies = GraphDependencies(
+        planner=get_planner(),
+        asset_retriever=None,
+        web_provider=None,
+        synthesizer=synthesizer,
+        llm_gateway=LLMGateway(),
+        chunk_repository=FakeChunkRepository(),
+    )
+    state = {
+        "run_id": str(uuid.uuid4()),
+        "query": "What did the second phase introduce?",
+        "objective": "Answer from the knowledge base.",
+        "context": "built by the context builder",
+        "retrieved_documents": documents,
+        "citations": citations,
+    }
+
+    update = await synthesis_node(state, {"configurable": {"dependencies": dependencies}})
+
+    claim_entries = [item for item in update["citations"] if item.get("kind") == "claim"]
+    assert claim_entries[0]["verdict"] == "supported"
+
+
+@pytest.mark.asyncio
+async def test_synthesis_node_without_chunk_repository_falls_back_to_snippet(synthesizer, litellm_call):
+    """`chunk_repository=None` (existing fakes/tests that never set one)
+    must behave exactly as before this phase -- no crash, snippet used.
+    """
+    documents = [asset_document(0, "the second phase introduced the allow")]
+    litellm_call.return_value = model_reply_with_claims(
+        claims=[
+            {
+                "claim_text": "The second phase introduced the allowlist, which removes known-benign flows.",
+                "claim_type": "categorical",
+                "source_reference_ids": ["c1"],
+            }
+        ]
+    )
+    dependencies = GraphDependencies(
+        planner=get_planner(),
+        asset_retriever=None,
+        web_provider=None,
+        synthesizer=synthesizer,
+        llm_gateway=LLMGateway(),
+    )
+    state = {
+        "run_id": str(uuid.uuid4()),
+        "query": "What did the second phase introduce?",
+        "objective": "Answer from the knowledge base.",
+        "context": "built by the context builder",
+        "retrieved_documents": documents,
+        "citations": citations_from(documents),
+    }
+
+    update = await synthesis_node(state, {"configurable": {"dependencies": dependencies}})
+
+    claim_entries = [item for item in update["citations"] if item.get("kind") == "claim"]
+    assert claim_entries[0]["verdict"] == "unverifiable"
+
+
 @pytest.mark.asyncio
 async def test_claim_citing_an_invented_id_is_untrusted(synthesizer, litellm_call):
     """Schema-valid is not the same as supported: an invented id resolves to no evidence."""

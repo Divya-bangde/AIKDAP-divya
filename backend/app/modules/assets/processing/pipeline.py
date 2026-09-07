@@ -1,7 +1,7 @@
 """Asset processing pipeline orchestration.
 
-Runs extract -> chunk -> AI understanding -> embed for one asset. This
-is the only place that sequences those steps; `app.workers.
+Runs extract -> chunk -> embed -> (enqueue) AI understanding for one
+asset. This is the only place that sequences those steps; `app.workers.
 tasks.process_uploaded_asset` is a thin Celery bridge around
 `AssetProcessingService.process_asset`, and `app.modules.assets.
 router`'s manual reprocess endpoint enqueues the same Celery task — so
@@ -15,6 +15,15 @@ neither failure changes `processing_status`/`processing_error`, and
 neither discards the extracted text/chunks already persisted. See
 `AIProfileStatus` (Qwen) and `EmbeddingStatus` (BGE-M3) for why each is
 tracked on its own field rather than through the asset's own status.
+
+Sprint 16 Phase 8.11 Part D: embedding runs inline (fast, and the one
+thing search/retrieval actually needs); AI understanding is enqueued as
+its own Celery task (`workers.generate_ai_metadata`, which already
+existed) rather than awaited here, since a real measurement against
+this deployment's local Ollama server showed it serializes requests --
+18 sequential ~6-17s calls on a typical paper would otherwise leave a
+document unsearchable for minutes after upload for no retrieval
+benefit.
 """
 
 import uuid
@@ -137,8 +146,25 @@ class AssetProcessingService:
             # succeeded and `processing_status` is final. Neither the
             # Qwen nor the embedding step below can change it — only
             # `ai_profile` / each chunk's own `embedding_status`.
-            await self._run_ai_understanding(asset, extracted.full_text)
+            #
+            # Sprint 16 Phase 8.11 Part D: embedding runs first and
+            # inline, AI understanding is enqueued as its own task,
+            # not awaited here. Measured against the real local Ollama
+            # server (4 concurrent `qwen3.5:4b` calls via
+            # `asyncio.gather` each took *longer* than the last --
+            # 2.2s/4.2s/6.1s/8.1s -- confirming it serializes requests
+            # rather than parallelizing them, so `asyncio.gather`-ing
+            # the existing sequential section loop would have bought
+            # nothing. A 13-page paper's 18 sequential Qwen calls
+            # (6-17s each) were previously the reason a document wasn't
+            # searchable for minutes after upload, even though
+            # embedding itself (the one thing retrieval needs) takes
+            # seconds. Understanding is already best-effort with its
+            # own `ai_profile.status` field, so running it after,
+            # rather than before, embedding changes nothing about what
+            # a caller can observe once it completes -- only when.
             await self._run_embedding(asset, chunks)
+            self._enqueue_ai_understanding(asset.id)
 
         except ExtractionNotSupportedError as exc:
             asset.processing_status = AssetProcessingStatus.UNSUPPORTED
@@ -227,6 +253,30 @@ class AssetProcessingService:
 
         asset.ai_profile = profile.model_dump(mode="json")
         await self._session.commit()
+
+    def _enqueue_ai_understanding(self, asset_id: uuid.UUID) -> None:
+        """Fire-and-forget the existing standalone `generate_ai_metadata`
+        Celery task (Sprint 16 Phase 8.11 Part D).
+
+        That task already existed, already ran the same
+        `QwenDocumentUnderstandingService` this class's own
+        `_run_ai_understanding` calls, and its docstring already said
+        "standalone step for future composition" -- this is that
+        composition, not a new implementation. It re-extracts the
+        asset's text itself rather than reusing `extracted.full_text`
+        from this call, so it has no dependency on this method's stack
+        frame and can be retried independently by Celery like any
+        other task.
+
+        Imported locally, not at module level: `app.workers.tasks`
+        imports `get_asset_processing_service` from this module for
+        `process_uploaded_asset`, so a top-level import here would be
+        circular (the same reason `research.service` imports
+        `execute_research_run` locally).
+        """
+        from app.workers.tasks import generate_ai_metadata
+
+        generate_ai_metadata.delay(str(asset_id))
 
     async def _run_embedding(self, asset: Asset, chunks: list[KnowledgeChunk]) -> None:
         """Best-effort embedding generation for one asset's chunks.

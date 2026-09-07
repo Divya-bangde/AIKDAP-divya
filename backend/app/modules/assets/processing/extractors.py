@@ -83,6 +83,26 @@ class ExtractedUnit:
     section: str | None = None
     extraction_method: str | None = None
 
+    def __post_init__(self) -> None:
+        """Strip NUL bytes from extracted text.
+
+        PostgreSQL `text` columns cannot store `0x00` -- psycopg raises
+        `DataError` and, because chunks are persisted as one bulk
+        insert, a single NUL anywhere in a document fails all of its
+        chunks and poisons the session (observed live: a real PDF whose
+        pypdf output carried NULs left its asset stuck in `processing`
+        forever rather than failing visibly).
+
+        Done here rather than in the chunker or the pipeline because
+        every extractor constructs `ExtractedUnit` and `full_text` is
+        derived from it, so this is the one point all three consumers
+        -- chunking, AI understanding, persistence -- route through.
+        NUL carries no textual meaning in any format this module reads,
+        so removing it loses nothing.
+        """
+        if "\x00" in self.text:
+            object.__setattr__(self, "text", self.text.replace("\x00", ""))
+
 
 @dataclass
 class ExtractedDocument:

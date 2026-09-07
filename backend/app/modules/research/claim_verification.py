@@ -142,7 +142,7 @@ def _normalize_words(text: str) -> list[str]:
     return _WORD.findall(text.lower())
 
 
-def _shares_long_ngram(claim_text: str, evidence_text: str, *, min_words: int = 6) -> bool:
+def _shares_long_ngram(claim_text: str, evidence_text: str, *, min_words: int = 8) -> bool:
     """True if a run of `min_words` consecutive claim words appears verbatim in evidence.
 
     A cheap, deterministic stand-in for "this evidence states the same
@@ -161,6 +161,17 @@ def _shares_long_ngram(claim_text: str, evidence_text: str, *, min_words: int = 
     everything else. Removing this in favor of the new rule would trade
     one real regression for another; running both and requiring only one
     to fire is strictly additive.
+
+    `min_words` raised from 6 to 8 this same phase: the Phase 8.9 safety
+    tests (see `tests/test_claim_verification.py`) caught this function
+    itself producing false SUPPORTED verdicts on two constructed cases --
+    a claim sharing a 6-word prefix with evidence that then states
+    something the claim never asserts ("...with zero false positives" /
+    a differing "91%" vs "89%") -- 6 was simply too short a run to imply
+    "this evidence backs this whole claim" once the claim extends past
+    it. 8 clears both false positives with room to spare while the real
+    families case above still shares a 16-word run, comfortably above
+    either threshold.
     """
     claim_words = _normalize_words(claim_text)
     evidence_words = _normalize_words(evidence_text)
@@ -489,4 +500,15 @@ def evidence_state_from_claim_verification(
     it inside `classify_evidence_state` would change already-reviewed
     Phase 8.1 production behaviour this phase has no mandate to alter.
     """
-    if verdict == ClaimSupport.CONTRADI
+    if verdict == ClaimSupport.CONTRADICTED:
+        return EvidenceState.CONTRADICTED
+    if verdict == ClaimSupport.SUPPORTED:
+        from app.modules.research.schemas import ResearchCertainty
+
+        return classify_evidence_state(
+            certainty=ResearchCertainty.EXPLICIT,
+            citation_accepted=citation_accepted,
+            is_primary_source=is_primary_source,
+            has_source_evidence=True,
+        )
+    return EvidenceState.UNKNOWN

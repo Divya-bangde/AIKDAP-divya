@@ -281,10 +281,30 @@ async def test_successful_embedding_updates_status_and_stores_vector(session, pr
 
 
 @pytest.mark.asyncio
-async def test_qwen_and_embedding_steps_are_independent(session, project):
-    """A Qwen failure must not prevent embedding from running, and vice
-    versa -- the two Sprint 9B/9C AI steps are tracked on separate
-    fields precisely so one's failure cannot mask the other's success."""
+async def test_qwen_and_embedding_steps_are_independent(session, project, monkeypatch):
+    """Embedding must complete regardless of AI understanding -- Sprint
+    16 Phase 8.11 Part D decoupled them further than the original
+    Sprint 9B/9C "separate status fields" guarantee this test predates:
+    understanding no longer even runs inline during `process_asset`, it
+    is enqueued as its own Celery task (`workers.generate_ai_metadata`)
+    once embedding has already committed. A real local-Ollama
+    measurement (see `pipeline.py`'s module docstring) showed Ollama
+    serializes requests, so the 18-sequential-call understanding step
+    must never sit between "chunks exist" and "chunks are searchable".
+
+    `.delay()` is stubbed, not exercised against the real broker/worker
+    (matching `test_asset_service.py`'s identical convention for
+    `process_uploaded_asset.delay`) -- this test asserts the pipeline
+    *enqueues* understanding, not that understanding itself succeeds or
+    fails, which is `test_document_understanding.py`'s concern.
+    """
+    from app.workers import tasks as tasks_module
+
+    enqueued: list[str] = []
+    monkeypatch.setattr(
+        tasks_module.generate_ai_metadata, "delay", lambda asset_id: enqueued.append(asset_id)
+    )
+
     storage = FakeStorage()
     storage_path = await storage.save(project_id=project.id, filename="doc.txt", content=TEST_TEXT.encode())
     asset = _make_asset(project_id=project.id, owner_id=project.owner_id, storage_path=storage_path)
@@ -295,17 +315,22 @@ async def test_qwen_and_embedding_steps_are_independent(session, project):
     gateway = GatewayDouble(vectors=[_vector()])
     pipeline = AssetProcessingService(
         session, storage, chunk_size=1000, chunk_overlap=100,
-        understanding=FakeQwen(),  # type: ignore[arg-type] -- always fails
+        understanding=FakeQwen(),  # type: ignore[arg-type] -- would always fail if ever called
         embeddings=OllamaBgeM3EmbeddingProvider(gateway=gateway),  # type: ignore[arg-type]
     )
     await pipeline.process_asset(asset.id)
 
+    # Embedding completed without ever waiting on AI understanding.
+    chunks = await KnowledgeChunkRepository(session).list_by_project(project.id, asset_id=asset.id)
+    assert all(c.embedding_status is EmbeddingStatus.COMPLETED for c in chunks)
+
+    # AI understanding was handed off as its own task, for this exact
+    # asset, rather than skipped or run inline.
+    assert enqueued == [str(asset.id)]
+
     refreshed = await AssetRepository(session).get_by_id(asset.id)
     profile = AIProfile.model_validate(refreshed.ai_profile)
-    assert profile.status.value == "failed"  # Qwen (fake) failed
-
-    chunks = await KnowledgeChunkRepository(session).list_by_project(project.id, asset_id=asset.id)
-    assert all(c.embedding_status is EmbeddingStatus.COMPLETED for c in chunks)  # embedding still succeeded
+    assert profile.status.value == "pending"  # not yet run -- only enqueued
 
     await session.delete(asset)
     await session.commit()

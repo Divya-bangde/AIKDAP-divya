@@ -236,12 +236,17 @@ async def _generate_ai_metadata(asset_id: uuid.UUID) -> dict[str, str]:
         storage = get_storage_provider()
         content = await storage.read(asset.storage_path)
         extractor = get_text_extractor(asset.mime_type)
-        text = await extractor.extract(content)
+        # `extract()` returns an `ExtractedDocument`, not a plain string --
+        # `.full_text` is what `QwenDocumentUnderstandingService.analyze`
+        # (which calls `.strip()` on its input) actually needs. This task
+        # went uncalled from Sprint 9B until Phase 8.11 Part D enqueued it
+        # for the first time, which is when this mismatch first surfaced.
+        extracted = await extractor.extract(content)
 
         profile = AIProfile.model_validate(asset.ai_profile or {})
         understanding = get_document_understanding_service()
         try:
-            metadata = await understanding.analyze(text)
+            metadata = await understanding.analyze(extracted.full_text)
         except DocumentUnderstandingError as exc:
             profile.status = AIProfileStatus.FAILED
             profile.error = str(exc)

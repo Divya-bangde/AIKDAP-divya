@@ -14,10 +14,12 @@ import io
 
 import pytest
 
+from app.modules.assets.processing.chunker import chunk_document
 from app.modules.assets.processing.extractors import (
     CsvExtractor,
     DocxExtractor,
     ExtractedDocument,
+    ExtractedUnit,
     ExtractionFailedError,
     ExtractionNotSupportedError,
     HtmlExtractor,
@@ -908,3 +910,38 @@ def test_extracted_document_full_text_joins_units_with_blank_line():
 
 def test_extracted_document_empty_has_no_extractable_text():
     assert not ExtractedDocument(units=[]).has_extractable_text
+
+
+class TestNulByteSanitization:
+    """NUL bytes must never reach a PostgreSQL `text` column.
+
+    Observed live: a real PDF whose pypdf output carried `0x00` failed
+    the whole 125-chunk bulk insert with `psycopg.DataError`, poisoning
+    the session so the asset sat in `processing` indefinitely instead of
+    failing visibly.
+    """
+
+    def test_unit_strips_nul_from_text(self) -> None:
+        unit = ExtractedUnit(text="before\x00after", page_number=1)
+        assert "\x00" not in unit.text
+        assert unit.text == "beforeafter"
+
+    def test_unit_without_nul_is_unchanged(self) -> None:
+        unit = ExtractedUnit(text="clean text", page_number=1)
+        assert unit.text == "clean text"
+
+    def test_full_text_is_nul_free(self) -> None:
+        document = ExtractedDocument(
+            units=[
+                ExtractedUnit(text="page\x00one", page_number=1),
+                ExtractedUnit(text="page\x00two", page_number=2),
+            ]
+        )
+        assert "\x00" not in document.full_text
+        assert document.full_text == "pageone\n\npagetwo"
+
+    def test_chunks_built_from_nul_text_are_clean(self) -> None:
+        document = ExtractedDocument(units=[ExtractedUnit(text="a\x00b " * 400, page_number=1)])
+        chunks = chunk_document(document, chunk_size=200, chunk_overlap=20)
+        assert chunks
+        assert all("\x00" not in chunk.text for chunk in chunks)

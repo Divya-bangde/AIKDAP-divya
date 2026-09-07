@@ -195,6 +195,223 @@ def test_categorical_claim_unverifiable_when_unrelated():
     assert result.verdict == ClaimSupport.UNVERIFIABLE
 
 
+# ---------------------------------------------------------------------------
+# Sprint 16 Phase 8.9 -- categorical paraphrase matching.
+#
+# `_shares_long_ngram` (above) only fires on a contiguous verbatim run,
+# so it misses a claim that states the same fact with different word
+# order or number spelling. `_token_set_supported` adds an
+# order-independent, negation-guarded containment check; the two run in
+# OR, since removing the verbatim check breaks
+# `test_categorical_claim_supported_verbatim` above (see that function's
+# docstring in claim_verification.py: the real cited text there says
+# "families"/"raising" where the claim says "family"/"raised", and this
+# phase deliberately does not stem words).
+#
+# The reproduction case named in this phase's brief -- "raised detection
+# ... from two to five families" -- is `test_categorical_claim_supported_verbatim`
+# itself: run through `verify_categorical_claim` before this phase's
+# change, it was ALREADY correctly SUPPORTED (the verbatim run survives
+# every real phrasing captured in Phase 8.5-8.8 production data). The
+# case below is a real reordering of the same fact that the *old* code
+# also happened to pass (the anchor phrase "within a ten-flow review
+# budget" stays intact even after reordering), so it is not, by itself,
+# a before/after fix -- it is the target class of paraphrase this phase
+# exists to cover, verified via the new mechanism specifically, not
+# lucky verbatim survival. See the phase report for the full
+# before/after table across every real categorical claim captured in
+# 8.6-8.8 production data.
+# ---------------------------------------------------------------------------
+
+
+def test_categorical_paraphrase_reordered_clause_now_supported_via_token_set():
+    """Real evidence (sinanian_lte c1), reordered claim clauses.
+
+    Moving "within a ten-flow review budget" to the front breaks the
+    contiguous run `_shares_long_ngram` looks for starting from
+    "allowlist"; `_token_set_supported` (order-independent within its
+    window) still finds every content token of the claim inside one
+    stretch of the evidence.
+    """
+    claim = (
+        "Within a ten-flow review budget, allowlist suppression raised "
+        "stalkerware family detection from two out of five families to all five."
+    )
+    evidence = [
+        (
+            "c1",
+            "The results revealed that the allowlist suppression was the decisive "
+            "factor, raising detection within a ten-flow review budget from just two "
+            "out of five families to all five. A quantitative...",
+        )
+    ]
+    result = verify_categorical_claim(claim_text=claim, evidence=evidence)
+    assert result.verdict == ClaimSupport.SUPPORTED
+
+
+def test_categorical_paraphrase_digit_grouping_normalized():
+    """"1,000" (claim) vs "1000" (evidence) -- the comma-grouping rule."""
+    result = verify_categorical_claim(
+        claim_text="The dataset contained 1,000 executive reports evaluated in this study overall.",
+        evidence=[(
+            "c1",
+            "In total the dataset contained 1000 executive reports evaluated in this overall study.",
+        )],
+    )
+    assert result.verdict == ClaimSupport.SUPPORTED
+
+
+def test_categorical_paraphrase_number_word_normalized():
+    """"two" (claim) vs "2" (evidence) -- the number-word rule."""
+    result = verify_categorical_claim(
+        claim_text="Only two commercial vendors were evaluated in the baseline experiment overall.",
+        evidence=[(
+            "c1",
+            "The baseline experiment overall evaluated only 2 commercial vendors.",
+        )],
+    )
+    assert result.verdict == ClaimSupport.SUPPORTED
+
+
+def test_categorical_paraphrase_stays_unverifiable_when_synonym_not_literal():
+    """Real: run 1d8bc5de-fdfd-446d-b218-e9496448bcc5 (aguilar_cti production).
+
+    "Corresponds to" / "configuration" are never literally in the cited
+    text -- only "S4: One-Shot + BLUF" is. Neither the verbatim-run nor
+    the token-set check can bridge a synonym the source never uses, and
+    this phase adds no synonym table, embeddings, or LLM call to do so:
+    staying UNVERIFIABLE here is the correct, safe outcome, not a gap to
+    close.
+    """
+    claim = "The S4 strategy corresponds to the 'One-Shot + BLUF' configuration."
+    evidence = [
+        (
+            "c1",
+            "he mean composite scores, dimension scores, and pass rates for each of "
+            "the five prompt strategies. Strategy N Avg Action. Avg Rigor Avg Language "
+            "Avg Structure Composite / Pass % S0: Baseline 200 3.60 3.77 3.30 2.96 3.50 "
+            "/ 61.0% S1: Template 200 3.22 3.20 3.53 2.85 3.22 / 1.5% S2: Template + BLUF "
+            "200 3.28 3.19 3.58 3.68 3.37 / 20.0% S3: One-Shot Template 200 3.37 3.54 "
+            "3.66 3.14 3.44 / 38.0% S4: One-Shot + BLUF 200 3.55 3.35 3.70 4.07 3.60 / "
+            "73.5% Figure 1: Prompt Strategy Summary",
+        )
+    ]
+    result = verify_categorical_claim(claim_text=claim, evidence=evidence)
+    assert result.verdict == ClaimSupport.UNVERIFIABLE
+
+
+# --- Safety tests (the deliverable): every one of these must stay
+# UNVERIFIABLE/CONTRADICTED. A single false SUPPORTED here means the
+# offending normalization rule must be deleted, per this phase's abort
+# condition -- see the phase report for the two pre-existing false
+# positives this table actually caught in `_shares_long_ngram` (fixed by
+# raising its `min_words` from 6 to 8, not by touching the new rule).
+
+
+def test_safety_similar_words_different_meaning_stays_unverifiable():
+    """SYNTHETIC: 'false positives' vs 'true positives' -- one word apart, opposite claim."""
+    result = verify_categorical_claim(
+        claim_text="The framework achieved zero false positives across all test cases.",
+        evidence=[(
+            "c1",
+            "The framework achieved zero true positives across all test cases, "
+            "missing every real intrusion.",
+        )],
+    )
+    assert result.verdict == ClaimSupport.UNVERIFIABLE
+
+
+def test_safety_partial_support_stays_unverifiable():
+    """SYNTHETIC: the claim's extra clause ('zero false positives') is never stated.
+
+    Also the regression case that caught `_shares_long_ngram`'s own
+    false positive this phase: a 6-word shared prefix is not enough
+    signal once the claim continues past it into unstated territory.
+    """
+    result = verify_categorical_claim(
+        claim_text="The system detected all five malware families with zero false positives.",
+        evidence=[("c1", "The system detected all five malware families in the test set.")],
+    )
+    assert result.verdict == ClaimSupport.UNVERIFIABLE
+
+
+def test_safety_related_but_different_numbers_stays_unverifiable():
+    """SYNTHETIC: 91% claimed, source says 89% -- digit normalization must not blur this."""
+    result = verify_categorical_claim(
+        claim_text="Detection accuracy improved from 62% to 91% after tuning.",
+        evidence=[("c1", "Detection accuracy improved from 62% to 89% after tuning.")],
+    )
+    assert result.verdict == ClaimSupport.UNVERIFIABLE
+
+
+def test_safety_negated_source_stays_unverifiable():
+    """SYNTHETIC, isolates the negation guard: every claim token literally
+
+    appears in the evidence (containment alone would say SUPPORTED) --
+    only the added "not" distinguishes them. Without the negation guard
+    this would be the exact "same tokens, opposite meaning" false
+    positive the guard exists to catch.
+    """
+    result = verify_categorical_claim(
+        claim_text="Support for offline mode is present in this release.",
+        evidence=[("c1", "Support for offline mode is not present in this release.")],
+    )
+    assert result.verdict == ClaimSupport.UNVERIFIABLE
+
+
+def test_safety_same_entities_different_relationship_stays_unverifiable():
+    """Real evidence (vaniscak_c2 c1), wrong entity attribution.
+
+    The source says "Traffic Patterns proved most viable"; this claim
+    misattributes that same property to "Traffic Metadata", a different
+    entity thirteen content-tokens away in the same chunk. Whole-chunk
+    containment would wrongly say SUPPORTED (both entities and "most
+    viable" all appear somewhere in the chunk); the bounded window in
+    `_token_set_supported` requires them to co-occur locally, which they
+    do not.
+    """
+    evidence_text = (
+        "sing 51 packet captures (3 baselines, 6 automated browser tests and 6 framework "
+        "tests per service). Across four detection tiers, Reputation-based detection failed "
+        "to identify any C2 channels; Beacon Detection was marginally viable when using "
+        "clustering (2/4); Traffic Metadata was partially viable, with mixed results other "
+        "than JA4 fingerprints (100% detection); and Traffic Patterns proved most viable, "
+        "with both TLS session resumption near-zero (vs 22%+ for browser) and a 2.6x "
+        "upload/download ratio gap (1.41 vs 0.55 means)."
+    )
+    result = verify_categorical_claim(
+        claim_text="Traffic Metadata was most viable for detection.",
+        evidence=[("c1", evidence_text)],
+    )
+    assert result.verdict == ClaimSupport.UNVERIFIABLE
+
+    # Sanity check: the CORRECT attribution for the same real evidence
+    # must still be reachable, proving the window isn't simply too
+    # narrow to ever match anything.
+    correct = verify_categorical_claim(
+        claim_text="Traffic Patterns was most viable for detection.",
+        evidence=[("c1", evidence_text)],
+    )
+    assert correct.verdict == ClaimSupport.SUPPORTED
+
+
+def test_safety_ambiguous_wording_negated_in_source_stays_unverifiable():
+    """SYNTHETIC: a vague claim ('results were significant') that containment
+
+    alone would accept because every one of its few tokens appears in
+    the source -- the source's own hedge ("not statistically
+    significant") is exactly what the negation guard is for.
+    """
+    result = verify_categorical_claim(
+        claim_text="The results were significant.",
+        evidence=[(
+            "c1",
+            "The results were not statistically significant across all metrics.",
+        )],
+    )
+    assert result.verdict == ClaimSupport.UNVERIFIABLE
+
+
 def test_false_insufficiency_when_evidence_has_the_value():
     """Real: run 637d6cf1-1f5e-470e-9332-431b6e0ca575 (vaniscak_c2). Qwen
     declined to answer despite the supplied evidence stating "JA4
