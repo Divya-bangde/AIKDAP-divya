@@ -53,10 +53,14 @@ from app.modules.assets.processing.extractors import (
 from app.modules.assets.processing.pipeline import get_asset_processing_service
 from app.modules.assets.repository import AssetRepository
 from app.modules.assets.storage import get_storage_provider
+from app.modules.execution.repository import ExecutionJobRepository
+from app.modules.execution.service import prepare_approved_launch, recover_interrupted_retry_attempt
+from execution_launcher.launcher import execute_approved_launch, reconcile_attempt
 from app.modules.knowledge_base.embeddings import get_embedding_provider
 from app.modules.knowledge_base.repository import KnowledgeChunkRepository
 from app.modules.research.service import ResearchExecutionService
 from app.workers.celery_app import celery_app
+from execution_launcher.models import InputResolutionError, SecurityBlocked
 
 logger = get_logger(__name__)
 
@@ -120,6 +124,23 @@ def _run_task_loop(coroutine: Coroutine[Any, Any, Any]) -> Any:
     containment invariant `test_litellm_is_imported_only_by_the_gateway`
     checks (see that function's docstring for the full root-cause
     explanation of what is being reset and why).
+
+    Sprint 16 Phase 8.0: this function calls a FRESH `asyncio.run()` for
+    every task, and a long-lived worker process makes MANY such calls
+    over its lifetime -- confirmed live, against a real worker consuming
+    from a real Redis broker, that this breaks once a `pool_pre_ping`-
+    backed connection pool is shared across them (`asyncpg` connections
+    are bound to the loop that created them; a later task's `asyncio.
+    run()` creates a new loop, and re-validating a pooled connection
+    from a now-closed loop raises `RuntimeError: ... attached to a
+    different loop`). An `await engine.dispose()` added here after every
+    task was tried first and verified correct in an isolated repro, but
+    the real worker still failed on a later task despite it -- see
+    `app.database.session.configure_for_worker_process`'s own docstring
+    for the full story. The actual fix lives THERE: `app.workers.worker`
+    calls it before any task module is imported, rebuilding the engine
+    with `NullPool` so no connection is ever held between checkouts in
+    the first place -- nothing to do here as a result.
     """
     from app.core.llm.gateway import reset_litellm_logging_worker_for_task_boundary
 
@@ -333,7 +354,7 @@ async def _update_status(asset_id: uuid.UUID, status: AssetProcessingStatus, err
 
 @celery_app.task(name="workers.execute_research_run", bind=True, max_retries=3, default_retry_delay=30)
 @log_task_execution
-def execute_research_run(self, run_id: str) -> dict[str, str]:
+def execute_research_run(self, run_id: str, workspace_context: dict[str, Any] | None = None) -> dict[str, str]:
     """Execute the LangGraph research workflow for one research run.
 
     Enqueued by `ResearchService.start_run` so `POST /research/run` can
@@ -348,12 +369,142 @@ def execute_research_run(self, run_id: str) -> dict[str, str]:
     would fail identically three more times.
     """
     try:
-        _run_task_loop(_run_research(uuid.UUID(run_id)))
+        _run_task_loop(_run_research(uuid.UUID(run_id), workspace_context))
     except Exception as exc:
         raise self.retry(exc=exc) from exc
     return {"status": "ok", "run_id": run_id}
 
 
-async def _run_research(run_id: uuid.UUID) -> None:
+async def _run_research(run_id: uuid.UUID, workspace_context: dict[str, Any] | None = None) -> None:
     async with async_session_factory() as session:
-        await ResearchExecutionService(session).execute(run_id)
+        await ResearchExecutionService(session).execute(run_id, workspace_context)
+
+
+@celery_app.task(name="workers.recover_execution_job_retry", bind=True)
+@log_task_execution
+def recover_execution_job_retry(self, job_id: str) -> dict[str, str]:
+    """Materialize one interrupted retry claim (Sprint 16 Phase
+    7B.21/7B.22). Enqueued per job by `reconciliation.
+    reconcile_stale_launching_execution_jobs`, which stays detection
+    only -- this task is the one place the guard pipeline and the
+    claim-and-materialize transaction actually run.
+
+    Deliberately has no `self.retry(...)`, unlike the pipeline tasks
+    above. `recover_interrupted_retry_attempt` is idempotent by
+    construction: a lost claim race returns `None` (success, not an
+    error), and a guard rejection is terminal for automatic recovery
+    (already recorded on `job.reason` by the service) -- retrying would
+    re-run the same guards against the same input and reject again. A
+    genuine infrastructure failure is left to propagate as a normal
+    Celery task failure; the next startup reconciliation pass finds
+    this job still stale and re-enqueues it.
+    """
+    status = _run_task_loop(_recover_retry(uuid.UUID(job_id)))
+    return {"status": status, "job_id": job_id}
+
+
+async def _recover_retry(job_id: uuid.UUID) -> str:
+    async with async_session_factory() as session:
+        try:
+            preparation = await recover_interrupted_retry_attempt(job_id, session)
+        except (SecurityBlocked, InputResolutionError):
+            return "guard_rejected"
+        if preparation is None:
+            return "lost_race"
+        return "recovered"
+
+
+#: Persisted on a job's `reason` when this task's guard pipeline rejects
+#: it. Fixed and complete -- no interpolation -- matching every other
+#: diagnostic constant in this codebase. `prepare_approved_launch`
+#: itself deliberately writes nothing on rejection (its own module
+#: docstring: "this layer neither catches nor translates" a guard
+#: failure, leaving the job at `VALIDATING` for
+#: `reconcile_stale_validating_execution_jobs` to eventually diagnose);
+#: this constant exists so a synchronous rejection is visible
+#: immediately, without waiting for that reconciliation pass.
+LAUNCH_GUARD_REJECTED_DIAGNOSTIC = "Execution job's launch was rejected by guard validation."
+
+
+@celery_app.task(name="workers.launch_execution_job", bind=True)
+@log_task_execution
+def launch_execution_job(self, job_id: str) -> dict[str, str]:
+    """The launch task a `PENDING` job actually runs through (Sprint 16
+    Phase 7B.23). Enqueued once, immediately after
+    `ExperimentPlanService.request_execution` inserts the job and
+    commits it.
+
+    A thin wrapper around the existing, untouched `prepare_approved_
+    launch` (`PENDING -> VALIDATING`, guard pipeline, `ExecutionAttempt`
+    creation) -- same shape as `recover_execution_job_retry`: no
+    `self.retry(...)` anywhere. A guard rejection
+    (`SecurityBlocked`/`InputResolutionError`) is diagnosed on
+    `job.reason` and treated as terminal, not retried -- re-running the
+    same guards against the same job rejects identically every time. A
+    genuine infrastructure failure (or `ExecutionJobNotFoundError`/
+    `ExecutionJobNotEligibleError`, which should not be reachable given
+    this task is only ever enqueued once, right after the job's own
+    creation) propagates as a normal Celery task failure.
+
+    Sprint 16 Phase 7B.25: once the guard pipeline approves the launch,
+    this now calls `execution_launcher.launcher.execute_approved_launch`
+    -- the real Docker create/start/wait/collect/cleanup lifecycle --
+    instead of stopping at attempt creation. `launch_execution_job`
+    remains the ONLY task that ever reaches this point; no new task,
+    queue, or route was added for it (the existing launcher/task
+    boundary already covers this).
+    """
+    status = _run_task_loop(_launch_job(uuid.UUID(job_id)))
+    return {"status": status, "job_id": job_id}
+
+
+async def _launch_job(job_id: uuid.UUID) -> str:
+    async with async_session_factory() as session:
+        try:
+            preparation = await prepare_approved_launch(job_id, session)
+        except (SecurityBlocked, InputResolutionError):
+            job = await ExecutionJobRepository(session).get_by_id(job_id)
+            if job is not None and job.reason != LAUNCH_GUARD_REJECTED_DIAGNOSTIC:
+                job.reason = LAUNCH_GUARD_REJECTED_DIAGNOSTIC
+                await session.commit()
+            return "guard_rejected"
+
+        job = await ExecutionJobRepository(session).get_by_id(job_id)
+        outcome = await execute_approved_launch(
+            preparation.approved_spec,
+            attempt_id=preparation.attempt_id,
+            container_name=preparation.container_name,
+            project_id=job.project_id,
+            owner_id=job.owner_id,
+            job_id=job_id,
+            session=session,
+        )
+        return "execution_succeeded" if outcome.succeeded else "execution_failed"
+
+
+@celery_app.task(name="workers.reconcile_execution_attempt", bind=True)
+@log_task_execution
+def reconcile_execution_attempt(self, attempt_id: str) -> dict[str, str]:
+    """Docker-aware crash recovery for ONE `ExecutionAttempt` (Sprint 16
+    Phase 7B.29). Enqueued per attempt by `app.workers.reconciliation.
+    reconcile_stale_docker_managed_attempts`, which stays detection only
+    -- this task is the one place `execution_launcher.launcher.
+    reconcile_attempt`'s real Docker inspect/kill/wait/cleanup I/O
+    actually runs, off the fast startup path entirely.
+
+    Deliberately has no `self.retry(...)`, matching `recover_execution_
+    job_retry`'s precedent: `reconcile_attempt` is idempotent by
+    construction (see its own docstring), so a lost race or a transient
+    daemon failure is not an error to retry here -- a daemon-unreachable
+    or inspect-failure outcome makes no durable write, which means the
+    attempt's `updated_at` is unchanged and the NEXT startup reconciliation
+    pass finds it still stale and re-enqueues it naturally.
+    """
+    outcome = _run_task_loop(_reconcile_attempt(uuid.UUID(attempt_id)))
+    return {"action": outcome, "attempt_id": attempt_id}
+
+
+async def _reconcile_attempt(attempt_id: uuid.UUID) -> str:
+    async with async_session_factory() as session:
+        outcome = await reconcile_attempt(attempt_id, session)
+        return outcome.action

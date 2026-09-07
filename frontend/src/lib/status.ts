@@ -26,6 +26,7 @@ const MAPS: Record<string, Record<string, (value: string) => { variant: Variant;
     completed: badge("success"),
     failed: badge("destructive"),
     unsupported: badge("warning"),
+    ocr_required: badge("warning", "OCR Required"),
   },
   aiProfile: {
     pending: badge("muted"),
@@ -100,6 +101,46 @@ const MAPS: Record<string, Record<string, (value: string) => { variant: Variant;
     healthy: badge("success"),
     degraded: badge("warning"),
     unhealthy: badge("destructive"),
+  },
+  // Sprint 16 Phase 8.7. Two deliberately separate domains for one
+  // claim, never merged into one badge: `verdict` is the raw
+  // deterministic outcome (does the cited text support this specific
+  // claim), `evidenceState` is the backend's broader trust
+  // classification (Phase 8.1) that the same verdict feeds into. A
+  // claim can be `verdict=supported` and still `evidenceState=verified`
+  // vs `derived` depending on citation acceptance — showing only one
+  // would hide that distinction.
+  claimVerdict: {
+    // Green only when the cited text was actually checked and matched
+    // — never for a claim that merely parsed. "Merely cited" has no
+    // badge at all in the panel (see ClaimEvidencePanel), so this is
+    // never confusable with it.
+    supported: badge("success", "Supported"),
+    // The one truly adversarial finding: the evidence says something
+    // else. Kept destructive/red, the same variant `evidenceState`
+    // uses for its own CONTRADICTED — the two taxonomies agree on what
+    // "contradicted" looks like even though they're separate checks.
+    contradicted: badge("destructive", "Contradicted"),
+    // Absence of support, not a wrong answer — warning (amber), never
+    // destructive, so it never reads as the same finding as
+    // `contradicted` above.
+    insufficient_evidence: badge("warning", "Insufficient Evidence"),
+    unverifiable: badge("warning", "Unverifiable"),
+  },
+  evidenceState: {
+    verified: badge("success", "Verified"),
+    derived: badge("secondary", "Derived"),
+    // Deliberately not the word "Supporting" alone — this is Phase
+    // 8.1's EvidenceState.SUPPORTING (a citation backing a claim
+    // without being its primary source), a different concept from the
+    // claim's own primary/supporting ROLE badge rendered alongside it
+    // in the panel. Same word in the data, different label on screen.
+    supporting: badge("outline", "Supporting Evidence"),
+    // Neutral gray, not destructive: "not enough signal to classify"
+    // must never look like "this claim is false" (that is
+    // `contradicted`, below, in red).
+    unknown: badge("muted", "Unknown"),
+    contradicted: badge("destructive", "Contradicted"),
   },
 };
 

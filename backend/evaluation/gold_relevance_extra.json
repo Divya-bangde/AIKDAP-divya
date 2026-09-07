@@ -1,0 +1,93 @@
+[
+  {
+    "query": "What is the enzyme kinetics model used for substrate inhibition?",
+    "query_kind": "in_corpus",
+    "chunk_id": "eval-8.1-r01",
+    "asset_id": "eval-8.1-asset-a",
+    "file_name": "phase_8_1_curated.txt",
+    "note": "near-threshold borderline positive, curated for Phase 8.1",
+    "retrieval_rank": 1,
+    "retrieval_score": 0.71,
+    "rerank_score": -1.6,
+    "expected_relevance": true,
+    "source": "phase_8_1_curated"
+  },
+  {
+    "query": "What is the enzyme kinetics model used for substrate inhibition?",
+    "query_kind": "in_corpus",
+    "chunk_id": "eval-8.1-r02",
+    "asset_id": "eval-8.1-asset-a",
+    "file_name": "phase_8_1_curated.txt",
+    "note": "near-threshold borderline negative, curated for Phase 8.1",
+    "retrieval_rank": 2,
+    "retrieval_score": 0.55,
+    "rerank_score": -2.4,
+    "expected_relevance": false,
+    "source": "phase_8_1_curated"
+  },
+  {
+    "query": "What is the enzyme kinetics model used for substrate inhibition?",
+    "query_kind": "in_corpus",
+    "chunk_id": "eval-8.1-r03",
+    "asset_id": "eval-8.1-asset-a",
+    "file_name": "phase_8_1_curated.txt",
+    "note": "clearly relevant, high score",
+    "retrieval_rank": 3,
+    "retrieval_score": 0.81,
+    "rerank_score": 5.2,
+    "expected_relevance": true,
+    "source": "phase_8_1_curated"
+  },
+  {
+    "query": "What is the capital of France?",
+    "query_kind": "out_of_corpus",
+    "chunk_id": "eval-8.1-r04",
+    "asset_id": "eval-8.1-asset-a",
+    "file_name": "phase_8_1_curated.txt",
+    "note": "off-topic query against a scientific corpus, curated for Phase 8.1",
+    "retrieval_rank": 1,
+    "retrieval_score": 0.31,
+    "rerank_score": -7.8,
+    "expected_relevance": false,
+    "source": "phase_8_1_curated"
+  },
+  {
+    "query": "What is the capital of France?",
+    "query_kind": "out_of_corpus",
+    "chunk_id": "eval-8.1-r05",
+    "asset_id": "eval-8.1-asset-a",
+    "file_name": "phase_8_1_curated.txt",
+    "note": "off-topic query, second candidate",
+    "retrieval_rank": 2,
+    "retrieval_score": 0.29,
+    "rerank_score": -9.1,
+    "expected_relevance": false,
+    "source": "phase_8_1_curated"
+  },
+  {
+    "query": "What sample size was used in the clinical trial?",
+    "query_kind": "in_corpus",
+    "chunk_id": "eval-8.1-r06",
+    "asset_id": "eval-8.1-asset-b",
+    "file_name": "phase_8_1_curated.txt",
+    "note": "clearly irrelevant chunk retrieved alongside a relevant one",
+    "retrieval_rank": 4,
+    "retrieval_score": 0.40,
+    "rerank_score": -5.5,
+    "expected_relevance": false,
+    "source": "phase_8_1_curated"
+  },
+  {
+    "query": "What sample size was used in the clinical trial?",
+    "query_kind": "in_corpus",
+    "chunk_id": "eval-8.1-r07",
+    "asset_id": "eval-8.1-asset-b",
+    "file_name": "phase_8_1_curated.txt",
+    "note": "clearly relevant",
+    "retrieval_rank": 1,
+    "retrieval_score": 0.77,
+    "rerank_score": 3.9,
+    "expected_relevance": true,
+    "source": "phase_8_1_curated"
+  }
+]

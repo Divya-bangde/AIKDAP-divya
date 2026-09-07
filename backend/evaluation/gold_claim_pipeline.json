@@ -1,0 +1,218 @@
+{
+  "_provenance": "Sprint 16 Phase 8.6. dev_set cases were the ONLY cases read while designing evaluation/claim_extraction.py's rules; held_out_set cases were fetched and read for the first time after that file was frozen (see claim_extraction.py's module docstring). All free-text answers, citation snippets, and chunk ids are REAL, copied verbatim from real Phase 8.4 research runs (run ids given per case) and real knowledge_chunks rows fetched directly from Postgres for this phase. The two 'structured_input' cases (contradiction, contamination) are reused unmodified from Phase 8.5/8.1 -- they never pass through claim_extraction at all, since there is no free-text answer to extract from; they exercise the verification/EvidenceState stages only, and are marked as such.",
+
+  "dev_set": [
+    {
+      "id": "dev-aguilar-r1",
+      "kind": "free_text",
+      "run_id": "23d1361f-9d05-4d86-8f0f-a9705773a19b",
+      "categories": ["numeric_aggregate", "numeric_component"],
+      "answer_text": "The overall AI-instrument pass rate across all 1,000 generated executive reports was **73.5%** [c1][c2][c4]. The prompt strategy that performed best was **S4 (One-Shot + BLUF)** [c1], which achieved this rate compared to other strategies such as S0 (61.0%) and S3 (38.0%) [c1].\n## Evidence quality\n...",
+      "run_citation_ids": ["c1", "c2", "c4"],
+      "citations": {
+        "c1": "he mean composite scores, dimension scores, and pass rates for each of the five prompt strategies. Strategy N Avg Action. Avg Rigor Avg Language Avg Structure Composite / Pass % S0: Baseline 200 3.60 3.77 3.30 2.96 3.50 / 61.0% S1: Template 200 3.22 3.20 3.53 2.85 3.22 / 1.5% S2: Template + BLUF 200 3.28 3.19 3.58 3.68 3.37 / 20.0% S3: One-Shot Template 200 3.37 3.54 3.66 3.14 3.44 / 38.0% S4: One-Shot + BLUF 200 3.55 3.35 3.70 4.07 3.60 / 73.5% Figure 1: Prompt Strategy Summary (AI-Instrument Scoring, N = 1,000)",
+        "c2": "At the S4 configuration's 73.5% AI-instrument pass rate, and assuming the 26.5% of failing reports still require meaningful analyst revision... Under AI-instrument scoring, S4 achieves a 73.5% pass rate.",
+        "c4": "Gemma3:27b, running on consumer-grade hardware through a standard RAG pipeline, produced passing-quality executive CTI reports at a 73.5% rate under the S4 prompt configuration per AI-instrument scoring."
+      },
+      "gold": {
+        "insufficiency": {"claimed_insufficient": false, "source": null},
+        "expected_claim_count": 2,
+        "claims": [
+          {"claim_type": "numeric", "claimed_value": "73.5%", "scope": "aggregate", "gold_citation_ids": ["c1", "c2", "c4"], "gold_verdict": "contradicted", "gold_evidence_state": "contradicted", "note": "Every cited occurrence of 73.5% is scoped to strategy S4; none is aggregate-labelled. Established in Phase 8.5."},
+          {"claim_type": "categorical", "claim_text": "S4 (One-Shot + BLUF)", "claimed_value": null, "scope": null, "gold_citation_ids": ["c1"], "gold_verdict": "supported", "gold_evidence_state": "verified", "note": "S4 genuinely has the highest composite/pass-rate row in c1's table."}
+        ]
+      }
+    },
+    {
+      "id": "dev-aguilar-unanswerable-r1",
+      "kind": "free_text",
+      "run_id": "80f5f264-a55a-4e72-a4ce-78e7a5c73b3b",
+      "categories": ["real_contradictions_free", "false_insufficiency_control_source_insufficient"],
+      "answer_text": "## Objective\nProduce a grounded answer supported by the retrieved evidence for: What was the model's accuracy on the SQuAD question-answering benchmark\n\n## Result\nThe available evidence is insufficient to answer this question. The project's knowledge base returned no material that supports an answer, so no answer was generated.\n\n## Evidence quality\n...",
+      "run_citation_ids": [],
+      "citations": {},
+      "evidence_supplied": [],
+      "required_values": ["SQuAD"],
+      "gold": {
+        "insufficiency": {"claimed_insufficient": true, "source": "backend_template"},
+        "expected_claim_count": 0,
+        "claims": [],
+        "gold_sufficiency_verdict": "source_insufficient"
+      }
+    },
+    {
+      "id": "dev-sinanian-r1",
+      "kind": "free_text",
+      "run_id": "50163fe6-5f61-4cf7-935a-70f23719aad2",
+      "categories": ["categorical_correct"],
+      "answer_text": "Allowlist suppression was the decisive factor that raised stalkerware family detection within a ten-flow review budget from just two out of five families to all five families.\n## Evidence quality\n...",
+      "run_citation_ids": ["c1", "c2"],
+      "citations": {
+        "c1": "The results revealed that the allowlist suppression was the decisive factor, raising detection within a ten-flow review budget from just two out of five families to all five.",
+        "c2": "Chief among these interventions is post-scoring allowlist suppression: in this study, a curated allowlist applied after anomaly scoring was the single most decisive improvement, raising detection within a ten-flow..."
+      },
+      "gold": {
+        "insufficiency": {"claimed_insufficient": false, "source": null},
+        "expected_claim_count": 1,
+        "claims": [
+          {"claim_type": "categorical", "claim_text": "Allowlist suppression was the decisive factor that raised stalkerware family detection within a ten-flow review budget from just two out of five families to all five families.", "claimed_value": null, "scope": null, "gold_citation_ids": ["c1", "c2"], "gold_verdict": "supported", "gold_evidence_state": "verified", "note": "Near-verbatim in c1."}
+        ]
+      }
+    }
+  ],
+
+  "held_out_set": [
+    {
+      "id": "ho-aguilar-r2",
+      "kind": "free_text",
+      "run_id": "084a9ed7-2573-4421-a09a-28fbbc637a0d",
+      "categories": ["numeric_aggregate", "numeric_component", "correct_quantitative", "paraphrased"],
+      "answer_text": "The overall AI-instrument pass rate across all 1,000 generated executive reports was **38.8%** (388 reports met or exceeded the ≥3.5 quality threshold) [c5]. The prompt strategy that performed best was **S4 (One-Shot + BLUF)**, which achieved a **73.5%** pass rate [c1], [c2], [c4].\n## Evidence quality\n...",
+      "run_citation_ids": ["c1", "c2", "c4", "c5"],
+      "citations": {
+        "c1": "S0: Baseline 200 3.60 3.77 3.30 2.96 3.50 / 61.0% ... S4: One-Shot + BLUF 200 3.55 3.35 3.70 4.07 3.60 / 73.5% Figure 1: Prompt Strategy Summary (AI-Instrument Scoring, N = 1,000)",
+        "c2": "At the S4 configuration's 73.5% AI-instrument pass rate... Under AI-instrument scoring, S4 achieves a 73.5% pass rate.",
+        "c4": "Gemma3:27b ... produced passing-quality executive CTI reports at a 73.5% rate under the S4 prompt configuration per AI-instrument scoring.",
+        "c5": "The findings establish that model capability alone is neither the limiting factor nor the reliable determinant of output quality. 3.1 Overall Performance and Aggregate Findings Of the 1,000 AI-generated reports scored against the four-dimension composite rubric, 388 (38.8%) met or exceeded the ≥3.5 quality threshold under AI-instrument scoring."
+      },
+      "gold": {
+        "insufficiency": {"claimed_insufficient": false, "source": null},
+        "expected_claim_count": 2,
+        "claims": [
+          {"claim_type": "numeric", "claimed_value": "38.8%", "scope": "aggregate", "gold_citation_ids": ["c5"], "gold_verdict": "supported", "gold_evidence_state": "verified", "note": "REAL positive control: c5 literally contains '388 (38.8%)' under a heading titled 'Overall Performance and Aggregate Findings' -- genuine aggregate language AND correct value, unlike dev-aguilar-r1."},
+          {"claim_type": "numeric", "claimed_value": "73.5%", "scope": "component", "gold_citation_ids": ["c1", "c2", "c4"], "gold_verdict": "supported", "gold_evidence_state": "verified", "note": "Correctly attributed to S4 this time, matching evidence's own component scoping."}
+        ]
+      }
+    },
+    {
+      "id": "ho-sinanian-r2",
+      "kind": "free_text",
+      "run_id": "29b97a28-b1f6-43ef-bb79-0fee14686a4a",
+      "categories": ["categorical_correct", "paraphrased", "ambiguous_unverifiable"],
+      "answer_text": "Allowlist suppression was the decisive factor that raised stalkerware family detection within a ten-flow review budget from just two out of five families to all five families [c1]. This improvement occurred when a curated allowlist applied after anomaly scoring removed known-benign flows, replacing the single benign baseline used in the first phase where only two families were detected [c3].\n## Evidence quality\n...",
+      "run_citation_ids": ["c1", "c2", "c3"],
+      "citations": {
+        "c1": "The results revealed that the allowlist suppression was the decisive factor, raising detection within a ten-flow review budget from just two out of five families to all five.",
+        "c2": "-date rules and detection logic that reflect the continuing evolution of network technologies...",
+        "c3": "Family First-TP rank Hit@5 Hit@10 Hit@20 Prec@5 Prec@20 PktRec@20 FlexiSPY none (>50) X X X .000 .000 .000 MobileSpy 5 v v v .200 .100 .899 mSpy none (>50) X X X .000 .000 .000 TheWiSpy 30 X X X .000 .000 .000 uMobix 2 v v v .600 .250 .886 Table 1: Phase 1 results (single benign baseline, no allowlist)."
+      },
+      "gold": {
+        "insufficiency": {"claimed_insufficient": false, "source": null},
+        "expected_claim_count": 2,
+        "claims": [
+          {"claim_type": "categorical", "claim_text": "Allowlist suppression was the decisive factor that raised stalkerware family detection within a ten-flow review budget from just two out of five families to all five families [c1].", "claimed_value": null, "scope": null, "gold_citation_ids": ["c1"], "gold_verdict": "supported", "gold_evidence_state": "verified", "note": "Same near-verbatim match as dev-sinanian-r1."},
+          {"claim_type": "categorical", "claim_text": "This improvement occurred when a curated allowlist applied after anomaly scoring removed known-benign flows, replacing the single benign baseline used in the first phase where only two families were detected [c3].", "claimed_value": null, "scope": null, "gold_citation_ids": ["c3"], "gold_verdict": "unverifiable", "gold_evidence_state": "unknown", "note": "HONEST abstention target, not a system failure: c3 is a results TABLE (Table 1, Phase 1). It is plausible the paper supports 'single benign baseline...only two families detected' elsewhere, but this specific cited chunk does not state it in words the deterministic n-gram check can confirm. A narrow, non-semantic verifier correctly declines to assume support here."}
+        ]
+      }
+    },
+    {
+      "id": "ho-vaniscak-gate-on-r2",
+      "kind": "free_text",
+      "run_id": "28ae0ec9-539e-4764-96cf-7a06e6255f3c",
+      "categories": ["false_insufficiency", "ambiguous_unverifiable"],
+      "answer_text": "The provided evidence does not contain enough information to answer the question. While the text identifies that **Traffic Patterns** ... were the most viable detection tier against trusted services, it does not provide a specific numerical detection rate...\n\nThe evidence states:\n- Reputation-based detection failed to identify any C2 channels [c1].\n- Beacon Detection was marginally viable with clustering (2/4) [c1] ...\n- Traffic Metadata was partially viable with mixed results other than JA4 fingerprints (100% detection) [c1].\n- Traffic Patterns proved most viable ... [c1].\n\nThe evidence lacks the specific metric ... required to determine which tier achieved the *highest* rate.\n## Evidence quality\n...",
+      "run_citation_ids": ["c1", "c3"],
+      "citations": {
+        "c1": "Across four detection tiers, Reputation-based detection failed to identify any C2 channels; Beacon Detection was marginally viable when using clustering (2/4); Traffic Metadata was partially viable, with mixed results other than JA4 fingerprints (100% detection); and Traffic Patterns proved most viable, with both TLS session resumption near-zero (vs 22%+ for browser) and a 2.6x upload/download ratio gap.",
+        "c3": "tested four publicly available C2 frameworks that operate over trusted services, Discord, Dropbox, Gmail, and OneNote, and found that both reputation-based detection and traditional beacon detection are ineffective at detecting their abuse."
+      },
+      "evidence_supplied": [
+        "sing 51 packet captures (3 baselines, 6 automated browser tests and 6 framework tests per service). Across four detection tiers, Reputation-based detection failed to identify any C2 channels; Beacon Detection was marginally viable when using clustering (2/4); Traffic Metadata was partially viable, with mixed results other than JA4 fingerprints (100% detection); and Traffic Patterns proved most viable, with both TLS session resumption near-zero (vs 22%+ for browser) and a 2.6x upload/download ratio gap (1.41 vs 0.55 means)."
+      ],
+      "required_values": ["100% detection"],
+      "gold": {
+        "insufficiency": {"claimed_insufficient": true, "source": "model_text"},
+        "expected_claim_count": 4,
+        "claims_note": "A correct extractor would treat each of the 4 bullet lines as its own claim. Not itemized further here: this case's primary gold target is the case-level sufficiency verdict below, which does not depend on correct bullet-splitting.",
+        "gold_sufficiency_verdict": "model_failed_to_use_sufficient_evidence"
+      }
+    },
+    {
+      "id": "ho-aguilar-gate-off-r1",
+      "kind": "free_text",
+      "run_id": "ea1c5f41-b234-4794-8e7c-d12669c2d9f2",
+      "categories": ["real_contradictions_free", "correct_quantitative", "ambiguous_unverifiable"],
+      "answer_text": "The overall AI-instrument pass rate across all 1,000 generated executive reports is not explicitly stated as a single aggregate percentage in the provided evidence. However, the evidence indicates that the study produced exactly 1,000 AI-generated executive summaries (20 reports × 5 strategies × 10 iterations) [c2]. Regarding which prompt strategy performed best, the S4 configuration achieved the highest pass rate under AI-instrument scoring at 73.5% [c5].\n## Evidence quality\n...",
+      "run_citation_ids": ["c2", "c5"],
+      "citations": {
+        "c2": "Each of the 20 reports was used as the input for all five prompt strategies across ten generation iterations per strategy, producing 1,000 AI-generated executive summaries in total (20 reports x 5 strategies x 10 iterations).",
+        "c5": "Second, the quality of that output depends on both the prompt design and the scoring instrument used to evaluate it. Under AI-instrument scoring, S4 achieves a 73.5% pass rate."
+      },
+      "gold": {
+        "insufficiency": {"claimed_insufficient": true, "source": "model_text"},
+        "insufficiency_note": "REAL, CORRECT partial insufficiency: this run's retrieval (gate_off) did not surface the chunk containing 38.8%/388 at all (contrast ho-aguilar-r2, where it did) -- so declining to state an aggregate here is genuinely SOURCE_INSUFFICIENT, not false. Phrased in passive voice ('is not explicitly stated as...'), which claim_extraction.py's frozen keyword regex (built on dev's active-voice 'does not explicitly state') does NOT match -- documented, not fixed, per the held-out discipline.",
+        "expected_claim_count": 2,
+        "claims": [
+          {"claim_type": "categorical", "claim_text": "However, the evidence indicates that the study produced exactly 1,000 AI-generated executive summaries (20 reports × 5 strategies × 10 iterations) [c2].", "claimed_value": null, "scope": null, "gold_citation_ids": ["c2"], "gold_verdict": "supported", "gold_evidence_state": "verified", "note": "VERIFIED CORRECTLY, but not for the reason first hypothesized while writing this gold case. The model wrote '×' where c2's real text uses ASCII 'x' ('20 reports x 5 strategies x 10 iterations'), so the specific 'reports...strategies...iterations' window does NOT align (confirmed by direct inspection: the tokenizer keeps ASCII 'x' as its own word but drops '×' as punctuation, breaking that window's contiguity). The claim is still correctly marked SUPPORTED because a *different* 6-word window in the same sentence ('1 000 ai generated executive summaries', from '1,000 AI-generated executive summaries') matches verbatim in both texts. Kept as a documented near-miss: a shorter or differently-worded sentence without that second overlapping phrase would have gone UNVERIFIABLE for the same underlying (×-vs-x) reason."},
+          {"claim_type": "numeric", "claim_text": "Regarding which prompt strategy performed best, the S4 configuration achieved the highest pass rate under AI-instrument scoring at 73.5% [c5].", "claimed_value": "73.5%", "scope": "component", "gold_citation_ids": ["c5"], "gold_verdict": "supported", "gold_evidence_state": "verified", "note": "Correct and verifiable, but the model did not bold '73.5%' in this run, so claim_extraction.py's bold-dependent numeric-claim rule downgrades it to an unstructured categorical claim -- a real value-extraction miss, not a verification-stage issue. gold_verdict/claim_type reflect what a correct extractor SHOULD produce (numeric); scored against the actual categorical prediction via claim_type mismatch."}
+        ]
+      }
+    },
+    {
+      "id": "ho-sinanian-gate-off-unanswerable-r1",
+      "kind": "free_text",
+      "run_id": "a2389027-da5e-46ba-a79c-aa23f2181b24",
+      "categories": ["false_insufficiency_control_source_insufficient"],
+      "answer_text": "The provided evidence does not contain specific detection accuracy figures (such as percentages or numerical scores) for the framework's performance against Pegasus spyware specifically.\n\nWhile the text mentions ... [c3].\n\nThe evidence notes ... [c5].\n## Evidence quality\n...",
+      "run_citation_ids": ["c3", "c5"],
+      "citations": {
+        "c3": "The results revealed that the allowlist suppression was the decisive factor, raising detection within a ten-flow review budget from just two out of five families to all five.",
+        "c5": "Vendor SNI + suspicious host FlexiSPY C2 ... Table 7: Confirmed stalkerware command-and-control and exfiltration flows."
+      },
+      "evidence_supplied": [
+        "The results revealed that the allowlist suppression was the decisive factor, raising detection within a ten-flow review budget from just two out of five families to all five.",
+        "Vendor SNI + suspicious host FlexiSPY C2 119.8.47.97 push.mobilefonex.com Huawei Cloud ... Table 7: Confirmed stalkerware command-and-control and exfiltration flows."
+      ],
+      "required_values": ["Pegasus"],
+      "gold": {
+        "insufficiency": {"claimed_insufficient": true, "source": "model_text"},
+        "insufficiency_note": "REAL, CORRECT insufficiency (Pegasus genuinely is not one of the five tested vendors). Phrased as 'does not contain specific detection accuracy figures...' -- claim_extraction.py's regex only matches the literal phrase 'does not contain enough information' from the dev set and does NOT generalize to this paraphrase family. Documented, not fixed.",
+        "gold_sufficiency_verdict": "source_insufficient"
+      }
+    },
+    {
+      "id": "ho-vaniscak-gate-off-r2",
+      "kind": "free_text",
+      "run_id": "8867b264-5d82-4195-8699-47eda57b09fb",
+      "categories": ["false_insufficiency"],
+      "answer_text": "The provided evidence does not contain enough information to answer the question.\n\nWhile the evidence identifies that **Traffic Patterns** were the most viable detection tier ..., citing a **2.6x upload/download ratio gap** ... [c1] ...\n\nThe evidence provides specific detection rates only for **JA4 fingerprints** within the Traffic Metadata tier, stating they achieved **100% detection** [c1]. ...\n## Evidence quality\n...",
+      "run_citation_ids": ["c1"],
+      "citations": {
+        "c1": "Across four detection tiers, Reputation-based detection failed to identify any C2 channels; Beacon Detection was marginally viable when using clustering (2/4); Traffic Metadata was partially viable, with mixed results other than JA4 fingerprints (100% detection); and Traffic Patterns proved most viable, with both TLS session resumption near-zero (vs 22%+ for browser) and a 2.6x upload/download ratio gap (1.41 vs 0.55 means)."
+      },
+      "evidence_supplied": [
+        "Across four detection tiers, Reputation-based detection failed to identify any C2 channels; Beacon Detection was marginally viable when using clustering (2/4); Traffic Metadata was partially viable, with mixed results other than JA4 fingerprints (100% detection); and Traffic Patterns proved most viable, with both TLS session resumption near-zero (vs 22%+ for browser) and a 2.6x upload/download ratio gap (1.41 vs 0.55 means)."
+      ],
+      "required_values": ["100% detection"],
+      "gold": {
+        "insufficiency": {"claimed_insufficient": true, "source": "model_text"},
+        "gold_sufficiency_verdict": "model_failed_to_use_sufficient_evidence"
+      }
+    }
+  ],
+
+  "structured_input_set": [
+    {
+      "id": "si-contradiction-aguilar-chunks",
+      "kind": "structured_input",
+      "categories": ["real_contradictions_structured"],
+      "note": "Reused unmodified from Phase 8.5 (cv-03). No free-text answer exists to extract this from -- both sides are real source-document chunks, not model output.",
+      "claim_text": "Reports were submitted to Claude (Sonnet 4.6) in randomized batches with identifying information removed: the scoring instrument had no visibility into which prompt strategy produced a given rep",
+      "evidence": [
+        ["chunk-24", "Reports were submitted to Claude (Sonnet 4.6) in randomized batches with identifying information removed: the scoring instrument had no visibility into which prompt strategy produced a given rep"],
+        ["chunk-42", "Gemma3 Pass → Human Fail 17 28.3% Model over-credited report quality"]
+      ],
+      "contradicting_phrases": ["Gemma3"],
+      "gold_verdict": "contradicted"
+    },
+    {
+      "id": "si-contamination-xp05",
+      "kind": "structured_input",
+      "categories": ["primary_supporting_contamination"],
+      "note": "SYNTHETIC, reused unmodified from Phase 8.1 (xp-05) via Phase 8.5. No free-text answer exists to extract this from -- input is already a structured ComparisonItem.",
+      "claim_attributed_to_primary": true,
+      "source_is_primary": [false],
+      "gold_contamination": true
+    }
+  ]
+}

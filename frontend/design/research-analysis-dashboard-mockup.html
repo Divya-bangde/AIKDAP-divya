@@ -1,0 +1,688 @@
+<title>Research Analysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --background: 220 24% 97%; --foreground: 222 47% 11%;
+    --card: 0 0% 100%; --card-foreground: 222 47% 11%;
+    --elevated: 0 0% 100%; --sunken: 220 24% 96%;
+    --primary: 243 75% 59%; --primary-foreground: 0 0% 100%;
+    --secondary: 220 18% 94%; --secondary-foreground: 222 47% 11%;
+    --muted: 220 18% 94%; --muted-foreground: 220 9% 42%;
+    --accent: 243 75% 96%; --accent-foreground: 243 75% 40%;
+    --ai: 190 95% 30%; --ai-foreground: 0 0% 100%; --ai-soft: 190 70% 95%;
+    --success: 152 60% 30%; --success-foreground: 0 0% 100%;
+    --warning: 38 92% 30%; --warning-foreground: 0 0% 100%;
+    --destructive: 0 72% 45%; --destructive-foreground: 0 0% 100%;
+    --border: 220 16% 90%; --border-strong: 220 14% 80%;
+    --radius: 0.75rem;
+    --shadow-subtle: 0 1px 2px 0 hsl(222 47% 11% / 0.04), 0 1px 3px 0 hsl(222 47% 11% / 0.03);
+    --shadow-raised: 0 2px 4px -1px hsl(222 47% 11% / 0.05), 0 8px 16px -4px hsl(222 47% 11% / 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --background: 224 47% 5%; --foreground: 210 25% 96%;
+      --card: 223 42% 8%; --card-foreground: 210 25% 96%;
+      --elevated: 222 38% 11%; --sunken: 225 45% 6.5%;
+      --primary: 243 80% 70%; --primary-foreground: 224 47% 6%;
+      --secondary: 222 26% 15%; --secondary-foreground: 210 25% 96%;
+      --muted: 222 26% 15%; --muted-foreground: 218 14% 68%;
+      --accent: 243 38% 19%; --accent-foreground: 236 92% 88%;
+      --ai: 187 88% 56%; --ai-foreground: 224 47% 6%; --ai-soft: 190 62% 13%;
+      --success: 152 52% 48%; --success-foreground: 224 47% 6%;
+      --warning: 38 92% 58%; --warning-foreground: 224 47% 6%;
+      --destructive: 0 72% 62%; --destructive-foreground: 224 47% 6%;
+      --border: 222 24% 16%; --border-strong: 222 20% 27%;
+      --shadow-subtle: 0 1px 2px 0 hsl(224 60% 2% / 0.5), 0 1px 3px 0 hsl(224 60% 2% / 0.4);
+      --shadow-raised: 0 2px 6px -1px hsl(224 60% 2% / 0.6), 0 10px 20px -6px hsl(224 60% 2% / 0.55);
+    }
+  }
+  :root[data-theme="dark"] {
+    --background: 224 47% 5%; --foreground: 210 25% 96%;
+    --card: 223 42% 8%; --card-foreground: 210 25% 96%;
+    --elevated: 222 38% 11%; --sunken: 225 45% 6.5%;
+    --primary: 243 80% 70%; --primary-foreground: 224 47% 6%;
+    --secondary: 222 26% 15%; --secondary-foreground: 210 25% 96%;
+    --muted: 222 26% 15%; --muted-foreground: 218 14% 68%;
+    --accent: 243 38% 19%; --accent-foreground: 236 92% 88%;
+    --ai: 187 88% 56%; --ai-foreground: 224 47% 6%; --ai-soft: 190 62% 13%;
+    --success: 152 52% 48%; --success-foreground: 224 47% 6%;
+    --warning: 38 92% 58%; --warning-foreground: 224 47% 6%;
+    --destructive: 0 72% 62%; --destructive-foreground: 224 47% 6%;
+    --border: 222 24% 16%; --border-strong: 222 20% 27%;
+    --shadow-subtle: 0 1px 2px 0 hsl(224 60% 2% / 0.5), 0 1px 3px 0 hsl(224 60% 2% / 0.4);
+    --shadow-raised: 0 2px 6px -1px hsl(224 60% 2% / 0.6), 0 10px 20px -6px hsl(224 60% 2% / 0.55);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: hsl(var(--background)); color: hsl(var(--foreground));
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased;
+  }
+  .display { font-family: "Space Grotesk", "Inter", sans-serif; letter-spacing: -0.01em; }
+  .tabular { font-variant-numeric: tabular-nums; }
+  .label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: hsl(var(--muted-foreground)); }
+
+  .shell { max-width: 1180px; margin: 0 auto; padding: 28px 32px 64px; }
+
+  .topbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding-bottom: 20px; border-bottom: 1px solid hsl(var(--border)); margin-bottom: 24px; }
+  .crumb { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: hsl(var(--muted-foreground)); margin-bottom: 6px; }
+  .crumb span:last-child { color: hsl(var(--foreground)); font-weight: 500; }
+  h1 { margin: 0; font-size: 24px; font-weight: 600; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .segmented { display: flex; background: hsl(var(--secondary)); border-radius: 8px; padding: 2px; gap: 2px; }
+  .segmented button { border: none; background: transparent; font: inherit; font-size: 12.5px; font-weight: 500; color: hsl(var(--muted-foreground)); padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+  .segmented button[aria-pressed="true"] { background: hsl(var(--card)); color: hsl(var(--foreground)); box-shadow: var(--shadow-subtle); }
+  .btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid hsl(var(--border-strong)); background: hsl(var(--card)); color: hsl(var(--foreground)); font: inherit; font-size: 12.5px; font-weight: 500; padding: 7px 12px; border-radius: 8px; cursor: pointer; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+  .kpi { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: var(--radius); box-shadow: var(--shadow-subtle); padding: 16px 18px 15px; position: relative; overflow: hidden; }
+  .kpi::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--kpi-rule); }
+  .kpi-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .kpi-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: var(--kpi-bg); color: var(--kpi-fg); flex-shrink: 0; }
+  .kpi-icon svg { width: 15px; height: 15px; }
+  .kpi-value { font-size: 27px; font-weight: 600; letter-spacing: -0.01em; }
+  .kpi-detail { font-size: 12px; color: hsl(var(--muted-foreground)); margin-top: 2px; }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .panel { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: var(--radius); box-shadow: var(--shadow-subtle); padding: 18px 20px 16px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; gap: 2px; }
+  .panel-title { font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 7px; }
+  .panel-title svg { width: 15px; height: 15px; color: hsl(var(--ai)); }
+  .panel-sub { font-size: 12px; color: hsl(var(--muted-foreground)); margin: 0 0 14px; }
+
+  /* Grounding outcome breakdown — horizontal stacked bar, exact status vocabulary */
+  .stack-bar { display: flex; height: 26px; border-radius: 7px; overflow: hidden; border: 1px solid hsl(var(--border)); }
+  .stack-seg { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: hsl(var(--card)); }
+  .outcome-legend { display: flex; flex-wrap: wrap; gap: 14px 18px; margin-top: 14px; }
+  .outcome-legend div { display: flex; align-items: baseline; gap: 6px; font-size: 12.5px; }
+  .outcome-legend .sw { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  .outcome-legend .n { font-weight: 600; }
+  .outcome-legend .l { color: hsl(var(--muted-foreground)); }
+
+  /* Evidence funnel — matches EvidenceFunnel.tsx's own visual language */
+  .funnel-row { display: flex; align-items: center; gap: 12px; margin-bottom: 11px; }
+  .funnel-row:last-child { margin-bottom: 0; }
+  .funnel-label { width: 128px; flex-shrink: 0; }
+  .funnel-label .t { font-size: 12px; font-weight: 500; line-height: 1.2; }
+  .funnel-label .d { font-size: 10px; color: hsl(var(--muted-foreground)); line-height: 1.2; }
+  .funnel-track { height: 26px; flex: 1; border-radius: 7px; border: 1px solid hsl(var(--border)); background: hsl(var(--sunken)); overflow: hidden; }
+  .funnel-fill { height: 100%; border-radius: 7px 0 0 7px; background: linear-gradient(90deg, hsl(var(--ai) / 0.7), hsl(var(--ai))); }
+  .funnel-value { width: 34px; flex-shrink: 0; text-align: right; font-size: 13px; font-weight: 600; }
+
+  /* Provider mix */
+  .bar-h-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .bar-h-row:last-child { margin-bottom: 0; }
+  .bar-h-label { width: 108px; flex-shrink: 0; font-size: 12px; font-family: ui-monospace, "SF Mono", monospace; }
+  .bar-h-track { height: 16px; flex: 1; border-radius: 4px; background: hsl(var(--sunken)); overflow: hidden; }
+  .bar-h-fill { height: 100%; border-radius: 4px; background: hsl(var(--primary)); }
+  .bar-h-value { width: 30px; flex-shrink: 0; text-align: right; font-size: 12px; color: hsl(var(--muted-foreground)); }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: hsl(var(--muted-foreground)); padding: 0 10px 10px; border-bottom: 1px solid hsl(var(--border)); }
+  thead th.num { text-align: right; }
+  tbody td { padding: 11px 10px; border-bottom: 1px solid hsl(var(--border)); font-size: 13px; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  .row-name { font-weight: 500; }
+  .row-sub { font-size: 11.5px; color: hsl(var(--muted-foreground)); margin-top: 1px; }
+  .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 10px; font-size: 11.5px; font-weight: 500; }
+  .b-success { background: hsl(var(--success)); color: hsl(var(--success-foreground)); }
+  .b-warning { background: hsl(var(--warning)); color: hsl(var(--warning-foreground)); }
+  .b-muted { background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
+  .b-destructive { background: hsl(var(--destructive)); color: hsl(var(--destructive-foreground)); }
+
+  .footnote { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: hsl(var(--muted-foreground)); margin-top: 16px; }
+  .footnote svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+  /* ---- Expression Workspace -------------------------------------- */
+  .expr-line {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: hsl(var(--sunken));
+    border: 1px solid hsl(var(--border));
+    margin-bottom: 14px;
+  }
+  .expr-line .op { color: hsl(var(--muted-foreground)); font-weight: 400; }
+  .var-table { display: flex; flex-direction: column; gap: 1px; border-radius: 8px; overflow: hidden; border: 1px solid hsl(var(--border)); }
+  .var-row { display: grid; grid-template-columns: 28px 1fr auto auto; align-items: center; gap: 10px; padding: 8px 10px; background: hsl(var(--card)); }
+  .var-sym { font-family: ui-monospace, monospace; font-weight: 700; font-size: 13px; color: hsl(var(--primary)); }
+  .var-name { font-size: 12px; color: hsl(var(--muted-foreground)); }
+  .var-val { font-family: ui-monospace, monospace; font-size: 12px; }
+  .var-badge { font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; }
+  .var-badge.const { background: hsl(var(--accent)); color: hsl(var(--accent-foreground)); }
+  .var-badge.mut { background: hsl(var(--ai-soft)); color: hsl(var(--ai)); }
+
+  /* The "[ ]" is a literal editable box: a bracket-framed number input
+     for every mutable variable, restyled off the native control so the
+     brackets themselves read as the input's edges. */
+  .var-input-wrap { display: flex; align-items: center; font-family: ui-monospace, monospace; font-size: 13px; font-weight: 600; color: hsl(var(--ai)); }
+  .var-input-wrap .bracket { opacity: 0.55; }
+  .var-input {
+    width: 64px; text-align: center; border: none; border-bottom: 1.5px dashed hsl(var(--ai) / 0.5);
+    background: transparent; color: hsl(var(--ai)); font: inherit; padding: 2px 2px;
+  }
+  .var-input:focus { outline: none; border-bottom-style: solid; border-bottom-color: hsl(var(--ai)); }
+  .var-unit { font-size: 10.5px; color: hsl(var(--muted-foreground)); font-family: "Inter", sans-serif; font-weight: 400; margin-left: 4px; }
+
+  .expr-result { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding: 10px 14px; border-radius: 8px; background: hsl(var(--ai-soft)); transition: background-color 400ms ease; }
+  .expr-result.flash { background: hsl(var(--ai) / 0.28); }
+  .expr-result .l { font-size: 12px; color: hsl(var(--ai)); font-weight: 600; }
+  .expr-result .v { font-family: ui-monospace, monospace; font-size: 15px; font-weight: 700; color: hsl(var(--ai)); }
+  .run-btn { display: inline-flex; align-items: center; gap: 6px; border: none; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); font: inherit; font-size: 12px; font-weight: 600; padding: 7px 13px; border-radius: 7px; cursor: pointer; }
+
+  /* ---- Live Visualization: canvas dot field is the panel's own
+     background, not a separate surface, per direction. ---- */
+  .live-panel { position: relative; overflow: hidden; padding: 0; }
+  .live-panel canvas { display: block; width: 100%; }
+  #dotfield { position: absolute; inset: 0; }
+  .live-head { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 0; }
+  .live-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: hsl(var(--ai)); }
+  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: hsl(var(--ai)); box-shadow: 0 0 0 0 hsl(var(--ai) / 0.5); animation: live-pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
+  @keyframes live-pulse { 0% { box-shadow: 0 0 0 0 hsl(var(--ai) / 0.45); } 70% { box-shadow: 0 0 0 7px hsl(var(--ai) / 0); } 100% { box-shadow: 0 0 0 0 hsl(var(--ai) / 0); } }
+  #livechart { position: relative; z-index: 2; }
+
+  @media (max-width: 880px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .row { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .live-dot { animation: none; }
+  }
+</style>
+
+<div class="shell">
+
+  <div class="topbar">
+    <div>
+      <div class="crumb"><span>Northwind Retail Expansion</span><span>&rsaquo;</span><span>Research Analysis</span></div>
+      <h1 class="display">Research Analysis</h1>
+    </div>
+    <div class="topbar-right">
+      <div class="segmented" role="group" aria-label="Time range">
+        <button aria-pressed="false">7d</button>
+        <button aria-pressed="true">30d</button>
+        <button aria-pressed="false">All time</button>
+      </div>
+      <button class="btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v13m0 0-4-4m4 4 4-4M4 20h16"/></svg>
+        Export
+      </button>
+    </div>
+  </div>
+
+  <!-- KPI strip: real, backend-derived aggregates only -->
+  <div class="kpis">
+    <div class="kpi" style="--kpi-bg: hsl(var(--accent)); --kpi-fg: hsl(var(--accent-foreground)); --kpi-rule: hsl(var(--primary) / 0.5);">
+      <div class="kpi-head">
+        <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4h2M4 11v2M20 11v2M11 20h2M6.3 6.3l1.4 1.4M17.7 6.3l-1.4 1.4M6.3 17.7l1.4-1.4M17.7 17.7l-1.4-1.4"/><circle cx="12" cy="12" r="3"/></svg></div>
+        <span class="label">Research runs</span>
+      </div>
+      <div class="kpi-value tabular">86</div>
+      <div class="kpi-detail">12 this range</div>
+    </div>
+    <div class="kpi" style="--kpi-bg: hsl(var(--success) / 0.1); --kpi-fg: hsl(var(--success)); --kpi-rule: hsl(var(--success) / 0.6);">
+      <div class="kpi-head">
+        <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 13 4 4L19 7"/></svg></div>
+        <span class="label">Grounded answers</span>
+      </div>
+      <div class="kpi-value tabular">71%</div>
+      <div class="kpi-detail">61 of 86 runs, cited evidence</div>
+    </div>
+    <div class="kpi" style="--kpi-bg: hsl(var(--ai-soft)); --kpi-fg: hsl(var(--ai)); --kpi-rule: hsl(var(--ai) / 0.6);">
+      <div class="kpi-head">
+        <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12h6M9 16h4M8 4h8l3 3v13H5V7l3-3Z"/></svg></div>
+        <span class="label">Avg. citations / answer</span>
+      </div>
+      <div class="kpi-value tabular">4.6</div>
+      <div class="kpi-detail">across grounded runs</div>
+    </div>
+    <div class="kpi" style="--kpi-bg: hsl(var(--accent)); --kpi-fg: hsl(var(--accent-foreground)); --kpi-rule: hsl(var(--primary) / 0.5);">
+      <div class="kpi-head">
+        <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2.5"/></svg></div>
+        <span class="label">Median run time</span>
+      </div>
+      <div class="kpi-value tabular">18.4<span style="font-size:15px;font-weight:500;">s</span></div>
+      <div class="kpi-detail">planner → synthesis</div>
+    </div>
+  </div>
+
+  <div class="row">
+
+    <!-- Expression Workspace: EVALUATE_EXPRESSION / array-compute ops the
+         execution launcher actually supports (Sprint 16 catalog) — a
+         scalar equation over constants plus array-valued variables. -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h12M6 20h12M8 4c0 5-4 6-4 8s4 3 4 8M16 4c0-0-0 0 0 0"/><path d="M6 4c6 4 6 12 0 16M18 4c-6 4-6 12 0 16"/></svg>
+          Expression workspace
+        </span>
+      </div>
+      <p class="panel-sub">EVALUATE_EXPRESSION &middot; edit a mutable variable to re-solve live &mdash; example expression, shown for illustration</p>
+
+      <div class="expr-line">P <span class="op">&middot;</span> V <span class="op">=</span> n <span class="op">&middot;</span> R <span class="op">&middot;</span> T</div>
+
+      <div class="var-table">
+        <div class="var-row">
+          <span class="var-sym">R</span>
+          <span class="var-name">gas constant</span>
+          <span class="var-val tabular">8.314</span>
+          <span class="var-badge const">Constant</span>
+        </div>
+        <div class="var-row">
+          <span class="var-sym">n</span>
+          <span class="var-name">moles</span>
+          <span class="var-val tabular">2.5</span>
+          <span class="var-badge const">Constant</span>
+        </div>
+        <div class="var-row">
+          <span class="var-sym">P</span>
+          <span class="var-name">pressure</span>
+          <span class="var-input-wrap">
+            <span class="bracket">[</span><input id="var-p" class="var-input tabular" type="number" step="0.1" value="12.0"><span class="bracket">]</span>
+            <span class="var-unit">atm</span>
+          </span>
+          <span class="var-badge mut">Mutable</span>
+        </div>
+        <div class="var-row">
+          <span class="var-sym">T</span>
+          <span class="var-name">temperature</span>
+          <span class="var-input-wrap">
+            <span class="bracket">[</span><input id="var-t" class="var-input tabular" type="number" step="1" value="310"><span class="bracket">]</span>
+            <span class="var-unit">K</span>
+          </span>
+          <span class="var-badge mut">Mutable</span>
+        </div>
+      </div>
+
+      <div class="expr-result" id="expr-result">
+        <span class="l">V &nbsp;=&nbsp; nRT / P &nbsp;(solved)</span>
+        <span class="v tabular" id="expr-result-value">5.36 L</span>
+      </div>
+
+      <button class="run-btn" style="margin-top:12px;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7Z"/></svg>
+        Run in sandbox
+      </button>
+    </div>
+
+    <!-- Live Visualization: an animated dot field is the panel's own
+         background (not a separate white/dark surface), with a
+         real-time line chart layered over it, per direction. -->
+    <div class="panel live-panel">
+      <canvas id="dotfield"></canvas>
+      <div class="live-head">
+        <span class="panel-title" style="color:hsl(var(--foreground));">Live visualization</span>
+        <span class="live-badge"><span class="live-dot"></span>Streaming</span>
+      </div>
+      <canvas id="livechart" height="300"></canvas>
+    </div>
+  </div>
+
+  <div class="row">
+
+    <!-- Grounding outcome breakdown: the four REAL grounding_status values -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4.5 8-11.5V5l-8-3-8 3v5.5C4 17.5 12 22 12 22Z"/></svg>
+          Grounding outcomes
+        </span>
+      </div>
+      <p class="panel-sub">How each of the 86 runs in this range resolved</p>
+
+      <div class="stack-bar" role="img" aria-label="71 percent grounded, 15 percent partially grounded, 9 percent insufficient evidence, 5 percent failed">
+        <div class="stack-seg" style="width:71%; background:hsl(var(--success));">71%</div>
+        <div class="stack-seg" style="width:15%; background:hsl(var(--warning));">15%</div>
+        <div class="stack-seg" style="width:9%; background:hsl(var(--muted)); color:hsl(var(--muted-foreground));"></div>
+        <div class="stack-seg" style="width:5%; background:hsl(var(--destructive));"></div>
+      </div>
+
+      <div class="outcome-legend">
+        <div><span class="sw" style="background:hsl(var(--success))"></span><span class="n tabular">61</span><span class="l">Grounded</span></div>
+        <div><span class="sw" style="background:hsl(var(--warning))"></span><span class="n tabular">13</span><span class="l">Partially Grounded</span></div>
+        <div><span class="sw" style="background:hsl(var(--muted-foreground))"></span><span class="n tabular">8</span><span class="l">Insufficient Evidence</span></div>
+        <div><span class="sw" style="background:hsl(var(--destructive))"></span><span class="n tabular">4</span><span class="l">Research Failed</span></div>
+      </div>
+    </div>
+
+    <!-- Aggregate evidence funnel — same stage set as EvidenceFunnel.tsx, summed across the range -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18l-7 9v5l-4 2v-7L3 5Z"/></svg>
+          Evidence funnel
+        </span>
+      </div>
+      <p class="panel-sub">Totals across every run in this range</p>
+
+      <div class="funnel-row">
+        <div class="funnel-label"><div class="t">Retrieved</div><div class="d">asset_retrieval</div></div>
+        <div class="funnel-track"><div class="funnel-fill" style="width:100%"></div></div>
+        <div class="funnel-value tabular">1,240</div>
+      </div>
+      <div class="funnel-row">
+        <div class="funnel-label"><div class="t">Reranked</div><div class="d">context_builder</div></div>
+        <div class="funnel-track"><div class="funnel-fill" style="width:61%"></div></div>
+        <div class="funnel-value tabular">756</div>
+      </div>
+      <div class="funnel-row">
+        <div class="funnel-label"><div class="t">Above threshold</div><div class="d">relevance-filtered</div></div>
+        <div class="funnel-track"><div class="funnel-fill" style="width:34%"></div></div>
+        <div class="funnel-value tabular">421</div>
+      </div>
+      <div class="funnel-row">
+        <div class="funnel-label"><div class="t">Cited in answer</div><div class="d">synthesis</div></div>
+        <div class="funnel-track"><div class="funnel-fill" style="width:23%"></div></div>
+        <div class="funnel-value tabular">279</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Provider / model mix — real synthesis.provider field, aggregated -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg>
+          Synthesis provider mix
+        </span>
+      </div>
+      <p class="panel-sub">Which provider completed the answer</p>
+
+      <div class="bar-h-row">
+        <span class="bar-h-label">gemini-flash</span>
+        <div class="bar-h-track"><div class="bar-h-fill" style="width:64%"></div></div>
+        <span class="bar-h-value tabular">55</span>
+      </div>
+      <div class="bar-h-row">
+        <span class="bar-h-label">gpt-4o-mini</span>
+        <div class="bar-h-track"><div class="bar-h-fill" style="width:24%; background:hsl(var(--ai));"></div></div>
+        <span class="bar-h-value tabular">21</span>
+      </div>
+      <div class="bar-h-row">
+        <span class="bar-h-label">claude-haiku</span>
+        <div class="bar-h-track"><div class="bar-h-fill" style="width:12%; background:hsl(var(--success));"></div></div>
+        <span class="bar-h-value tabular">10</span>
+      </div>
+      <p class="footnote" style="margin-top:14px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12a8 8 0 0 1 14-5M20 12a8 8 0 0 1-14 5"/><path d="M18 3v4h-4M6 21v-4h4"/></svg>
+        6 of 86 runs used a fallback provider after the primary was unavailable.
+      </p>
+    </div>
+
+    <!-- Recent runs — same row shape as ResearchHistoryList -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title" style="color:hsl(var(--foreground));">Recent runs</span>
+        <a href="#" style="font-size:12px; color:hsl(var(--primary)); text-decoration:none; font-weight:500;">View all &rarr;</a>
+      </div>
+      <div>
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px solid hsl(var(--border));">
+          <div style="min-width:0;">
+            <div class="row-name" style="font-size:12.5px;">What drove Q3 basket-size growth in the Midwest region?</div>
+            <div class="row-sub">4 min ago &middot; 21.2s &middot; 6 citations</div>
+          </div>
+          <span class="badge b-success">Grounded</span>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px solid hsl(var(--border));">
+          <div style="min-width:0;">
+            <div class="row-name" style="font-size:12.5px;">Summarize supplier delay patterns from the logistics reports</div>
+            <div class="row-sub">19 min ago &middot; 14.8s &middot; 3 citations</div>
+          </div>
+          <span class="badge b-warning">Partially Grounded</span>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px solid hsl(var(--border));">
+          <div style="min-width:0;">
+            <div class="row-name" style="font-size:12.5px;">Is there a documented policy on returns after 90 days?</div>
+            <div class="row-sub">1 hr ago &middot; 9.1s &middot; 0 citations</div>
+          </div>
+          <span class="badge b-muted">Insufficient Evidence</span>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 0;">
+          <div style="min-width:0;">
+            <div class="row-name" style="font-size:12.5px;">Compare warehouse throughput before and after the Q2 rollout</div>
+            <div class="row-sub">2 hr ago &middot; 27.6s</div>
+          </div>
+          <span class="badge b-destructive">Research Failed</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footnote">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+    Every number above is aggregated from real run and citation records &mdash; no trend is projected or forecast.
+  </div>
+
+</div>
+
+<script>
+(function () {
+  // Live-solves V = nRT / P as the reader edits the bracketed P/T
+  // inputs. R and n stay fixed (rendered read-only, not <input>s) since
+  // the direction marks only the bracketed fields as user-editable.
+  (function wireExpression() {
+    var R = 8.314, n = 2.5;
+    var pInput = document.getElementById("var-p");
+    var tInput = document.getElementById("var-t");
+    var resultBox = document.getElementById("expr-result");
+    var resultValue = document.getElementById("expr-result-value");
+    if (!pInput || !tInput || !resultBox || !resultValue) return;
+
+    function solve() {
+      var p = parseFloat(pInput.value);
+      var t = parseFloat(tInput.value);
+      if (!isFinite(p) || p === 0 || !isFinite(t)) {
+        resultValue.textContent = "undefined";
+        return;
+      }
+      var v = (n * R * t) / p;
+      resultValue.textContent = v.toFixed(2) + " L";
+      resultBox.classList.add("flash");
+      window.clearTimeout(solve._t);
+      solve._t = window.setTimeout(function () { resultBox.classList.remove("flash"); }, 350);
+    }
+    pInput.addEventListener("input", solve);
+    tInput.addEventListener("input", solve);
+    solve();
+  })();
+
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var live = document.querySelector(".live-panel");
+  var dotCanvas = document.getElementById("dotfield");
+  var chartCanvas = document.getElementById("livechart");
+  if (!live || !dotCanvas || !chartCanvas) return;
+
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var dctx = dotCanvas.getContext("2d");
+  var cctx = chartCanvas.getContext("2d");
+
+  function token(name) {
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v ? "hsl(" + v + ")" : "#888";
+  }
+
+  var W = 0, H = 0;
+  function resize() {
+    var r = live.getBoundingClientRect();
+    W = r.width;
+    H = Math.max(300, r.height ? r.height : 300);
+    [dotCanvas, chartCanvas].forEach(function (c) {
+      c.width = W * dpr;
+      c.height = H * dpr;
+      c.style.height = H + "px";
+    });
+  }
+  resize();
+  window.addEventListener("resize", resize);
+
+  // ---- Dot field: a slow-drifting particle grid, the panel's own
+  // background rather than a separate surface. Amplitude is small and
+  // opacity low so it reads as ambient texture, not as a demo. ----
+  var DOT_GAP = 26;
+  var dots = [];
+  function seedDots() {
+    dots = [];
+    var cols = Math.ceil(W / DOT_GAP) + 2;
+    var rows = Math.ceil(H / DOT_GAP) + 2;
+    for (var i = 0; i < cols; i++) {
+      for (var j = 0; j < rows; j++) {
+        dots.push({
+          x: i * DOT_GAP,
+          y: j * DOT_GAP,
+          phase: Math.random() * Math.PI * 2,
+          speed: 0.4 + Math.random() * 0.3,
+        });
+      }
+    }
+  }
+  seedDots();
+
+  function drawDots(t) {
+    dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    dctx.clearRect(0, 0, W, H);
+    var base = token("--muted-foreground");
+    for (var k = 0; k < dots.length; k++) {
+      var d = dots[k];
+      var wobble = reduceMotion ? 0 : Math.sin(t * 0.0006 * d.speed + d.phase) * 3;
+      var r = reduceMotion ? 1.1 : 0.9 + Math.sin(t * 0.0009 * d.speed + d.phase) * 0.5;
+      var alpha = reduceMotion ? 0.12 : 0.08 + (Math.sin(t * 0.0006 * d.speed + d.phase) + 1) * 0.05;
+      dctx.beginPath();
+      dctx.arc(d.x, d.y + wobble, Math.max(0.4, r), 0, Math.PI * 2);
+      dctx.fillStyle = base.replace(")", "") === base ? base : base;
+      dctx.globalAlpha = alpha;
+      dctx.fillStyle = base;
+      dctx.fill();
+    }
+    dctx.globalAlpha = 1;
+  }
+
+  // ---- Live line chart: a smooth real-time series with drawn axis
+  // ticks, a faint grid and an emphasized leading point, matching the
+  // static charts' own drawing conventions. ----
+  var MAX_POINTS = 40;
+  var series = [];
+  (function seedSeries() {
+    var v = 50;
+    for (var i = 0; i < MAX_POINTS; i++) {
+      v += (Math.random() - 0.5) * 8;
+      v = Math.max(10, Math.min(90, v));
+      series.push(v);
+    }
+  })();
+
+  var lastTick = 0;
+  var TICK_MS = 1100;
+
+  function pushPoint() {
+    var last = series[series.length - 1];
+    var next = last + (Math.random() - 0.5) * 10;
+    next = Math.max(8, Math.min(92, next));
+    series.push(next);
+    if (series.length > MAX_POINTS) series.shift();
+  }
+
+  function drawChart() {
+    cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cctx.clearRect(0, 0, W, H);
+
+    var padL = 40, padR = 16, padT = 56, padB = 30;
+    var plotW = W - padL - padR;
+    var plotH = H - padT - padB;
+    var grid = token("--border");
+    var muted = token("--muted-foreground");
+    var fg = token("--foreground");
+    var ai = token("--ai");
+    var primary = token("--primary");
+
+    // gridlines + y ticks (0 / 25 / 50 / 75 / 100 domain)
+    cctx.font = "10.5px Inter, sans-serif";
+    cctx.fillStyle = muted;
+    cctx.strokeStyle = grid;
+    cctx.lineWidth = 1;
+    [0, 25, 50, 75, 100].forEach(function (v) {
+      var y = padT + plotH - (v / 100) * plotH;
+      cctx.beginPath();
+      cctx.moveTo(padL, y);
+      cctx.lineTo(padL + plotW, y);
+      cctx.stroke();
+      cctx.textAlign = "right";
+      cctx.fillText(String(v), padL - 8, y + 3);
+    });
+
+    // series path, area fill, and endpoint
+    function xAt(i) { return padL + (i / (MAX_POINTS - 1)) * plotW; }
+    function yAt(v) { return padT + plotH - (v / 100) * plotH; }
+
+    cctx.beginPath();
+    series.forEach(function (v, i) {
+      var x = xAt(i), y = yAt(v);
+      if (i === 0) cctx.moveTo(x, y); else cctx.lineTo(x, y);
+    });
+    var grad = cctx.createLinearGradient(0, padT, 0, padT + plotH);
+    grad.addColorStop(0, ai.replace("hsl(", "hsla(").replace(")", ", 0.22)"));
+    grad.addColorStop(1, ai.replace("hsl(", "hsla(").replace(")", ", 0)"));
+    var lastX = xAt(series.length - 1);
+    cctx.lineTo(lastX, padT + plotH);
+    cctx.lineTo(xAt(0), padT + plotH);
+    cctx.closePath();
+    cctx.fillStyle = grad;
+    cctx.fill();
+
+    cctx.beginPath();
+    series.forEach(function (v, i) {
+      var x = xAt(i), y = yAt(v);
+      if (i === 0) cctx.moveTo(x, y); else cctx.lineTo(x, y);
+    });
+    cctx.strokeStyle = ai;
+    cctx.lineWidth = 2;
+    cctx.lineJoin = "round";
+    cctx.stroke();
+
+    var endY = yAt(series[series.length - 1]);
+    cctx.beginPath();
+    cctx.arc(lastX, endY, 4, 0, Math.PI * 2);
+    cctx.fillStyle = ai;
+    cctx.fill();
+    cctx.beginPath();
+    cctx.arc(lastX, endY, 8, 0, Math.PI * 2);
+    cctx.strokeStyle = ai;
+    cctx.globalAlpha = 0.35;
+    cctx.lineWidth = 1.5;
+    cctx.stroke();
+    cctx.globalAlpha = 1;
+
+    cctx.textAlign = "left";
+    cctx.fillStyle = fg;
+    cctx.font = "600 12px Inter, sans-serif";
+    cctx.fillText(series[series.length - 1].toFixed(1), lastX + 12, endY + 4);
+  }
+
+  function frame(t) {
+    drawDots(t);
+    if (!reduceMotion) {
+      if (t - lastTick > TICK_MS) {
+        pushPoint();
+        lastTick = t;
+      }
+      drawChart();
+      requestAnimationFrame(frame);
+    }
+  }
+
+  if (reduceMotion) {
+    drawDots(0);
+    drawChart();
+  } else {
+    requestAnimationFrame(frame);
+  }
+})();
+</script>
+

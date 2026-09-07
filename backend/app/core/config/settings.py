@@ -228,6 +228,57 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     research_run_stale_after_seconds: float = Field(default=1_200.0, gt=0)
 
+    # ------------------------------------------------------------------
+    # Stale execution-attempt reconciliation (Sprint 16 Phase 7B.15)
+    #
+    # `prepare_approved_launch()` commits an `ExecutionAttempt` at
+    # `PENDING_CREATE` *before* any Docker call, deliberately, so a
+    # crashed launcher leaves durable evidence rather than an orphan
+    # container nothing knows about (Phase 7B.12 recovery protocol). The
+    # cost of that ordering is that a launcher which dies between the
+    # commit and the Docker call leaves the row at `PENDING_CREATE`
+    # forever — the same "nothing ever revisits this row" gap Sprint 9J
+    # found for `ResearchRun`.
+    #
+    # UNVERIFIED number. Unlike `research_run_stale_after_seconds` — sized
+    # from the real retry/timeout configuration it has to clear — there is
+    # no Docker call in this system yet, so there is nothing to measure a
+    # normal `PENDING_CREATE` dwell time against. 300s is chosen as a
+    # conservative ceiling over the slowest plausible container creation
+    # (a cold image pull), not as a benchmarked value, and must be
+    # re-derived once a real launcher exists. It gates reconciliation
+    # only; nothing else reads it.
+    # ------------------------------------------------------------------
+    execution_attempt_stale_after_seconds: float = Field(default=300.0, gt=0)
+
+    # ------------------------------------------------------------------
+    # Stale execution-job VALIDATING reconciliation (Sprint 16 Phase 7B.16)
+    #
+    # `ExecutionJobRepository.claim_pending_job()` moves a job
+    # `PENDING -> VALIDATING` and commits immediately. Phase 7B.10's
+    # documented failure policy then deliberately leaves the job parked
+    # at `VALIDATING` forever on a guard/resolver rejection, an
+    # attempt-creation failure, or a crash anywhere in between -- the
+    # same "nothing ever revisits this row" gap Sprint 9J found for
+    # `ResearchRun` and Phase 7B.15 found for `ExecutionAttempt`.
+    #
+    # Deliberately a SEPARATE setting from
+    # `execution_attempt_stale_after_seconds`, not a reuse of it: the two
+    # cover structurally different spans. The attempt threshold's 300s
+    # accounts for a cold Docker image pull that has not happened yet.
+    # `VALIDATING` covers only `reconstruct_launch_request()` ->
+    # `ProductionInputResolver` -> `build_candidate()` ->
+    # `validate_and_approve()` -> attempt creation -- pure in-process
+    # Python plus Postgres/local-filesystem I/O, no Docker call anywhere
+    # in that span. UNVERIFIED number: not benchmarked against real
+    # production timings (none exist yet), only reasoned from the
+    # structural absence of any Docker wait in this stage; a materially
+    # smaller ceiling than the attempt threshold is justified by that
+    # absence, not by measurement, and must be re-derived once real
+    # timing data exists. It gates reconciliation only.
+    # ------------------------------------------------------------------
+    execution_job_validating_stale_after_seconds: float = Field(default=120.0, gt=0)
+
     #: Whether research synthesis answers with a real model
     #: (`GroundedSynthesizer`) or extracts from the evidence without one
     #: (`ExtractiveSynthesizer`). There is deliberately no automatic
@@ -318,6 +369,83 @@ class Settings(BaseSettings):
     #: `app.modules.assets.processing.document_understanding`.
     qwen_max_input_characters: int = Field(default=6000, gt=0)
 
+    #: Sprint 12.3: fraction of a PDF's pages that must be empty of
+    #: machine-readable text before the WHOLE document is treated as
+    #: `OCR_REQUIRED` rather than `COMPLETED`. Before this existed, only
+    #: a document with EVERY page empty triggered OCR_REQUIRED -- a
+    #: real-world PDF with a handful of pages of genuine text (a cover
+    #: page, a stamped page number) followed by dozens of scanned image
+    #: pages was marked COMPLETED with just that small fraction indexed,
+    #: silently dropping the rest of the document while looking
+    #: successful. Confirmed live: a synthetic 5-page PDF (1 real text
+    #: page + 4 image-only pages) returned COMPLETED with 1 chunk
+    #: before this fix. 0.5 (a majority) is deliberately conservative --
+    #: it only fires when most of the document is unreadable, so a
+    #: document with a few genuinely blank pages (a section divider, a
+    #: back cover) is unaffected.
+    pdf_ocr_required_empty_page_ratio: float = Field(default=0.5, gt=0.0, le=1.0)
+
+    # ------------------------------------------------------------------
+    # OCR (Sprint 12.5) -- Tesseract, invoked via `pytesseract`.
+    #
+    # `ocr_enabled` is a deployment-wide kill switch: a deployment that
+    # never installed the `tesseract-ocr` system package (see
+    # Dockerfile) can set this false to fail fast and honestly
+    # (`OCR_REQUIRED`, unchanged from Sprint 12.3) instead of hitting a
+    # `TesseractNotFoundError` on every scanned-page attempt.
+    #
+    # `ocr_min_confidence`/`ocr_min_characters` are the quality gate,
+    # calibrated live against this deployment's own Tesseract 5.5.0:
+    # genuinely readable rendered text (clean, mildly blurred, and a
+    # tiny 8pt font) scored 79-96 average confidence; random noise, a
+    # blank image, heavily blurred text, and 15-degree-rotated text all
+    # scored exactly 0 (zero words recognized at all). The threshold
+    # sits well inside that gap on the conservative side -- rejecting
+    # only when OCR found nothing worth trusting, not merely imperfect
+    # text.
+    # ------------------------------------------------------------------
+    ocr_enabled: bool = True
+    ocr_language: str = "eng"
+    ocr_min_confidence: float = Field(default=40.0, ge=0.0, le=100.0)
+    ocr_min_characters: int = Field(default=10, gt=0)
+    #: How long Tesseract may spend on one image before being killed --
+    #: bounds worst-case per-page latency (Sprint 12.5 Phase 10).
+    ocr_timeout_seconds: float = Field(default=30.0, gt=0)
+    #: Hard ceiling on pages OCR'd per PDF. Only pages with no native
+    #: text are ever candidates, so this bounds the pathological case
+    #: (a many-hundred-page scanned PDF) rather than normal documents,
+    #: which stay far under it.
+    ocr_max_pages_per_document: int = Field(default=50, gt=0)
+    #: Per-image pixel-count ceiling, checked before Tesseract ever
+    #: runs. Set well below Pillow's own ~89-megapixel
+    #: `DecompressionBombWarning` threshold so an oversized embedded
+    #: image is skipped cheaply rather than decoded first and warned
+    #: about after the fact. 40 megapixels comfortably covers even a
+    #: 600 DPI scan of a Letter page (~34 megapixels).
+    ocr_max_image_pixels: int = Field(default=40_000_000, gt=0)
+    #: Sprint 12.5 Phase 3: minimum Tesseract OSD `orientation_conf`
+    #: required to trust its rotation suggestion. Calibrated live: real
+    #: rotated text (0/90/180/270 degrees) scored 3.7-3.9; pure random
+    #: noise scored 0.13 despite OSD returning a "successful" (non-
+    #: exception) result. The threshold sits well below the real-text
+    #: range and well above the noise measurement, so a genuinely
+    #: unreadable/blank image (which usually raises its own exception,
+    #: handled separately) or a noise-like one is left unrotated rather
+    #: than confidently "corrected" based on a meaningless suggestion.
+    ocr_osd_min_confidence: float = Field(default=1.0, ge=0.0)
+
+    #: Sprint 12.2: hard ceiling on how many sections `analyze()` will
+    #: send to Qwen for one document. Without this, a very large upload
+    #: (a several-hundred-page PDF) had no upper bound on sequential
+    #: Qwen calls — document understanding produces a summary, not an
+    #: exhaustive extraction, so processing the leading N sections
+    #: (which carry the title, abstract/intro, and early structure of
+    #: most real documents) is a reasonable trade for a bounded worst
+    #: case. The full text remains fully searchable regardless of this
+    #: cap: retrieval chunking (`chunk_document`) is a separate,
+    #: uncapped path over the complete extracted text.
+    qwen_max_sections: int = Field(default=20, gt=0)
+
     # ------------------------------------------------------------------
     # Local embeddings — BGE-M3 through Ollama + pgvector (Sprint 9C)
     #
@@ -405,6 +533,10 @@ class Settings(BaseSettings):
     #: different reranker — recalibrate rather than reusing this number.
     #: Lower admits more evidence; raise it to filter harder.
     reranker_relevance_threshold: float = -2.0
+
+    #: Sprint 15: Validated Query Understanding
+    #: Feature flag to enable/disable safe LLM query reformulation before retrieval.
+    query_reformulation_enabled: bool = True
 
     @property
     def resolved_reranker_base_url(self) -> str:

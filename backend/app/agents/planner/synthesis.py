@@ -38,7 +38,10 @@ that imports LiteLLM.
 import json
 import re
 from abc import ABC, abstractmethod
+from collections import Counter
 from dataclasses import dataclass, field
+
+from pydantic import ValidationError
 
 from app.agents.planner.prompts import (
     GROUNDED_SYNTHESIS_SYSTEM_PROMPT,
@@ -49,7 +52,18 @@ from app.agents.planner.state import Citation, RetrievedDocument
 from app.core.config import settings
 from app.core.llm import LLMGateway, get_llm_gateway
 from app.core.logging.logger import get_logger
+from app.modules.research.claim_verification import (
+    evidence_state_from_claim_verification,
+    verify_categorical_claim,
+    verify_numeric_claim,
+)
 from app.modules.research.enums import ResearchGroundingStatus
+from app.modules.research.schemas import (
+    GroundedSynthesisResponse,
+    SynthesisClaim,
+    SynthesisClaimScope,
+    SynthesisClaimType,
+)
 
 logger = get_logger(__name__)
 
@@ -87,6 +101,25 @@ class SynthesisResult:
     #: Kept (rather than merely counted) so the trace shows exactly what
     #: was rejected.
     rejected_citation_ids: list[str] = field(default_factory=list)
+    #: Claims the model asserted, each run through the real Phase 8.5
+    #: deterministic verifier (Sprint 16 Phase 8.7). Serializable dicts,
+    #: shaped like `VerifiedClaimRead`, ready to ride alongside
+    #: `citations` into `research_runs.citations` JSONB with no schema
+    #: change. Empty for the extractive path, which has no model.
+    verified_claims: list[dict] = field(default_factory=list)
+    #: Every real, supplied `Citation` a verified claim's
+    #: `source_reference_ids` resolved to (Sprint 16 Phase 8.8 Part B) --
+    #: not merely a copy of `citations` above. A claim is validated
+    #: against `supplied` (everything the model was given), while
+    #: `citations` is only the model's own top-level cited set; a claim
+    #: can legitimately resolve evidence the model never listed at the
+    #: top level (the real Phase 8.7 case: an `insufficient_evidence`
+    #: answer with zero top-level citations, whose one claim still
+    #: resolved real evidence). Never fabricated -- every entry here is
+    #: copied verbatim from `supplied`, the same evidence already sent
+    #: to the model. `nodes.synthesis_node` unions this into what gets
+    #: persisted, so a claim's evidence chip is never backed by nothing.
+    claim_referenced_citations: list[Citation] = field(default_factory=list)
     #: How many evidence items were actually placed in the model's
     #: prompt. The upper bound on how many citations can be legitimate.
     evidence_supplied: int = 0
@@ -350,14 +383,26 @@ class GroundedSynthesizer(Synthesizer):
             prompt=prompt,
             system_prompt=GROUNDED_SYNTHESIS_SYSTEM_PROMPT,
             model=self._model,
-            response_format={"type": "json_object"},
+            # Sprint 16 Phase 8.7: json_schema instead of plain
+            # json_object, the same pattern Phase 8.2/8.3 already proved
+            # on `ResearchDocumentUnderstanding` -- lets `claims` be
+            # requested as part of the one existing model call rather
+            # than parsed back out of the answer's prose afterward.
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "GroundedSynthesisResponse",
+                    "schema": GroundedSynthesisResponse.model_json_schema(),
+                },
+            },
         )
 
-        answer, claimed_ids, claimed_status = _parse_response(response.content)
+        answer, claimed_ids, claimed_status, claimed_claims = _parse_response(response.content)
         accepted, rejected = _validate_citation_ids(claimed_ids, supplied)
         status = _grounding_status(
             claimed_status=claimed_status, accepted=accepted, rejected=rejected
         )
+        verified_claims, claim_referenced_citations = _verify_claims(claimed_claims, supplied)
 
         if rejected:
             # Loud on purpose: a model inventing citation ids is the
@@ -390,6 +435,14 @@ class GroundedSynthesizer(Synthesizer):
             llm_attempts=response.attempts,
         )
 
+        if verified_claims:
+            logger.info(
+                "grounded_synthesis_claims_verified",
+                claim_count=len(verified_claims),
+                verdict_counts=_count_by(verified_claims, "verdict"),
+                evidence_state_counts=_count_by(verified_claims, "evidence_state"),
+            )
+
         return SynthesisResult(
             answer=_decorate(
                 answer,
@@ -398,6 +451,8 @@ class GroundedSynthesizer(Synthesizer):
                 rejected=rejected,
             ),
             citations=accepted,
+            verified_claims=verified_claims,
+            claim_referenced_citations=claim_referenced_citations,
             grounding_status=status,
             rejected_citation_ids=rejected,
             evidence_supplied=len(supplied),
@@ -441,13 +496,23 @@ class GroundedSynthesizer(Synthesizer):
 # ---------------------------------------------------------------------------
 
 
-def _parse_response(content: str) -> tuple[str, list[str], str | None]:
-    """Pull the answer, claimed citation ids, and claimed status out of JSON.
+def _parse_response(
+    content: str,
+) -> tuple[str, list[str], str | None, list[SynthesisClaim]]:
+    """Pull the answer, claimed citation ids, claimed status, and claims out of JSON.
 
     Strict about the envelope and lenient about nothing important: a
     response that is not a JSON object with a non-empty `answer` is an
     error, because the alternative is guessing at which claims the
     citations belong to.
+
+    `claims` is lenient by contrast: it is untrusted, additive model
+    output (Sprint 16 Phase 8.7), not the load-bearing answer/citation
+    mapping above. One malformed claim entry is dropped rather than
+    failing a response that otherwise parsed fine -- a schema-enforced
+    call can still return a claim missing a required field if the
+    provider's json_schema support is imperfect, and that must never
+    take down an answer that would otherwise be usable.
     """
     text = (content or "").strip()
     fenced = _JSON_FENCE.match(text)
@@ -484,10 +549,23 @@ def _parse_response(content: str) -> tuple[str, list[str], str | None]:
         claimed_ids = [item for item in raw_ids if isinstance(item, str) and item.strip()]
 
     claimed_status = payload.get("grounding_status")
+
+    raw_claims = payload.get("claims")
+    claims: list[SynthesisClaim] = []
+    if isinstance(raw_claims, list):
+        for item in raw_claims:
+            if not isinstance(item, dict):
+                continue
+            try:
+                claims.append(SynthesisClaim.model_validate(item))
+            except ValidationError as exc:
+                logger.warning("grounded_synthesis_claim_dropped", reason=str(exc))
+
     return (
         answer.strip(),
         claimed_ids,
         claimed_status if isinstance(claimed_status, str) else None,
+        claims,
     )
 
 
@@ -531,6 +609,87 @@ def _grounding_status(
     if rejected:
         return ResearchGroundingStatus.PARTIALLY_GROUNDED
     return ResearchGroundingStatus.GROUNDED
+
+
+# ---------------------------------------------------------------------------
+# Claim verification (Sprint 16 Phase 8.7)
+# ---------------------------------------------------------------------------
+
+
+def _verify_claims(
+    claims: list[SynthesisClaim], supplied: list[Citation]
+) -> tuple[list[dict], list[Citation]]:
+    """Bind each claim to its cited evidence, then run the real Phase 8.5 checks.
+
+    The trust boundary is identical to `_validate_citation_ids` above,
+    reused rather than re-derived: a claim's `source_reference_ids` are
+    resolved against `supplied` (the evidence actually placed in the
+    model's prompt), never against `claimed_ids`/`accepted` at the
+    whole-answer level -- a claim could legitimately rely on a supplied
+    item the model forgot to also list at the top level, and an id it
+    invented for one claim must be rejected the same way an invented
+    top-level id already is.
+
+    Verdicts and evidence states come straight from
+    `app.modules.research.claim_verification` -- the deterministic
+    checks stay the sole authority; nothing here re-implements or
+    second-guesses them.
+
+    Returns `(verified_claims, referenced_citations)` -- the second is
+    every real `Citation` any claim successfully resolved (Sprint 16
+    Phase 8.8 Part B), deduplicated by id, so a caller can guarantee
+    every id a claim references is actually retrievable rather than
+    silently absent from the top-level citation set.
+    """
+    verified: list[dict] = []
+    referenced_by_id: dict[str, Citation] = {}
+    for claim in claims:
+        accepted, rejected = _validate_citation_ids(claim.source_reference_ids, supplied)
+        evidence = [(item["id"], item.get("snippet") or "") for item in accepted]
+        for item in accepted:
+            referenced_by_id.setdefault(item["id"], item)
+
+        if claim.claim_type == SynthesisClaimType.NUMERIC and claim.claimed_value:
+            result = verify_numeric_claim(
+                claimed_value=claim.claimed_value,
+                is_aggregate_claim=(claim.scope == SynthesisClaimScope.AGGREGATE),
+                evidence=evidence,
+            )
+        else:
+            result = verify_categorical_claim(claim_text=claim.claim_text, evidence=evidence)
+
+        # `evidence_state_from_claim_verification` only reads
+        # `citation_accepted` inside its SUPPORTED branch, which both
+        # verifiers above only reach when `evidence` is non-empty --
+        # i.e. exactly when `accepted` is non-empty. Safe unconditionally.
+        state = evidence_state_from_claim_verification(
+            result.verdict,
+            citation_accepted=bool(accepted),
+            is_primary_source=claim.attributed_to_primary,
+        )
+
+        verified.append(
+            {
+                "kind": "claim",
+                "claim_text": claim.claim_text,
+                "claim_type": claim.claim_type.value,
+                "claimed_value": claim.claimed_value,
+                "scope": claim.scope.value if claim.scope else None,
+                "source_reference_ids": [item["id"] for item in accepted],
+                "unresolved_citation_ids": rejected,
+                "attributed_to_primary": claim.attributed_to_primary,
+                "verdict": result.verdict.value,
+                "evidence_state": state.value,
+                "matched_evidence_ids": result.matched_evidence_ids,
+                "reason": result.reason,
+            }
+        )
+    return verified, list(referenced_by_id.values())
+
+
+def _count_by(items: list[dict], key: str) -> dict[str, int]:
+    """Small logging helper: how many verified claims landed in each value of `key`."""
+    return dict(Counter(item[key] for item in items))
 
 
 # ---------------------------------------------------------------------------

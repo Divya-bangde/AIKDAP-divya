@@ -65,11 +65,13 @@ def assert_citation_shape(citation: dict) -> None:
 
 def web_only_dependencies() -> GraphDependencies:
     """Dependencies for a web-only run: no database access required."""
+    from app.core.llm.gateway import LLMGateway
     return GraphDependencies(
         planner=get_planner(),
         asset_retriever=_UnusedAssetRetriever(),
         web_provider=MockWebResearchProvider(),
         synthesizer=ExtractiveSynthesizer(),
+        llm_gateway=LLMGateway(),
     )
 
 

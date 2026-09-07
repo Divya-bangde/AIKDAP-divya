@@ -8,6 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AiProfilePanel } from "@/features/assets/AiProfilePanel";
 import { DocumentCard } from "@/features/assets/DocumentCard";
 import { UploadDropzone } from "@/features/assets/UploadDropzone";
+import { DocumentAnalysisPanel } from "@/features/research/DocumentAnalysisPanel";
+import { ExperimentPlaygroundLauncher } from "@/features/research/ExperimentPlaygroundLauncher";
 import { allSettled } from "@/features/assets/asset-state";
 import { usePolling } from "@/hooks/usePolling";
 import * as assetsService from "@/services/assets";
@@ -65,7 +67,11 @@ export function DocumentsSection({ projectId }: { projectId: string }) {
           </Stagger>
           <div>
             {selectedAsset ? (
-              <AiProfilePanel asset={selectedAsset} />
+              <div className="flex flex-col gap-5">
+                <AiProfilePanel asset={selectedAsset} />
+                <DocumentAnalysisPanel asset={selectedAsset} />
+                <ExperimentPlaygroundLauncher asset={selectedAsset} />
+              </div>
             ) : (
               <p className="p-4 text-sm text-muted-foreground">
                 Select a document to view its AI-understanding results.

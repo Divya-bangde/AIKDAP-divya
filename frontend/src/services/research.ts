@@ -5,6 +5,8 @@ type ResearchRunCreate = components["schemas"]["ResearchRunCreate"];
 type ResearchRunAccepted = components["schemas"]["ResearchRunAccepted"];
 type ResearchRunDetail = components["schemas"]["ResearchRunDetail"];
 type ResearchRunRead = components["schemas"]["ResearchRunRead"];
+type AnalyzeDocumentRequest = components["schemas"]["AnalyzeDocumentRequest"];
+type ResearchDocumentUnderstanding = components["schemas"]["ResearchDocumentUnderstanding"];
 
 export function startResearchRun(payload: ResearchRunCreate) {
   return request<ResearchRunAccepted>("/api/v1/research/run", {
@@ -20,4 +22,18 @@ export function getResearchRun(runId: string) {
 export function listResearchRuns(projectId?: string) {
   const query = projectId ? `?project_id=${projectId}` : "";
   return request<ResearchRunRead[]>(`/api/v1/research/runs${query}`);
+}
+
+export function analyzeResearchDocument(
+  assetId: string,
+  projectId: string,
+  payload: AnalyzeDocumentRequest
+) {
+  return request<ResearchDocumentUnderstanding>(
+    `/api/v1/research/documents/${assetId}/analyze?project_id=${projectId}`,
+    {
+      method: "POST",
+      body: payload,
+    }
+  );
 }

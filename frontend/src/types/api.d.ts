@@ -220,7 +220,10 @@ export interface paths {
          *
          *     Assets are queued automatically on upload; this endpoint is for
          *     retrying a `FAILED` asset or reprocessing after the pipeline
-         *     changes.
+         *     changes. A `FAILED` or otherwise incomplete asset is always
+         *     reprocessed regardless of `force`; only an asset that already
+         *     completed every stage successfully is skipped, and only when
+         *     `force` is not set.
          */
         post: operations["reprocess_asset_api_v1_assets__asset_id__process_post"];
         delete?: never;
@@ -494,6 +497,276 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/research/documents/{asset_id}/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze Research Document Route
+         * @description Analyze a research document against a stated goal.
+         */
+        post: operations["analyze_research_document_route_api_v1_research_documents__asset_id__analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research/documents/{asset_id}/cross-paper-analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze Cross Paper Route
+         * @description Analyze multiple research documents against a primary document.
+         */
+        post: operations["analyze_cross_paper_route_api_v1_research_documents__asset_id__cross_paper_analysis_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research/experiments/from-equation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Experiment From Equation Route
+         * @description Turn an equation into a reviewable experiment plan (Part E).
+         */
+        post: operations["create_experiment_from_equation_route_api_v1_research_experiments_from_equation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research/experiments/from-understanding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Experiment From Understanding Route
+         * @description Turn a paper's structured research understanding into a reviewable
+         *     experiment plan, respecting the stated research goal (Part M).
+         */
+        post: operations["create_experiment_from_understanding_route_api_v1_research_experiments_from_understanding_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research/experiments/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Experiment Plan Route */
+        get: operations["get_experiment_plan_route_api_v1_research_experiments__plan_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Experiment Plan Route
+         * @description Update a plan, recording every change in its version history
+         *     (Part O). Changing a FIXED variable requires
+         *     `allow_fixed_variable_change=true` (Part Y.4).
+         */
+        patch: operations["update_experiment_plan_route_api_v1_research_experiments__plan_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/research/experiments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Experiment Plans Route */
+        get: operations["list_experiment_plans_route_api_v1_research_experiments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research/experiments/{plan_id}/variants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Experiment Variant Route
+         * @description Add a named variant (Part I) -- planned only, never executed.
+         */
+        post: operations["create_experiment_variant_route_api_v1_research_experiments__plan_id__variants_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research/experiments/{plan_id}/sweep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Experiment Sweep Route
+         * @description Expand a parameter sweep into planned variants for review (Part J)
+         *     -- never executed here.
+         */
+        post: operations["create_experiment_sweep_route_api_v1_research_experiments__plan_id__sweep_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research/experiments/{plan_id}/test-cases/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Experiment Test Cases Route
+         * @description Import test cases from JSON/CSV/XLSX (Part G). Appends to the
+         *     plan's existing test cases -- never overwrites them (Part Y.5).
+         */
+        post: operations["import_experiment_test_cases_route_api_v1_research_experiments__plan_id__test_cases_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research/experiments/{plan_id}/execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Execute Experiment Variant Route
+         * @description Request execution of ONE variant of an experiment plan (Sprint 16
+         *     Phase 7B.23). Creates an `ExecutionJob(PENDING)`, commits it, and
+         *     enqueues the launch task -- the existing guard pipeline runs to the
+         *     Docker boundary and stops there; no container is launched, because
+         *     no launcher exists yet. Connective tissue, not a user-visible
+         *     feature: nothing observable happens beyond `VALIDATING` plus a
+         *     `PENDING_CREATE` attempt row.
+         */
+        post: operations["execute_experiment_variant_route_api_v1_research_experiments__plan_id__execute_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research/experiments/{plan_id}/visualization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Experiment Visualization Route
+         * @description Raw trace data for the frontend to render with Plotly.js (Part
+         *     H/R) -- never a rendered image, never a causal claim.
+         */
+        get: operations["get_experiment_visualization_route_api_v1_research_experiments__plan_id__visualization_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/execution/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Execution Jobs Route
+         * @description List the current user's execution jobs, newest first.
+         */
+        get: operations["list_execution_jobs_route_api_v1_execution_jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/execution/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Execution Job Route
+         * @description Fetch one job together with every attempt made against it.
+         */
+        get: operations["get_execution_job_route_api_v1_execution_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -611,6 +884,11 @@ export interface components {
          * @enum {string}
          */
         AgentMessageRole: "system" | "planner" | "router" | "agent" | "tool" | "aggregator";
+        /** AnalyzeDocumentRequest */
+        AnalyzeDocumentRequest: {
+            goal: components["schemas"]["ResearchGoal"];
+            workspace_context?: components["schemas"]["ResearchWorkspaceContext"] | null;
+        };
         /**
          * AssetProcessingStatus
          * @description State of the extract -> chunk -> (future) embed pipeline for an
@@ -621,9 +899,17 @@ export interface components {
          *     extractor is implemented yet for the asset's MIME type (a known,
          *     expected gap), as opposed to `FAILED`, which means something broke
          *     while processing a MIME type we do support.
+         *
+         *     `OCR_REQUIRED` (Sprint 12.1) is a third, equally deliberate terminal
+         *     state: the file parsed structurally (it IS a valid PDF) but
+         *     contained zero machine-readable text — the signature of a scanned
+         *     document. Distinct from both `UNSUPPORTED` (we don't have any
+         *     extractor for this MIME type at all) and `FAILED` (the file didn't
+         *     parse) — this format IS supported, this specific file just needs
+         *     OCR, which isn't available yet.
          * @enum {string}
          */
-        AssetProcessingStatus: "pending" | "queued" | "extracting" | "chunking" | "embedding" | "completed" | "failed" | "unsupported";
+        AssetProcessingStatus: "pending" | "queued" | "extracting" | "chunking" | "embedding" | "completed" | "failed" | "unsupported" | "ocr_required";
         /**
          * AssetRead
          * @description Public representation of an asset.
@@ -731,6 +1017,14 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** Body_import_experiment_test_cases_route_api_v1_research_experiments__plan_id__test_cases_import_post */
+        Body_import_experiment_test_cases_route_api_v1_research_experiments__plan_id__test_cases_import_post: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+        };
         /** Body_upload_asset_api_v1_assets_upload_post */
         Body_upload_asset_api_v1_assets_upload_post: {
             /**
@@ -751,6 +1045,26 @@ export interface components {
              */
             file: string;
         };
+        /** ComparisonItem */
+        ComparisonItem: {
+            /** Topic */
+            topic: string;
+            /** Primary Claim */
+            primary_claim: string;
+            /** Supporting Claims */
+            supporting_claims: string[];
+            relationship: components["schemas"]["ComparisonRelationship"];
+            /** Evidence */
+            evidence: string;
+            certainty: components["schemas"]["ResearchCertainty"];
+            /** Source References */
+            source_references: components["schemas"]["SourceReference"][];
+        };
+        /**
+         * ComparisonRelationship
+         * @enum {string}
+         */
+        ComparisonRelationship: "SUPPORTS" | "EXTENDS" | "CONTRADICTS" | "DIFFERS" | "COMPLEMENTS" | "UNRELATED" | "INSUFFICIENT_EVIDENCE";
         /**
          * ComponentHealth
          * @description One dependency's state, plus whatever context helps diagnose it.
@@ -778,6 +1092,39 @@ export interface components {
          */
         ComponentStatus: "healthy" | "degraded" | "configured" | "quota_exhausted" | "rate_limited" | "unavailable" | "loading" | "disabled" | "not_configured" | "configuration_error" | "unknown";
         /**
+         * ConstraintSource
+         * @enum {string}
+         */
+        ConstraintSource: "mathematical_constraint" | "paper_constraint" | "user_constraint";
+        /** CrossPaperAnalysisRequest */
+        CrossPaperAnalysisRequest: {
+            /** Supporting Asset Ids */
+            supporting_asset_ids: string[];
+            goal: components["schemas"]["ResearchGoal"];
+            workspace_context?: components["schemas"]["ResearchWorkspaceContext"] | null;
+        };
+        /** CrossPaperComparison */
+        CrossPaperComparison: {
+            /**
+             * Primary Paper Id
+             * Format: uuid
+             */
+            primary_paper_id: string;
+            /** Supporting Paper Ids */
+            supporting_paper_ids: string[];
+            /** Comparison Items */
+            comparison_items: components["schemas"]["ComparisonItem"][];
+            /** Gap Resolutions */
+            gap_resolutions: components["schemas"]["GapResolution"][];
+            /** Hypotheses */
+            hypotheses: components["schemas"]["ResearchHypothesis"][];
+            /**
+             * Source Provenance
+             * @default Cross-Paper Reducer
+             */
+            source_provenance: string;
+        };
+        /**
          * EmbeddingProviderName
          * @description Identifies which embedding backend produced (or will produce) a
          *     chunk's vector. `NONE` is the only provider active this sprint —
@@ -794,6 +1141,590 @@ export interface components {
          * @enum {string}
          */
         EmbeddingStatus: "pending" | "processing" | "completed" | "failed" | "not_applicable";
+        /**
+         * ExecutionAttemptRead
+         * @description Public representation of a persisted execution attempt.
+         */
+        ExecutionAttemptRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Execution Job Id
+             * Format: uuid
+             */
+            execution_job_id: string;
+            /** Attempt Number */
+            attempt_number: number;
+            /** Container Name */
+            container_name: string;
+            /** Container Id */
+            container_id: string | null;
+            status: components["schemas"]["ExecutionAttemptStatus"];
+            /** Exit Code */
+            exit_code: number | null;
+            /** Error Message */
+            error_message: string | null;
+            /** Started At */
+            started_at: string | null;
+            /** Completed At */
+            completed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ExecutionAttemptStatus
+         * @description Lifecycle state of one `ExecutionAttempt` -- deliberately a
+         *     SEPARATE, smaller vocabulary from `ExecutionJobStatus` (Phase 7B.12
+         *     design, Part 3: "a job's status and one attempt's relationship to a
+         *     Docker container are different lifecycles"). A job's status describes
+         *     the job as a whole across possibly many attempts; an attempt's status
+         *     describes only that one attempt's relationship to (at most) one
+         *     Docker container.
+         *
+         *     Closed at exactly the states this slice's persistence layer and the
+         *     approved Phase 7B.12 design need. Deliberately does NOT include
+         *     speculative future states (`RETRYING`, `DESTROYING`, `ORPHANED`) --
+         *     nothing in the current design or repository evidence requires them
+         *     yet; they can be added deliberately, with their own migration, once
+         *     an actual future slice needs them.
+         * @enum {string}
+         */
+        ExecutionAttemptStatus: "PENDING_CREATE" | "CREATED" | "RUNNING" | "EXITED" | "UNKNOWN";
+        /**
+         * ExecutionCapability
+         * @description The broad domain a job belongs to. Every value maps to exactly one
+         *     `ResourceClass` via the fixed catalog in `docker_policy.py` -- never
+         *     read from the request as an independent, trusted fact.
+         * @enum {string}
+         */
+        ExecutionCapability: "evaluate_expression" | "array_compute" | "table_compute";
+        /**
+         * ExecutionJobDetail
+         * @description `ExecutionJobRead` plus its attempts (Sprint 16 Phase 7B.23) --
+         *     `GET /execution/jobs/{job_id}` only; the list route stays lightweight
+         *     and returns bare `ExecutionJobRead` rows, matching
+         *     `ResearchRunRead`/`ResearchRunDetail`'s existing list-vs-detail split.
+         */
+        ExecutionJobDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /**
+             * Experiment Plan Id
+             * Format: uuid
+             */
+            experiment_plan_id: string;
+            /** Experiment Plan Version */
+            experiment_plan_version: number;
+            capability: components["schemas"]["ExecutionCapability"];
+            operation: components["schemas"]["ExecutionOperation"];
+            resource_class: components["schemas"]["ResourceClass"];
+            /** Parameters */
+            parameters: {
+                [key: string]: unknown;
+            };
+            /** Input Asset Ids */
+            input_asset_ids: string[];
+            status: components["schemas"]["ExecutionJobStatus"];
+            /** Reason */
+            reason: string | null;
+            /** Started At */
+            started_at: string | null;
+            /** Completed At */
+            completed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Attempts */
+            attempts: components["schemas"]["ExecutionAttemptRead"][];
+        };
+        /**
+         * ExecutionJobRead
+         * @description Public representation of a persisted execution job.
+         */
+        ExecutionJobRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /**
+             * Experiment Plan Id
+             * Format: uuid
+             */
+            experiment_plan_id: string;
+            /** Experiment Plan Version */
+            experiment_plan_version: number;
+            capability: components["schemas"]["ExecutionCapability"];
+            operation: components["schemas"]["ExecutionOperation"];
+            resource_class: components["schemas"]["ResourceClass"];
+            /** Parameters */
+            parameters: {
+                [key: string]: unknown;
+            };
+            /** Input Asset Ids */
+            input_asset_ids: string[];
+            status: components["schemas"]["ExecutionJobStatus"];
+            /** Reason */
+            reason: string | null;
+            /** Started At */
+            started_at: string | null;
+            /** Completed At */
+            completed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ExecutionJobStatus
+         * @description Lifecycle state of a persisted execution job.
+         *
+         *     The authoritative status vocabulary (Phase 7B.11), superseding the
+         *     smaller, speculative set Phase 7B.8 originally guessed at
+         *     (`LAUNCHED`/`SECURITY_BLOCKED`/`COMPLETED`, never actually written by
+         *     any code path). Only `PENDING -> VALIDATING` is implemented as of this
+         *     slice -- every other transition (`VALIDATING -> LAUNCHING -> RUNNING ->
+         *     SUCCEEDED`, the `FAILED`/`TIMED_OUT`/`CANCEL_REQUESTED`/`CANCELLED`
+         *     branches) belongs to a future Docker-launcher slice. A guard/resolver
+         *     rejection is represented as `FAILED` with `reason` carrying the
+         *     detail, not a dedicated status -- consistent with how
+         *     `docker_policy.SecurityBlocked` already reports rejections via a
+         *     `check_name`/`reason` pair, not a distinct exception type per check.
+         * @enum {string}
+         */
+        ExecutionJobStatus: "PENDING" | "VALIDATING" | "LAUNCHING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "TIMED_OUT" | "CANCEL_REQUESTED" | "CANCELLED";
+        /**
+         * ExecutionOperation
+         * @description The exact 8-operation Phase 7B catalog. Nothing else is a legal
+         *     value -- adding a 9th operation here is out of scope for this slice.
+         * @enum {string}
+         */
+        ExecutionOperation: "evaluate_expression" | "matmul" | "percentile" | "mean" | "std" | "corrcoef" | "groupby_agg" | "pivot_table";
+        /** ExperimentConstraint */
+        ExperimentConstraint: {
+            /** Expression */
+            expression: string;
+            /** Description */
+            description: string;
+            source: components["schemas"]["ConstraintSource"];
+            source_reference?: components["schemas"]["SourceReference"] | null;
+        };
+        /**
+         * ExperimentExecuteRequest
+         * @description Body of `POST /experiments/{plan_id}/execute` (Sprint 16 Phase
+         *     7B.23) -- names ONE variant to run. No operation, no parameters, no
+         *     input assets: all of that is derived from the plan itself by
+         *     `ExperimentPlanService.request_execution`, never accepted from the
+         *     caller.
+         */
+        ExperimentExecuteRequest: {
+            /** Variant Id */
+            variant_id: string;
+        };
+        /**
+         * ExperimentGoal
+         * @description Mirrors the four research goals this phase must respect (Part M).
+         *
+         *     Distinct from `ResearchGoal.type` (free text, e.g. 'reproduce') on
+         *     `ResearchDocumentUnderstanding` -- this is the closed vocabulary an
+         *     experiment plan actually branches its behavior on. `from_free_text`
+         *     maps the free-text goal onto this enum conservatively.
+         * @enum {string}
+         */
+        ExperimentGoal: "understanding" | "reproduction" | "extension" | "application";
+        /**
+         * ExperimentHypothesisRef
+         * @description A pointer to a hypothesis, with its origin never lost (Part L).
+         */
+        ExperimentHypothesisRef: {
+            /** Description */
+            description: string;
+            origin: components["schemas"]["HypothesisOrigin"];
+            /**
+             * Source Hypothesis Id
+             * @description ID of the stored ResearchHypothesis, if origin is STORED.
+             */
+            source_hypothesis_id?: string | null;
+            /** @default unknown */
+            certainty: components["schemas"]["ResearchCertainty"];
+        };
+        /** ExperimentInput */
+        ExperimentInput: {
+            /** Name */
+            name: string;
+            /** Value */
+            value: string;
+            /**
+             * Type
+             * @description e.g. 'number', 'string', 'category'
+             */
+            type: string;
+            source_reference?: components["schemas"]["SourceReference"] | null;
+        };
+        /** ExperimentOutput */
+        ExperimentOutput: {
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Description */
+            description?: string | null;
+            source_reference?: components["schemas"]["SourceReference"] | null;
+        };
+        /**
+         * ExperimentOutputValue
+         * @description A single (output name, value) pair, tagged EXPECTED or OBSERVED.
+         *
+         *     Never both on one object -- Part Y.6 forbids mixing them, so a test
+         *     case carries two separate lists instead of one ambiguous dict.
+         */
+        ExperimentOutputValue: {
+            /** Output Name */
+            output_name: string;
+            /** Value */
+            value: string;
+            kind: components["schemas"]["OutputKind"];
+        };
+        /** ExperimentPlan */
+        ExperimentPlan: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Title */
+            title: string;
+            /** Objective */
+            objective: string;
+            goal: components["schemas"]["ExperimentGoal"];
+            hypothesis?: components["schemas"]["ExperimentHypothesisRef"] | null;
+            /**
+             * Source Expression
+             * @description The raw equation this plan was parsed from (set only by create_from_equation), e.g. 'Y = (a*X + b) / (c*X + d)'. Sprint 16 Phase 7B.23: the ONE field a plan-to-execution mapping can currently use to derive an ExecutionOperation (EVALUATE_EXPRESSION) -- a plan with no source_expression (e.g. created via create_from_understanding) cannot be mapped to any of the other six catalog operations, since nothing else on this model identifies which one is intended. Absent on plans persisted before this field existed; defaults to None, not backfilled.
+             */
+            source_expression?: string | null;
+            /**
+             * Source Asset Ids
+             * @description Research/source/citation context ONLY -- the paper(s) this plan cites or was derived from. Sprint 16 Phase 7B.24: NEVER treated as execution inputs. See execution_input_asset_ids for the field that actually feeds ExecutionJob.input_asset_ids.
+             */
+            source_asset_ids?: string[];
+            /**
+             * Execution Input Asset Ids
+             * @description Assets EXPLICITLY declared as execution inputs (Sprint 16 Phase 7B.24) -- distinct from source_asset_ids. Only assets listed here are ever mapped onto ExecutionJob.input_asset_ids; never derived from source_asset_ids or any other field. Validated (owned by the caller, same project) at the point they are declared (currently only create_from_equation accepts this). Absent on plans persisted before this field existed; defaults to an empty list, never backfilled -- an old plan has zero execution inputs, not an unknown set.
+             */
+            execution_input_asset_ids?: string[];
+            /** Variables */
+            variables?: components["schemas"]["ExperimentVariable"][];
+            /** Inputs */
+            inputs?: components["schemas"]["ExperimentInput"][];
+            /** Outputs */
+            outputs?: components["schemas"]["ExperimentOutput"][];
+            /** Constraints */
+            constraints?: components["schemas"]["ExperimentConstraint"][];
+            /** Test Cases */
+            test_cases?: components["schemas"]["ExperimentTestCase"][];
+            /** Variants */
+            variants?: components["schemas"]["ExperimentVariant"][];
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /** History */
+            history?: components["schemas"]["ExperimentPlanChange"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ExperimentPlanChange
+         * @description One entry in the plan's version history (Part O) -- deliberately
+         *     flat, not a full diff/patch system.
+         */
+        ExperimentPlanChange: {
+            /** Version */
+            version: number;
+            /**
+             * Changed At
+             * Format: date-time
+             */
+            changed_at: string;
+            /** Changed Field */
+            changed_field: string;
+            /** Old Value */
+            old_value: string | null;
+            /** New Value */
+            new_value: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** ExperimentPlanCreateFromEquation */
+        ExperimentPlanCreateFromEquation: {
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Title */
+            title: string;
+            /**
+             * Expression
+             * @description e.g. 'Y = (a*X + b) / (c*X + d)'. Capped to match the module-level length guard in app.agents.planner.experiment (Phase 6 security review) -- an early 422 here is cheaper than reaching the parser.
+             */
+            expression: string;
+            /** @default understanding */
+            goal: components["schemas"]["ExperimentGoal"];
+            /**
+             * Source Asset Id
+             * @description The paper this equation was derived from, if any -- research/citation context only. NOT an execution input; see execution_input_asset_ids.
+             */
+            source_asset_id?: string | null;
+            /**
+             * Known Inputs
+             * @description Symbol names the caller already knows are inputs (e.g. ['X']). The equation's math alone cannot tell an input apart from a parameter, so any symbol not listed here (and not matched to a paper's ResearchVariable) is classified role=UNKNOWN rather than guessed.
+             */
+            known_inputs?: string[] | null;
+            /**
+             * Execution Input Asset Ids
+             * @description Assets to explicitly declare as execution inputs for this plan (Sprint 16 Phase 7B.24) -- separate from source_asset_id. Each must be an asset the caller owns, in this same project; validated here at creation time, not re-derived from source_asset_id or anything else.
+             */
+            execution_input_asset_ids?: string[];
+        };
+        /** ExperimentPlanCreateFromUnderstanding */
+        ExperimentPlanCreateFromUnderstanding: {
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Title */
+            title: string;
+            /**
+             * Source Asset Id
+             * Format: uuid
+             */
+            source_asset_id: string;
+            /** @default understanding */
+            goal: components["schemas"]["ExperimentGoal"];
+        };
+        /**
+         * ExperimentPlanUpdateRequest
+         * @description Every field optional -- only supplied fields are changed, and
+         *     each change is appended to `history` (Part O).
+         */
+        ExperimentPlanUpdateRequest: {
+            /** Title */
+            title?: string | null;
+            /** Objective */
+            objective?: string | null;
+            /** Variables */
+            variables?: components["schemas"]["ExperimentVariable"][] | null;
+            /** Inputs */
+            inputs?: components["schemas"]["ExperimentInput"][] | null;
+            /** Outputs */
+            outputs?: components["schemas"]["ExperimentOutput"][] | null;
+            /** Constraints */
+            constraints?: components["schemas"]["ExperimentConstraint"][] | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Allow Fixed Variable Change
+             * @description Must be explicitly set to change a variable whose mutable status is FIXED (Part Y.4) -- an accidental overwrite is rejected by default.
+             * @default false
+             */
+            allow_fixed_variable_change: boolean;
+        };
+        /**
+         * ExperimentSweepRequest
+         * @description A parameter sweep spec -- turned into planned variants, never
+         *     executed (Part J).
+         */
+        ExperimentSweepRequest: {
+            /**
+             * Parameter Values
+             * @description variable name -> list of discrete values to sweep
+             */
+            parameter_values: {
+                [key: string]: string[];
+            };
+        };
+        /** ExperimentTestCase */
+        ExperimentTestCase: {
+            /** Id */
+            id: string;
+            /** Inputs */
+            inputs: {
+                [key: string]: string;
+            };
+            /** Expected Outputs */
+            expected_outputs?: components["schemas"]["ExperimentOutputValue"][];
+            /** Observed Outputs */
+            observed_outputs?: components["schemas"]["ExperimentOutputValue"][];
+            /** Metadata */
+            metadata?: {
+                [key: string]: string;
+            };
+            source_reference?: components["schemas"]["SourceReference"] | null;
+        };
+        /**
+         * ExperimentVariable
+         * @description One variable/parameter/constant/derived quantity in the plan.
+         *
+         *     `mutable` and `role` are independent axes on purpose (Part C) --
+         *     validated together only by `mutable_requires_reason`.
+         */
+        ExperimentVariable: {
+            /** Name */
+            name: string;
+            role: components["schemas"]["VariableRole"];
+            mutable: components["schemas"]["MutabilityStatus"];
+            /**
+             * Mutability Reason
+             * @description Human-readable explanation of why this mutability was assigned.
+             */
+            mutability_reason: string;
+            /** @default none */
+            mutability_evidence: components["schemas"]["MutabilityEvidenceSource"];
+            /** Current Value */
+            current_value?: string | null;
+            /** Unit */
+            unit?: string | null;
+            /** Allowed Values */
+            allowed_values?: string[] | null;
+            /** Min Value */
+            min_value?: number | null;
+            /** Max Value */
+            max_value?: number | null;
+            /** Step */
+            step?: number | null;
+            /** @default unknown */
+            certainty: components["schemas"]["ResearchCertainty"];
+            source_reference?: components["schemas"]["SourceReference"] | null;
+        };
+        /**
+         * ExperimentVariant
+         * @description BASELINE or a named VARIANT -- overrides on top of the plan's
+         *     variables, never a full copy (Part I/K): a variant only states what
+         *     it changes.
+         */
+        ExperimentVariant: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Is Baseline
+             * @default false
+             */
+            is_baseline: boolean;
+            /**
+             * Overrides
+             * @description variable name -> overridden value
+             */
+            overrides?: {
+                [key: string]: string;
+            };
+            /** @default planned */
+            status: components["schemas"]["RunPlanStatus"];
+            /** Notes */
+            notes?: string | null;
+        };
+        /** ExperimentVariantCreateRequest */
+        ExperimentVariantCreateRequest: {
+            /** Name */
+            name: string;
+            /** Overrides */
+            overrides?: {
+                [key: string]: string;
+            };
+            /** Notes */
+            notes?: string | null;
+        };
+        /**
+         * GapClassification
+         * @enum {string}
+         */
+        GapClassification: "required" | "helpful" | "optional" | "ambiguous";
+        /** GapResolution */
+        GapResolution: {
+            /** Gap Id */
+            gap_id?: string | null;
+            /** Gap Description */
+            gap_description: string;
+            /** Supporting Paper Ids */
+            supporting_paper_ids: string[];
+            resolution_state: components["schemas"]["GapResolutionState"];
+            /** Explanation */
+            explanation: string;
+            /** Evidence */
+            evidence: string;
+            /** Unresolved Portion */
+            unresolved_portion?: string | null;
+        };
+        /**
+         * GapResolutionState
+         * @enum {string}
+         */
+        GapResolutionState: "RESOLVED" | "PARTIALLY_RESOLVED" | "NOT_RESOLVED" | "CONTRADICTED" | "NEEDS_VERIFICATION";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -822,6 +1753,18 @@ export interface components {
                 [key: string]: components["schemas"]["ComponentHealth"];
             };
         };
+        /**
+         * HypothesisOrigin
+         * @description Never let an experiment plan present a hypothesis as more settled
+         *     than it is (Part L).
+         * @enum {string}
+         */
+        HypothesisOrigin: "user_created" | "stored_research_hypothesis" | "ai_generated_unvalidated";
+        /**
+         * HypothesisStatus
+         * @enum {string}
+         */
+        HypothesisStatus: "PROPOSED" | "ACCEPTED" | "REJECTED";
         /**
          * KnowledgeChunkRead
          * @description Public representation of a knowledge chunk.
@@ -853,6 +1796,12 @@ export interface components {
             content: string;
             /** Token Count */
             token_count: number | null;
+            /** Page Number */
+            page_number?: number | null;
+            /** Sheet Name */
+            sheet_name?: string | null;
+            /** Section */
+            section?: string | null;
             embedding_status: components["schemas"]["EmbeddingStatus"];
             embedding_provider: components["schemas"]["EmbeddingProviderName"] | null;
             /**
@@ -879,6 +1828,25 @@ export interface components {
             /** Password */
             password: string;
         };
+        /**
+         * MutabilityEvidenceSource
+         * @description The evidence hierarchy from Part D, recorded rather than
+         *     discarded once a decision is made, so a user can see *why*.
+         * @enum {string}
+         */
+        MutabilityEvidenceSource: "paper_statement" | "experiment_context" | "workspace_state" | "research_understanding" | "llm_interpretation" | "user_override" | "none";
+        /**
+         * MutabilityStatus
+         * @enum {string}
+         */
+        MutabilityStatus: "mutable" | "fixed" | "unknown";
+        /**
+         * OutputKind
+         * @description Expected and observed values are never the same field (Part Y.6) --
+         *     this tags which one a given `ExperimentOutputValue` is.
+         * @enum {string}
+         */
+        OutputKind: "expected" | "observed";
         /**
          * OverallStatus
          * @description Whether the platform as a whole can serve.
@@ -980,6 +1948,104 @@ export interface components {
             refresh_token: string;
         };
         /**
+         * ResearchCertainty
+         * @enum {string}
+         */
+        ResearchCertainty: "explicit" | "strongly_supported" | "interpreted" | "unknown";
+        /** ResearchConflict */
+        ResearchConflict: {
+            /** Description */
+            description: string;
+            /** Sources */
+            sources: string[];
+        };
+        /** ResearchDocumentUnderstanding */
+        ResearchDocumentUnderstanding: {
+            /** Title */
+            title: string;
+            /** Abstract */
+            abstract?: string | null;
+            /** Domain */
+            domain?: string | null;
+            /** Problem Statement */
+            problem_statement?: string | null;
+            /** Motivation */
+            motivation?: string | null;
+            /** Objectives */
+            objectives?: string[];
+            /** Research Questions */
+            research_questions?: string[];
+            /** Methodology */
+            methodology?: string | null;
+            /** Dataset */
+            dataset?: string | null;
+            /** Preprocessing */
+            preprocessing?: string | null;
+            /** Models */
+            models?: string[];
+            /** Algorithms */
+            algorithms?: string[];
+            /** Equations */
+            equations?: components["schemas"]["ResearchEquation"][];
+            /** Variables */
+            variables?: components["schemas"]["ResearchVariable"][];
+            /** Experimental Setup */
+            experimental_setup?: string | null;
+            /** Evaluation Metrics */
+            evaluation_metrics?: string[];
+            /** Results */
+            results?: string | null;
+            /** Conclusions */
+            conclusions?: string | null;
+            /** Limitations */
+            limitations?: string[];
+            /** Future Work */
+            future_work?: string[];
+            /** Explicit Assumptions */
+            explicit_assumptions?: string[];
+            /** Missing Information */
+            missing_information?: components["schemas"]["ResearchGap"][];
+            /** Conflicts */
+            conflicts?: components["schemas"]["ResearchConflict"][];
+            sufficiency: components["schemas"]["SufficiencyStatus"];
+            /** Sufficiency Reason */
+            sufficiency_reason: string;
+        };
+        /** ResearchEquation */
+        ResearchEquation: {
+            /** Expression */
+            expression: string;
+            /** Variables */
+            variables: string[];
+            /** Constants */
+            constants: string[];
+            /** Source Evidence */
+            source_evidence?: string | null;
+            confidence: components["schemas"]["ResearchCertainty"];
+        };
+        /** ResearchGap */
+        ResearchGap: {
+            /** Gap Type */
+            gap_type: string;
+            classification: components["schemas"]["GapClassification"];
+            /** Description */
+            description: string;
+            /** Why Needed */
+            why_needed: string;
+            /** Search Intent */
+            search_intent?: string | null;
+        };
+        /** ResearchGoal */
+        ResearchGoal: {
+            /**
+             * Type
+             * @description e.g. 'reproduce', 'understand', 'continue_research'
+             */
+            type: string;
+            /** Description */
+            description: string;
+        };
+        /**
          * ResearchGroundingStatus
          * @description How well the final answer is supported by retrieved evidence.
          *
@@ -994,6 +2060,23 @@ export interface components {
          * @enum {string}
          */
         ResearchGroundingStatus: "grounded" | "partially_grounded" | "insufficient_evidence" | "failed";
+        /** ResearchHypothesis */
+        ResearchHypothesis: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id?: string;
+            /** Description */
+            description: string;
+            /** Supporting Sources */
+            supporting_sources: components["schemas"]["SourceReference"][];
+            /** Rationale */
+            rationale: string;
+            certainty: components["schemas"]["ResearchCertainty"];
+            /** @default PROPOSED */
+            status: components["schemas"]["HypothesisStatus"];
+        };
         /**
          * ResearchRunAccepted
          * @description Immediate `201` response: the run exists, execution has been queued.
@@ -1053,6 +2136,8 @@ export interface components {
              * @default 5
              */
             max_results: number;
+            /** @description Explicit UI state for resolving ambiguous queries. */
+            workspace_context?: components["schemas"]["ResearchWorkspaceContext"] | null;
         };
         /**
          * ResearchRunDetail
@@ -1122,6 +2207,8 @@ export interface components {
             steps?: components["schemas"]["ResearchStepRead"][];
             /** Messages */
             messages?: components["schemas"]["AgentMessageRead"][];
+            /** Claims */
+            claims?: components["schemas"]["VerifiedClaimRead"][];
         };
         /**
          * ResearchRunRead
@@ -1250,6 +2337,51 @@ export interface components {
          * @enum {string}
          */
         ResearchStepStatus: "pending" | "running" | "completed" | "failed" | "skipped";
+        /** ResearchVariable */
+        ResearchVariable: {
+            /** Name */
+            name: string;
+            /** Role */
+            role: string;
+            /** Description */
+            description?: string | null;
+            /** Unit */
+            unit?: string | null;
+            /** Source Evidence */
+            source_evidence?: string | null;
+            confidence: components["schemas"]["ResearchCertainty"];
+        };
+        /**
+         * ResearchWorkspaceContext
+         * @description Explicit application state used to safely resolve ambiguous queries.
+         */
+        ResearchWorkspaceContext: {
+            /**
+             * Active Entity
+             * @description The currently selected company or entity in the UI.
+             */
+            active_entity?: string | null;
+            /**
+             * Active Asset Id
+             * @description The currently selected document ID in the UI.
+             */
+            active_asset_id?: string | null;
+            /**
+             * Active Research Document Id
+             * @description The currently selected research paper ID.
+             */
+            active_research_document_id?: string | null;
+        };
+        /**
+         * ResourceClass
+         * @enum {string}
+         */
+        ResourceClass: "class_expr" | "class_array" | "class_table";
+        /**
+         * RunPlanStatus
+         * @enum {string}
+         */
+        RunPlanStatus: "planned" | "executed" | "failed" | "cancelled";
         /**
          * SemanticSearchRequest
          * @description Request body for `POST /knowledge-base/search`.
@@ -1349,6 +2481,40 @@ export interface components {
             /** Rerank Score */
             rerank_score?: number | null;
         };
+        /** SourceReference */
+        SourceReference: {
+            /**
+             * Paper Id
+             * Format: uuid
+             */
+            paper_id: string;
+            /** Paper Title */
+            paper_title: string;
+            /** Page */
+            page?: number | null;
+            /** Chunk Index */
+            chunk_index?: number | null;
+            /**
+             * Evidence Scope
+             * @default FULL_TEXT
+             */
+            evidence_scope: string;
+        };
+        /**
+         * SufficiencyStatus
+         * @enum {string}
+         */
+        SufficiencyStatus: "sufficient" | "partially_sufficient" | "insufficient" | "ambiguous";
+        /**
+         * SynthesisClaimScope
+         * @enum {string}
+         */
+        SynthesisClaimScope: "aggregate" | "component";
+        /**
+         * SynthesisClaimType
+         * @enum {string}
+         */
+        SynthesisClaimType: "numeric" | "categorical";
         /**
          * TaskCreate
          * @description Payload for creating a new task within a project.
@@ -1457,6 +2623,18 @@ export interface components {
             status?: components["schemas"]["TaskStatus"] | null;
             priority?: components["schemas"]["TaskPriority"] | null;
         };
+        /** TestCaseImportResponse */
+        TestCaseImportResponse: {
+            /** Imported */
+            imported: components["schemas"]["ExperimentTestCase"][];
+            /**
+             * Rejected
+             * @description rows that failed to parse, with a reason
+             */
+            rejected?: {
+                [key: string]: string;
+            }[];
+        };
         /**
          * TokenPair
          * @description An access/refresh JWT pair returned on login or token refresh.
@@ -1520,6 +2698,97 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * VariableRole
+         * @description What kind of quantity this is -- never conflated with mutability
+         *     (Part C): a VARIABLE can be fixed, a PARAMETER can be mutable.
+         * @enum {string}
+         */
+        VariableRole: "variable" | "parameter" | "constant" | "derived_quantity" | "input" | "output" | "unknown";
+        /**
+         * VerifiedClaimRead
+         * @description One claim after real, deterministic verification -- what the
+         *     Claim Evidence Panel renders.
+         *
+         *     Persisted inside `research_runs.citations` JSONB, alongside
+         *     ordinary citation objects, tagged `kind="claim"` so
+         *     `ResearchRunDetail.from_model` can split the two back apart at read
+         *     time without a schema migration.
+         */
+        VerifiedClaimRead: {
+            /**
+             * Kind
+             * @default claim
+             * @constant
+             */
+            kind: "claim";
+            /** Claim Text */
+            claim_text: string;
+            claim_type: components["schemas"]["SynthesisClaimType"];
+            /** Claimed Value */
+            claimed_value?: string | null;
+            scope?: components["schemas"]["SynthesisClaimScope"] | null;
+            /** Source Reference Ids */
+            source_reference_ids?: string[];
+            /** Unresolved Citation Ids */
+            unresolved_citation_ids?: string[];
+            /**
+             * Attributed To Primary
+             * @default true
+             */
+            attributed_to_primary: boolean;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "supported" | "contradicted" | "insufficient_evidence" | "unverifiable";
+            /**
+             * Evidence State
+             * @enum {string}
+             */
+            evidence_state: "verified" | "derived" | "supporting" | "unknown" | "contradicted";
+            /** Matched Evidence Ids */
+            matched_evidence_ids?: string[];
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+        };
+        /** VisualizationData */
+        VisualizationData: {
+            /** Chart Type */
+            chart_type: string;
+            /** X Label */
+            x_label: string;
+            /** Y Label */
+            y_label: string;
+            /** Series */
+            series: components["schemas"]["VisualizationSeries"][];
+            /**
+             * Note
+             * @description e.g. a trend disclaimer -- never a causal claim (Part H).
+             */
+            note?: string | null;
+        };
+        /**
+         * VisualizationSeries
+         * @description Raw trace data for the frontend to render with Plotly.js -- the
+         *     backend never renders a chart image or asserts causality (Part H/R).
+         */
+        VisualizationSeries: {
+            /** Name */
+            name: string;
+            /** X */
+            x: string[];
+            /** Y */
+            y: (number | null)[];
+            /**
+             * Kind
+             * @description 'scatter' | 'line' | 'bar' | 'histogram'
+             */
+            kind: string;
         };
     };
     responses: never;
@@ -1901,7 +3170,10 @@ export interface operations {
     };
     reprocess_asset_api_v1_assets__asset_id__process_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Re-run the pipeline even if this asset already completed extraction, understanding, and embedding successfully. Without this, reprocessing an already-fully-processed asset is a no-op (Sprint 12.8). */
+                force?: boolean;
+            };
             header?: never;
             path: {
                 asset_id: string;
@@ -2437,6 +3709,468 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResearchRunDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_research_document_route_api_v1_research_documents__asset_id__analyze_post: {
+        parameters: {
+            query: {
+                project_id: string;
+            };
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalyzeDocumentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchDocumentUnderstanding"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_cross_paper_route_api_v1_research_documents__asset_id__cross_paper_analysis_post: {
+        parameters: {
+            query: {
+                project_id: string;
+            };
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrossPaperAnalysisRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrossPaperComparison"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_experiment_from_equation_route_api_v1_research_experiments_from_equation_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentPlanCreateFromEquation"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_experiment_from_understanding_route_api_v1_research_experiments_from_understanding_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentPlanCreateFromUnderstanding"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_experiment_plan_route_api_v1_research_experiments__plan_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_experiment_plan_route_api_v1_research_experiments__plan_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentPlanUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_experiment_plans_route_api_v1_research_experiments_get: {
+        parameters: {
+            query: {
+                project_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentPlan"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_experiment_variant_route_api_v1_research_experiments__plan_id__variants_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentVariantCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_experiment_sweep_route_api_v1_research_experiments__plan_id__sweep_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentSweepRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_experiment_test_cases_route_api_v1_research_experiments__plan_id__test_cases_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_experiment_test_cases_route_api_v1_research_experiments__plan_id__test_cases_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestCaseImportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    execute_experiment_variant_route_api_v1_research_experiments__plan_id__execute_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentExecuteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionJobRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_experiment_visualization_route_api_v1_research_experiments__plan_id__visualization_get: {
+        parameters: {
+            query: {
+                input_name: string;
+                output_name: string;
+            };
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisualizationData"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_execution_jobs_route_api_v1_execution_jobs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionJobRead"][];
+                };
+            };
+        };
+    };
+    get_execution_job_route_api_v1_execution_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionJobDetail"];
                 };
             };
             /** @description Validation Error */

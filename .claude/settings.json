@@ -41,5 +41,27 @@
       "PowerShell(docker exec -w /app aikdap_worker python /tmp/e2e_failure.py eb58aa57-99a8-4053-a5ef-4f12478f63ef)",
       "PowerShell($src = \"$env:TEMP\\\\claude\\\\c--Users-Divya-Bangde-OneDrive-Desktop-My-projects-AIKDAP\\\\e139018c-64cb-42e9-bbfe-5eb4075572b1\\\\scratchpad\\\\e2e_failure.py\"; docker cp $src aikdap_worker:/app/e2e_failure.py; if \\($?\\) { docker exec -w /app aikdap_worker python e2e_failure.py eb58aa57-99a8-4053-a5ef-4f12478f63ef })"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"C:\\Users\\Divya Bangde\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Python\\Python312\\Scripts\\graphify.exe\" hook-guard search"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"C:\\Users\\Divya Bangde\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Python\\Python312\\Scripts\\graphify.exe\" hook-guard read"
+          }
+        ]
+      }
+    ]
   }
 }

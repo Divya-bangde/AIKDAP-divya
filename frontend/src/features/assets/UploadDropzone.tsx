@@ -8,12 +8,33 @@ import { fadeIn } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import * as assetsService from "@/services/assets";
 
-/** Formats accepted here match `_PLAIN_TEXT_MIME_TYPES` in
+/** Formats accepted here match `_EXTRACTOR_FACTORIES` in
  * `backend/app/modules/assets/processing/extractors.py` exactly — the
- * only formats the backend can actually extract text from today.
- * Claiming PDF/DOCX support here would be a UI lie about a real
- * backend limitation. */
-const SUPPORTED_EXTENSIONS = [".txt", ".csv", ".md", ".json"];
+ * formats the backend can actually extract text from today (Sprint
+ * 12.1 added real PDF/DOCX/XLSX/PPTX/HTML extraction; Sprint 12.5
+ * added OCR, so PNG/JPEG are genuinely readable now, not just accepted
+ * then rejected; Sprint 12.5 Phase 3 wired GIF/WEBP into the same OCR
+ * path. Legacy .doc/.xls/.ppt and SVG remain unsupported — see that
+ * module's docstring for why). Claiming support here beyond what the
+ * backend can actually do would be a UI lie about a real backend
+ * limitation. */
+const SUPPORTED_EXTENSIONS = [
+  ".txt",
+  ".csv",
+  ".md",
+  ".json",
+  ".html",
+  ".htm",
+  ".pdf",
+  ".docx",
+  ".xlsx",
+  ".pptx",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+];
 
 export function UploadDropzone({ projectId }: { projectId: string }) {
   const [isDragging, setIsDragging] = useState(false);

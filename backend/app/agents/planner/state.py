@@ -124,6 +124,14 @@ class EvidenceProvenance(TypedDict, total=False):
     #: The relevance-gate threshold this item's `rerank_score` cleared.
     #: Absent when no gate ran, which is not the same as passing one.
     relevance_threshold: float
+    #: Sprint 12.1: the source location within the asset this evidence
+    #: came from, when the extractor recorded one — a PDF page number,
+    #: an XLSX sheet name, a DOCX/HTML heading or PPTX slide title.
+    #: Absent (not null) for chunks with no such locator, same
+    #: `total=False` convention as every other key here.
+    page_number: int
+    sheet_name: str
+    section: str
 
 
 #: The optional identity keys, derived from the TypedDict rather than
@@ -240,6 +248,9 @@ class ResearchState(TypedDict, total=False):
     # Optional: a run can be started directly against a project.
     task_id: str | None
     query: str
+    
+    # Workspace Context (from UI) for query resolution.
+    workspace_context: dict[str, Any] | None
     include_assets: bool
     include_web: bool
     max_results: int

@@ -28,6 +28,7 @@ from app.agents.planner.nodes import (
     build_dependencies,
 )
 from app.agents.planner.planner import get_planner
+from app.core.llm.gateway import LLMGateway
 from app.agents.planner.registry import (
     AGENT_REGISTRY,
     NodeSpec,
@@ -114,11 +115,12 @@ class BrokenPlanner:
 
 def make_dependencies(**overrides: Any) -> GraphDependencies:
     """Default offline dependency set, with per-test overrides."""
-    defaults: dict[str, Any] = {
+    defaults = {
         "planner": get_planner(),
         "asset_retriever": FakeAssetRetriever(),
         "web_provider": MockWebResearchProvider(),
         "synthesizer": ExtractiveSynthesizer(),
+        "llm_gateway": LLMGateway(),
     }
     defaults.update(overrides)
     return GraphDependencies(**defaults)
@@ -142,6 +144,7 @@ def initial_state(**overrides: Any) -> dict[str, Any]:
         "owner_id": str(uuid.uuid4()),
         "task_id": None,
         "query": QUERY,
+        "workspace_context": None,
         "include_assets": True,
         "include_web": True,
         "max_results": 3,
@@ -568,8 +571,9 @@ def test_celery_task_is_registered_and_calls_the_orchestrator(monkeypatch):
         def __init__(self, session):
             called["session"] = session
 
-        async def execute(self, incoming_run_id):
+        async def execute(self, incoming_run_id, workspace_context=None):
             called["run_id"] = incoming_run_id
+            called["workspace_context"] = workspace_context
 
     monkeypatch.setattr(worker_tasks, "ResearchExecutionService", FakeExecutionService)
 

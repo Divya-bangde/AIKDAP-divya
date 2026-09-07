@@ -1,0 +1,465 @@
+<title>Business Analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --background: 220 24% 97%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --elevated: 0 0% 100%;
+    --sunken: 220 24% 96%;
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 18% 94%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 220 18% 94%;
+    --muted-foreground: 220 9% 42%;
+    --accent: 243 75% 96%;
+    --accent-foreground: 243 75% 40%;
+    --ai: 190 95% 30%;
+    --ai-foreground: 0 0% 100%;
+    --ai-soft: 190 70% 95%;
+    --success: 152 60% 30%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 30%;
+    --warning-foreground: 0 0% 100%;
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 16% 90%;
+    --border-strong: 220 14% 80%;
+    --radius: 0.75rem;
+    --shadow-subtle: 0 1px 2px 0 hsl(222 47% 11% / 0.04), 0 1px 3px 0 hsl(222 47% 11% / 0.03);
+    --shadow-raised: 0 2px 4px -1px hsl(222 47% 11% / 0.05), 0 8px 16px -4px hsl(222 47% 11% / 0.06);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {}
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --background: 224 47% 5%;
+      --foreground: 210 25% 96%;
+      --card: 223 42% 8%;
+      --card-foreground: 210 25% 96%;
+      --elevated: 222 38% 11%;
+      --sunken: 225 45% 6.5%;
+      --primary: 243 80% 70%;
+      --primary-foreground: 224 47% 6%;
+      --secondary: 222 26% 15%;
+      --secondary-foreground: 210 25% 96%;
+      --muted: 222 26% 15%;
+      --muted-foreground: 218 14% 68%;
+      --accent: 243 38% 19%;
+      --accent-foreground: 236 92% 88%;
+      --ai: 187 88% 56%;
+      --ai-foreground: 224 47% 6%;
+      --ai-soft: 190 62% 13%;
+      --success: 152 52% 48%;
+      --success-foreground: 224 47% 6%;
+      --warning: 38 92% 58%;
+      --warning-foreground: 224 47% 6%;
+      --destructive: 0 72% 62%;
+      --destructive-foreground: 224 47% 6%;
+      --border: 222 24% 16%;
+      --border-strong: 222 20% 27%;
+      --shadow-subtle: 0 1px 2px 0 hsl(224 60% 2% / 0.5), 0 1px 3px 0 hsl(224 60% 2% / 0.4);
+      --shadow-raised: 0 2px 6px -1px hsl(224 60% 2% / 0.6), 0 10px 20px -6px hsl(224 60% 2% / 0.55);
+    }
+  }
+  :root[data-theme="dark"] {
+    --background: 224 47% 5%;
+    --foreground: 210 25% 96%;
+    --card: 223 42% 8%;
+    --card-foreground: 210 25% 96%;
+    --elevated: 222 38% 11%;
+    --sunken: 225 45% 6.5%;
+    --primary: 243 80% 70%;
+    --primary-foreground: 224 47% 6%;
+    --secondary: 222 26% 15%;
+    --secondary-foreground: 210 25% 96%;
+    --muted: 222 26% 15%;
+    --muted-foreground: 218 14% 68%;
+    --accent: 243 38% 19%;
+    --accent-foreground: 236 92% 88%;
+    --ai: 187 88% 56%;
+    --ai-foreground: 224 47% 6%;
+    --ai-soft: 190 62% 13%;
+    --success: 152 52% 48%;
+    --success-foreground: 224 47% 6%;
+    --warning: 38 92% 58%;
+    --warning-foreground: 224 47% 6%;
+    --destructive: 0 72% 62%;
+    --destructive-foreground: 224 47% 6%;
+    --border: 222 24% 16%;
+    --border-strong: 222 20% 27%;
+    --shadow-subtle: 0 1px 2px 0 hsl(224 60% 2% / 0.5), 0 1px 3px 0 hsl(224 60% 2% / 0.4);
+    --shadow-raised: 0 2px 6px -1px hsl(224 60% 2% / 0.6), 0 10px 20px -6px hsl(224 60% 2% / 0.55);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  .display { font-family: "Space Grotesk", "Inter", sans-serif; letter-spacing: -0.01em; }
+  .tabular { font-variant-numeric: tabular-nums; }
+  .label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .shell { max-width: 1180px; margin: 0 auto; padding: 28px 32px 64px; }
+
+  /* ---- Top bar ---- */
+  .topbar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid hsl(var(--border));
+    margin-bottom: 24px;
+  }
+  .crumb { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: hsl(var(--muted-foreground)); margin-bottom: 6px; }
+  .crumb span:last-child { color: hsl(var(--foreground)); font-weight: 500; }
+  h1 { margin: 0; font-size: 24px; font-weight: 600; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .segmented {
+    display: flex;
+    background: hsl(var(--secondary));
+    border-radius: 8px;
+    padding: 2px;
+    gap: 2px;
+  }
+  .segmented button {
+    border: none;
+    background: transparent;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .segmented button[aria-pressed="true"] {
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    box-shadow: var(--shadow-subtle);
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid hsl(var(--border-strong));
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    font: inherit; font-size: 12.5px; font-weight: 500;
+    padding: 7px 12px; border-radius: 8px; cursor: pointer;
+  }
+
+  /* ---- KPI strip ---- */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+  .kpi {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-subtle);
+    padding: 16px 18px 15px;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--kpi-rule, hsl(var(--primary) / 0.5));
+  }
+  .kpi-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .kpi-icon {
+    width: 30px; height: 30px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--kpi-bg, hsl(var(--accent))); color: var(--kpi-fg, hsl(var(--accent-foreground)));
+    flex-shrink: 0;
+  }
+  .kpi-icon svg { width: 15px; height: 15px; }
+  .kpi-value { font-size: 27px; font-weight: 600; letter-spacing: -0.01em; }
+  .kpi-detail { font-size: 12px; color: hsl(var(--muted-foreground)); margin-top: 2px; }
+
+  /* ---- Chart row ---- */
+  .chart-row { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .panel {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-subtle);
+    padding: 18px 20px 16px;
+  }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+  .panel-title { font-size: 13.5px; font-weight: 600; }
+  .panel-sub { font-size: 12px; color: hsl(var(--muted-foreground)); margin: 0 0 12px; }
+  .legend { display: flex; gap: 14px; font-size: 11.5px; color: hsl(var(--muted-foreground)); }
+  .legend .dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 5px; vertical-align: -1px; }
+
+  svg text { font-family: "Inter", sans-serif; fill: hsl(var(--muted-foreground)); }
+  .grid-line { stroke: hsl(var(--border)); stroke-width: 1; }
+  .axis-label { font-size: 10.5px; }
+
+  /* ---- Table ---- */
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    padding: 0 10px 10px; border-bottom: 1px solid hsl(var(--border));
+  }
+  thead th.num, tbody td.num { text-align: right; }
+  tbody td { padding: 12px 10px; border-bottom: 1px solid hsl(var(--border)); font-size: 13px; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  .row-name { font-weight: 500; }
+  .row-sub { font-size: 11.5px; color: hsl(var(--muted-foreground)); margin-top: 1px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11.5px; font-weight: 500; padding: 3px 9px 3px 7px; border-radius: 999px;
+  }
+  .chip .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .chip-done { background: hsl(var(--success) / 0.1); color: hsl(var(--success)); }
+  .chip-done .dot { background: hsl(var(--success)); }
+  .chip-running { background: hsl(var(--ai-soft)); color: hsl(var(--ai)); }
+  .chip-running .dot { background: hsl(var(--ai)); animation: pulse 1.8s ease-in-out infinite; }
+  .chip-queued { background: hsl(var(--secondary)); color: hsl(var(--muted-foreground)); }
+  .chip-queued .dot { background: hsl(var(--muted-foreground)); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  @media (prefers-reduced-motion: reduce) { .chip-running .dot { animation: none; } }
+
+  .table-panel { margin-bottom: 14px; }
+  .footnote { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: hsl(var(--muted-foreground)); margin-top: 16px; }
+  .footnote svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+  @media (max-width: 880px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .chart-row { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="shell">
+
+  <div class="topbar">
+    <div>
+      <div class="crumb"><span>Northwind Retail Expansion</span><span>&rsaquo;</span><span>Business Analytics</span></div>
+      <h1 class="display">Business Analytics</h1>
+    </div>
+    <div class="topbar-right">
+      <div class="segmented" role="group" aria-label="Time range">
+        <button aria-pressed="false">24h</button>
+        <button aria-pressed="true">7d</button>
+        <button aria-pressed="false">30d</button>
+        <button aria-pressed="false">All</button>
+      </div>
+      <button class="btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v13m0 0-4-4m4 4 4-4M4 20h16"/></svg>
+        Export
+      </button>
+    </div>
+  </div>
+
+  <!-- KPI strip -->
+  <div class="kpis">
+    <div class="kpi" style="--kpi-bg: hsl(var(--accent)); --kpi-fg: hsl(var(--accent-foreground)); --kpi-rule: hsl(var(--primary) / 0.5);">
+      <div class="kpi-head">
+        <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6a8 3 0 0 0 16 0 8 3 0 0 0-16 0Zm0 0v12a8 3 0 0 0 16 0V6M4 12a8 3 0 0 0 16 0"/></svg></div>
+        <span class="label">Datasets analyzed</span>
+      </div>
+      <div class="kpi-value tabular">47</div>
+      <div class="kpi-detail">6 uploaded this week</div>
+    </div>
+    <div class="kpi" style="--kpi-bg: hsl(var(--ai-soft)); --kpi-fg: hsl(var(--ai)); --kpi-rule: hsl(var(--ai) / 0.6);">
+      <div class="kpi-head">
+        <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3Z"/></svg></div>
+        <span class="label">Insights surfaced</span>
+      </div>
+      <div class="kpi-value tabular">312</div>
+      <div class="kpi-detail">grounded in source data</div>
+    </div>
+    <div class="kpi" style="--kpi-bg: hsl(var(--success) / 0.1); --kpi-fg: hsl(var(--success)); --kpi-rule: hsl(var(--success) / 0.6);">
+      <div class="kpi-head">
+        <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12.5 11.2 15 15 9M12 3l2.5 2H19v4.5L21 12l-2 2.5V19h-4.5L12 21l-2.5-2H5v-4.5L3 12l2-2.5V5h4.5L12 3Z"/></svg></div>
+        <span class="label">Reports delivered</span>
+      </div>
+      <div class="kpi-value tabular">18</div>
+      <div class="kpi-detail">3 pending review</div>
+    </div>
+    <div class="kpi" style="--kpi-bg: hsl(var(--accent)); --kpi-fg: hsl(var(--accent-foreground)); --kpi-rule: hsl(var(--primary) / 0.5);">
+      <div class="kpi-head">
+        <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2.5"/></svg></div>
+        <span class="label">Active analyses</span>
+      </div>
+      <div class="kpi-value tabular">4</div>
+      <div class="kpi-detail">2 running now</div>
+    </div>
+  </div>
+
+  <!-- Chart row -->
+  <div class="chart-row">
+
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">Analysis throughput</span>
+        <div class="legend">
+          <span><span class="dot" style="background:hsl(var(--primary))"></span>Completed</span>
+          <span><span class="dot" style="background:hsl(var(--ai))"></span>In progress</span>
+        </div>
+      </div>
+      <p class="panel-sub">Analyses finished per day, last 7 days</p>
+
+      <svg viewBox="0 0 560 220" width="100%" height="220" role="img" aria-label="Bar chart of analyses completed per day over the last 7 days, ranging from 3 to 11">
+        <!-- gridlines + y labels: 0,3,6,9,12 -->
+        <g>
+          <line class="grid-line" x1="34" y1="14" x2="548" y2="14"/>
+          <text class="axis-label" x="28" y="17" text-anchor="end">12</text>
+          <line class="grid-line" x1="34" y1="58" x2="548" y2="58"/>
+          <text class="axis-label" x="28" y="61" text-anchor="end">9</text>
+          <line class="grid-line" x1="34" y1="102" x2="548" y2="102"/>
+          <text class="axis-label" x="28" y="105" text-anchor="end">6</text>
+          <line class="grid-line" x1="34" y1="146" x2="548" y2="146"/>
+          <text class="axis-label" x="28" y="149" text-anchor="end">3</text>
+          <line class="grid-line" x1="34" y1="190" x2="548" y2="190" style="stroke:hsl(var(--border-strong))"/>
+          <text class="axis-label" x="28" y="193" text-anchor="end">0</text>
+        </g>
+        <!-- bars: scale 14.67px per unit, baseline y=190 -->
+        <!-- Mon 6, Tue 8, Wed 5, Thu 11, Fri 7, Sat 3, Sun(today, partial) 4 done + 2 running -->
+        <g>
+          <!-- Mon -->
+          <rect x="52" y="102" width="26" height="88" rx="3" fill="hsl(var(--primary))"/>
+          <text class="axis-label" x="65" y="90" text-anchor="middle" font-weight="600" fill="hsl(var(--foreground))">6</text>
+          <!-- Tue -->
+          <rect x="122" y="73" width="26" height="117" rx="3" fill="hsl(var(--primary))"/>
+          <text class="axis-label" x="135" y="61" text-anchor="middle" font-weight="600" fill="hsl(var(--foreground))">8</text>
+          <!-- Wed -->
+          <rect x="192" y="117" width="26" height="73" rx="3" fill="hsl(var(--primary))"/>
+          <text class="axis-label" x="205" y="105" text-anchor="middle" font-weight="600" fill="hsl(var(--foreground))">5</text>
+          <!-- Thu -->
+          <rect x="262" y="29" width="26" height="161" rx="3" fill="hsl(var(--primary))"/>
+          <text class="axis-label" x="275" y="17" text-anchor="middle" font-weight="600" fill="hsl(var(--foreground))">11</text>
+          <!-- Fri -->
+          <rect x="332" y="88" width="26" height="102" rx="3" fill="hsl(var(--primary))"/>
+          <text class="axis-label" x="345" y="76" text-anchor="middle" font-weight="600" fill="hsl(var(--foreground))">7</text>
+          <!-- Sat -->
+          <rect x="402" y="146" width="26" height="44" rx="3" fill="hsl(var(--primary))"/>
+          <text class="axis-label" x="415" y="134" text-anchor="middle" font-weight="600" fill="hsl(var(--foreground))">3</text>
+          <!-- Sun: 4 done (bottom, primary) + 2 running (top, ai, hatched feel via opacity) stacked -->
+          <rect x="472" y="132" width="26" height="58" rx="3" fill="hsl(var(--primary))"/>
+          <rect x="472" y="102" width="26" height="28" rx="3" fill="hsl(var(--ai))"/>
+          <text class="axis-label" x="485" y="90" text-anchor="middle" font-weight="600" fill="hsl(var(--foreground))">6</text>
+        </g>
+        <!-- x labels -->
+        <g class="axis-label">
+          <text x="65" y="206" text-anchor="middle">Mon</text>
+          <text x="135" y="206" text-anchor="middle">Tue</text>
+          <text x="205" y="206" text-anchor="middle">Wed</text>
+          <text x="275" y="206" text-anchor="middle">Thu</text>
+          <text x="345" y="206" text-anchor="middle">Fri</text>
+          <text x="415" y="206" text-anchor="middle">Sat</text>
+          <text x="485" y="206" text-anchor="middle" fill="hsl(var(--foreground))" font-weight="600">Sun</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">Insight categories</span>
+      </div>
+      <p class="panel-sub">Share of the 312 surfaced this range</p>
+
+      <svg viewBox="0 0 220 160" width="100%" height="150" role="img" aria-label="Donut chart: Trend 34 percent, Anomaly 27 percent, Correlation 22 percent, Summary 17 percent">
+        <g transform="translate(78,80)">
+          <!-- r=52, stroke-width 20, circumference 326.7. Order: Trend 34%, Anomaly 27%, Correlation 22%, Summary 17% -->
+          <circle r="52" fill="none" stroke="hsl(var(--border))" stroke-width="20"/>
+          <circle r="52" fill="none" stroke="hsl(var(--primary))" stroke-width="20"
+            stroke-dasharray="111.1 326.7" stroke-dashoffset="0" transform="rotate(-90)"/>
+          <circle r="52" fill="none" stroke="hsl(var(--ai))" stroke-width="20"
+            stroke-dasharray="88.2 326.7" stroke-dashoffset="-111.1" transform="rotate(-90)"/>
+          <circle r="52" fill="none" stroke="hsl(var(--success))" stroke-width="20"
+            stroke-dasharray="71.9 326.7" stroke-dashoffset="-199.3" transform="rotate(-90)"/>
+          <circle r="52" fill="none" stroke="hsl(var(--warning))" stroke-width="20"
+            stroke-dasharray="55.5 326.7" stroke-dashoffset="-271.2" transform="rotate(-90)"/>
+          <text text-anchor="middle" y="-3" font-size="20" font-weight="600" fill="hsl(var(--foreground))" font-family="Inter">312</text>
+          <text text-anchor="middle" y="14" font-size="10" fill="hsl(var(--muted-foreground))">insights</text>
+        </g>
+      </svg>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; margin-top:6px;">
+        <span style="font-size:11.5px;"><span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:hsl(var(--primary));margin-right:5px;"></span>Trend &mdash; 34%</span>
+        <span style="font-size:11.5px;"><span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:hsl(var(--ai));margin-right:5px;"></span>Anomaly &mdash; 27%</span>
+        <span style="font-size:11.5px;"><span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:hsl(var(--success));margin-right:5px;"></span>Correlation &mdash; 22%</span>
+        <span style="font-size:11.5px;"><span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:hsl(var(--warning));margin-right:5px;"></span>Summary &mdash; 17%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent analyses table -->
+  <div class="panel table-panel">
+    <div class="panel-head">
+      <span class="panel-title">Recent analyses</span>
+      <a href="#" style="font-size:12px; color:hsl(var(--primary)); text-decoration:none; font-weight:500;">View all &rarr;</a>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Analysis</th>
+          <th>Dataset</th>
+          <th>Status</th>
+          <th class="num">Insights</th>
+          <th>Updated</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="row-name">Q3 regional churn drivers</div><div class="row-sub">GROUPBY_AGG &middot; CLASS_TABLE</div></td>
+          <td>customers_q3.csv</td>
+          <td><span class="chip chip-running"><span class="dot"></span>Running</span></td>
+          <td class="num tabular">&mdash;</td>
+          <td>2 min ago</td>
+        </tr>
+        <tr>
+          <td><div class="row-name">Store footfall vs. revenue correlation</div><div class="row-sub">CORRCOEF &middot; CLASS_ARRAY</div></td>
+          <td>footfall_2026.csv</td>
+          <td><span class="chip chip-running"><span class="dot"></span>Running</span></td>
+          <td class="num tabular">&mdash;</td>
+          <td>6 min ago</td>
+        </tr>
+        <tr>
+          <td><div class="row-name">Basket size percentile breakdown</div><div class="row-sub">PERCENTILE &middot; CLASS_ARRAY</div></td>
+          <td>transactions_sept.csv</td>
+          <td><span class="chip chip-done"><span class="dot"></span>Complete</span></td>
+          <td class="num tabular">14</td>
+          <td>41 min ago</td>
+        </tr>
+        <tr>
+          <td><div class="row-name">Supplier lead-time anomalies</div><div class="row-sub">STD &middot; CLASS_ARRAY</div></td>
+          <td>supplier_logs.csv</td>
+          <td><span class="chip chip-done"><span class="dot"></span>Complete</span></td>
+          <td class="num tabular">9</td>
+          <td>2 hr ago</td>
+        </tr>
+        <tr>
+          <td><div class="row-name">Seasonal demand pivot, by category</div><div class="row-sub">PIVOT_TABLE &middot; CLASS_TABLE</div></td>
+          <td>sku_sales_2025_26.csv</td>
+          <td><span class="chip chip-queued"><span class="dot"></span>Queued</span></td>
+          <td class="num tabular">&mdash;</td>
+          <td>Just now</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footnote">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+    Every figure above is drawn from a completed or in-progress analysis run &mdash; none are projected or estimated.
+  </div>
+
+</div>

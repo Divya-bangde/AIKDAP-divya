@@ -68,6 +68,9 @@ from app.agents.planner.synthesis import (  # noqa: F401 - re-exported for calle
     get_synthesizer,
 )
 from app.core.logging.logger import get_logger
+from app.core.config.settings import settings
+from app.core.llm.gateway import LLMGateway, get_llm_gateway
+from app.agents.planner.reformulation import reformulate_query
 from app.modules.assets.repository import AssetRepository
 from app.modules.knowledge_base.service import KnowledgeBaseService
 
@@ -242,11 +245,23 @@ class SemanticAssetRetriever(AssetRetriever):
         for rank, hit in enumerate(outcome.hits, start=1):
             asset = await self._assets.get_by_id(hit.chunk.asset_id)
             title = asset.title if asset is not None else "Unknown asset"
+            # Sprint 12.1: prefer a human-readable locator (page/sheet)
+            # over the bare chunk index when the extractor recorded
+            # one — "page 3" means something to a reader; "chunk 7"
+            # doesn't. `reference` (the stable citation key) is left
+            # unchanged so existing citation-key formats/tests aren't
+            # disturbed by this.
+            if hit.chunk.page_number is not None:
+                locator = f"page {hit.chunk.page_number}"
+            elif hit.chunk.sheet_name is not None:
+                locator = f"sheet '{hit.chunk.sheet_name}'"
+            else:
+                locator = f"chunk {hit.chunk.chunk_index}"
             document = RetrievedDocument(
                 source=ASSET_SOURCE,
                 provider=self.name,
                 reference=f"asset:{hit.chunk.asset_id}#chunk-{hit.chunk.chunk_index}",
-                title=f"{title} (chunk {hit.chunk.chunk_index})",
+                title=f"{title} ({locator})",
                 snippet=_truncate(hit.chunk.content, SNIPPET_CHARACTERS),
                 # `score` is the one cross-source comparable number the
                 # context builder ranks on. The two stage-specific
@@ -271,6 +286,12 @@ class SemanticAssetRetriever(AssetRetriever):
             # measurement must not read as a low one.
             if hit.rerank_score is not None:
                 document["rerank_score"] = hit.rerank_score
+            if hit.chunk.page_number is not None:
+                document["page_number"] = hit.chunk.page_number
+            if hit.chunk.sheet_name is not None:
+                document["sheet_name"] = hit.chunk.sheet_name
+            if hit.chunk.section is not None:
+                document["section"] = hit.chunk.section
             documents.append(document)
         return documents
 
@@ -336,6 +357,7 @@ class GraphDependencies:
     asset_retriever: AssetRetriever
     web_provider: WebResearchProvider
     synthesizer: Synthesizer
+    llm_gateway: LLMGateway
 
 
 def build_dependencies(session: AsyncSession) -> GraphDependencies:
@@ -345,6 +367,7 @@ def build_dependencies(session: AsyncSession) -> GraphDependencies:
         asset_retriever=SemanticAssetRetriever(session),
         web_provider=MockWebResearchProvider(),
         synthesizer=get_synthesizer(),
+        llm_gateway=get_llm_gateway(),
     )
 
 
@@ -465,10 +488,25 @@ async def asset_retrieval_node(
     afterwards.
     """
     dependencies = _dependencies(config)
+    original_query = state["query"]
+    workspace_context = state.get("workspace_context")
+    
+    if settings.query_reformulation_enabled:
+        retrieval_query, reformulation_meta = await reformulate_query(
+            original_query, dependencies.llm_gateway, workspace_context
+        )
+    else:
+        retrieval_query = original_query
+        reformulation_meta = {
+            "reformulation_attempted": False,
+            "reformulation_accepted": False,
+            "rejection_reason": "query_reformulation_enabled=False"
+        }
+    
     documents = await dependencies.asset_retriever.retrieve(
         owner_id=uuid.UUID(state["owner_id"]),
         project_id=uuid.UUID(state["project_id"]),
-        query=state["query"],
+        query=retrieval_query,
         limit=state.get("max_results", 5),
     )
     # Every document from one search shares the same status, so the
@@ -513,6 +551,7 @@ async def asset_retrieval_node(
                 # 2 ran, without having to infer it from the documents.
                 "reranking_status": reranking_status,
                 "chunk_ids": [doc.get("chunk_id") for doc in documents],
+                "reformulation": reformulation_meta,
             },
         },
     }
@@ -719,11 +758,38 @@ async def synthesis_node(state: ResearchState, config: RunnableConfig) -> dict[s
         llm_primary_model=result.primary_model,
         llm_primary_error_type=result.primary_error_type,
         llm_attempts=result.llm_attempts,
+        claim_count=len(result.verified_claims),
     )
+
+    # Sprint 16 Phase 8.8 Part B: a claim is validated against `supplied`
+    # (everything the model was given), not against the model's own
+    # top-level cited set -- so a claim can legitimately resolve real
+    # evidence the answer never cites at the top level (the real Phase
+    # 8.7 case: an `insufficient_evidence` answer with zero top-level
+    # citations, whose one claim still resolved a real, supplied chunk).
+    # Without this union, `ResearchRunDetail.citations` would not carry
+    # that evidence, and the panel's chip for it would be disabled with
+    # no way to tell "invented" apart from "valid but not returned".
+    # Every entry here is copied verbatim from `supplied` by
+    # `_verify_claims` -- nothing is invented, only exposed.
+    known_ids = {item["id"] for item in citations}
+    additional_evidence = [
+        item for item in result.claim_referenced_citations if item["id"] not in known_ids
+    ]
+
+    # Sprint 16 Phase 8.7: claims ride alongside citations in the same
+    # `research_runs.citations` JSONB list, tagged `kind="claim"`
+    # (`ResearchRunDetail.from_model` splits them back apart on read) --
+    # no migration, no second column. A separate variable rather than
+    # mutating `citations` itself: everything above this point (grounded/
+    # simulated counts, the step/message payloads below) must keep
+    # iterating the real citation shape only, which a claim dict does
+    # not have (e.g. no `simulated` key).
+    citations_for_storage = [*citations, *additional_evidence, *result.verified_claims]
 
     return {
         "final_answer": answer,
-        "citations": citations,
+        "citations": citations_for_storage,
         "grounding_status": result.grounding_status.value,
         # The graph's terminal node, so this is where the shared state
         # records the run reaching a successful end. The database row
@@ -775,6 +841,11 @@ async def synthesis_node(state: ResearchState, config: RunnableConfig) -> dict[s
                 "primary_model": result.primary_model,
                 "primary_error_type": result.primary_error_type,
                 "llm_attempts": result.llm_attempts,
+                # Sprint 16 Phase 8.7: the verified claims, for the same
+                # reason `rejected_citation_ids` is here rather than only
+                # in the final answer -- an auditable record even when
+                # nothing about verification appears in the prose itself.
+                "claims": result.verified_claims,
             },
         },
     }

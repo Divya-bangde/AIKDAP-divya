@@ -1,0 +1,23 @@
+# Sprint 16 Phase 7A.5 -- BENCHMARK-ONLY image. Not part of the
+# application; never referenced by docker-compose.yml or the
+# production Dockerfile. Not built or pushed anywhere in CI.
+#
+# Why this exists instead of reusing `aikdap-backend:latest`: that
+# image's WORKDIR (`/app`) contains the real backend source tree,
+# including `.env` (real secrets) and `uploads/`, baked in via its
+# `COPY . .` -- discovered live while building this benchmark, and
+# switched away from immediately rather than proceeding with an image
+# that put real secrets in a benchmark container's filesystem, even
+# though no workload script here ever reads them. This image installs
+# only the exact production-pinned versions of the three packages
+# these benchmarks actually exercise (matching backend/requirements.txt
+# exactly), with no application source, no .env, and a neutral
+# workdir.
+FROM python:3.12-slim
+
+RUN pip install --no-cache-dir \
+    numpy==2.3.2 \
+    pandas==2.3.2 \
+    sympy==1.13.3
+
+WORKDIR /bench

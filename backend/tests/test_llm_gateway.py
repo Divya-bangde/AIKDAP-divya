@@ -210,6 +210,117 @@ async def test_response_format_is_omitted_when_not_requested(gemini_key, mock_co
     assert "response_format" not in mock_completion.await_args.kwargs
 
 
+@pytest.mark.asyncio
+async def test_ollama_json_mode_is_routed_through_ollama_chat(mock_completion):
+    """`ollama/...` + a response_format must call `ollama_chat/...`.
+
+    Sprint 16 Phase 8.3: reproduced against a real local model that
+    `ollama/qwen3.5:4b` in JSON mode returns success with blank content
+    (LiteLLM's plain `ollama` transform reads only Ollama's `response`
+    field; a hybrid-reasoning model puts the whole answer in `thinking`
+    instead). `ollama_chat/...` reproduced correctly against the same
+    model and prompt, so the gateway rewrites to it whenever a
+    response_format is requested.
+    """
+    client = LLMGateway(default_model="ollama/qwen3.5:4b")
+    await client.generate(prompt="hello", response_format={"type": "json_object"})
+
+    assert mock_completion.await_args.kwargs["model"] == "ollama_chat/qwen3.5:4b"
+
+
+@pytest.mark.asyncio
+async def test_ollama_json_mode_defaults_thinking_off(mock_completion):
+    """A real 30-page document under the full target schema reproduced a
+    second, deeper failure past the endpoint fix above: `ollama_chat`
+    alone still returned blank `content` because `<think>` consumed the
+    whole token budget. Forcing `think: false` on the same real document
+    and schema fixed it (15s, real content) -- so the JSON-mode rewrite
+    also defaults thinking off, unless the caller already has an opinion.
+    """
+    client = LLMGateway(default_model="ollama/qwen3.5:4b")
+    await client.generate(prompt="hello", response_format={"type": "json_object"})
+
+    assert mock_completion.await_args.kwargs["think"] is False
+
+
+@pytest.mark.asyncio
+async def test_ollama_json_mode_respects_an_explicit_think_true(mock_completion):
+    """The default must not override a caller that actually wants reasoning on."""
+    client = LLMGateway(default_model="ollama/qwen3.5:4b")
+    await client.generate(prompt="hello", response_format={"type": "json_object"}, think=True)
+
+    assert mock_completion.await_args.kwargs["think"] is True
+
+
+@pytest.mark.asyncio
+async def test_ollama_without_response_format_is_left_alone(mock_completion):
+    """No response_format, no rewrite -- the bug only reproduces in JSON mode."""
+    client = LLMGateway(default_model="ollama/qwen3.5:4b")
+    await client.generate(prompt="hello")
+
+    assert mock_completion.await_args.kwargs["model"] == "ollama/qwen3.5:4b"
+
+
+@pytest.mark.asyncio
+async def test_ollama_chat_requested_directly_is_not_double_rewritten(mock_completion):
+    """A caller that already wrote `ollama_chat/...` is left untouched."""
+    client = LLMGateway(default_model="ollama_chat/qwen3.5:4b")
+    await client.generate(prompt="hello", response_format={"type": "json_object"})
+
+    assert mock_completion.await_args.kwargs["model"] == "ollama_chat/qwen3.5:4b"
+
+
+@pytest.mark.asyncio
+async def test_think_is_forwarded_to_an_ollama_model(mock_completion):
+    """Ollama's hybrid-reasoning toggle must still reach Ollama itself."""
+    client = LLMGateway(default_model="ollama_chat/qwen3.5:4b")
+    await client.generate(prompt="hello", think=False)
+
+    assert mock_completion.await_args.kwargs["think"] is False
+
+
+@pytest.mark.asyncio
+async def test_think_is_not_forwarded_to_a_non_ollama_model(gemini_key, mock_completion):
+    """`think` is Ollama-specific and must not reach an unrelated provider.
+
+    Sprint 12.6 Phase 3: sent unconditionally, it was rejected by Groq
+    as an unsupported request property on every fallback attempt.
+    """
+    client = LLMGateway(default_model=GEMINI_MODEL)
+    await client.generate(prompt="hello", think=False)
+
+    assert "think" not in mock_completion.await_args.kwargs
+
+
+@pytest.mark.asyncio
+async def test_think_is_not_forwarded_to_a_non_ollama_fallback(monkeypatch):
+    """A `think` request for the primary must not leak into its fallback.
+
+    Reproduces the Sprint 12.6 Phase 2 finding directly: Qwen (Ollama)
+    fails, the chain falls back to Groq, and Groq must never see the
+    Ollama-only `think` key that caused its `LLMInvalidRequestError`.
+    """
+    monkeypatch.setattr(settings, "groq_api_key", SecretStr("gsk_TEST_KEY_MUST_NEVER_BE_LOGGED"))
+    mock = AsyncMock(
+        side_effect=[
+            RuntimeError("connection refused"),
+            fake_completion(content="from fallback", model="groq/openai/gpt-oss-120b"),
+        ]
+    )
+    monkeypatch.setattr(gateway_module, "acompletion", mock)
+
+    client = LLMGateway(
+        default_model="ollama_chat/qwen3.5:4b",
+        fallback_model="groq/openai/gpt-oss-120b",
+        max_retries=0,
+    )
+    response = await client.generate(prompt="hello", think=False)
+
+    assert response.fallback_used is True
+    assert "think" in mock.await_args_list[0].kwargs  # the Ollama attempt
+    assert "think" not in mock.await_args_list[1].kwargs  # the Groq fallback
+
+
 # ---------------------------------------------------------------------------
 # TEST 4 — a successful response is returned
 # ---------------------------------------------------------------------------
@@ -255,7 +366,29 @@ async def test_null_content_raises_rather_than_returning_none(gemini_key, monkey
         usage=None,
     )
     monkeypatch.setattr(gateway_module, "acompletion", AsyncMock(return_value=broken))
-    with pytest.raises(LLMProviderError, match="no content"):
+    # Sprint 16 Phase 8.3: `None` and `""` are now the same failure (a
+    # real local model returned "" with finish_reason=stop and a nonzero
+    # token count, which the old `is None` check let through as success).
+    with pytest.raises(LLMProviderError, match="empty content"):
+        await LLMGateway(default_model=GEMINI_MODEL).generate(prompt="hello")
+
+
+@pytest.mark.asyncio
+async def test_blank_content_raises_rather_than_returning_success(gemini_key, monkeypatch):
+    """A choice with `content=""` must fail loudly too, not just `None`.
+
+    Sprint 16 Phase 8.3: reproduced against a real local Ollama model
+    (qwen3.5, a hybrid-reasoning model) in JSON mode -- it returned
+    `finish_reason="stop"` and a nonzero token count with blank content,
+    which read as a normal successful response before this guard existed.
+    """
+    broken = SimpleNamespace(
+        model=GEMINI_MODEL,
+        choices=[SimpleNamespace(message=SimpleNamespace(content=""), finish_reason="stop")],
+        usage=None,
+    )
+    monkeypatch.setattr(gateway_module, "acompletion", AsyncMock(return_value=broken))
+    with pytest.raises(LLMProviderError, match="empty content"):
         await LLMGateway(default_model=GEMINI_MODEL).generate(prompt="hello")
 
 

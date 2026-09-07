@@ -287,3 +287,65 @@ def test_get_provider_health_registry_returns_a_redis_backed_instance():
 
     registry = get_provider_health_registry()
     assert isinstance(registry, RedisProviderHealthRegistry)
+
+
+# ---------------------------------------------------------------------------
+# Sprint 13 Phase 3 — the full gateway call path, not just direct
+# `record_failure()`, must also be visible across independent registries.
+#
+# Every test above writes through `record_failure()` directly. Nothing
+# exercised the real path a research run actually takes: `LLMGateway.complete()`
+# -> `_call_with_retries()` -> `record_failure()`, driven by a rejected
+# `acompletion()` call rather than a hand-built error. A live discrepancy was
+# observed during Sprint 13 Phase 2/3 diagnosis (a genuine quota-exhaustion
+# recorded through that full path was not visible to a fresh process minutes
+# later) that this repository's existing tests could not have caught, because
+# none of them go through the gateway to produce the write. This closes that
+# specific gap; it does not by itself explain the discrepancy.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_failure_recorded_through_the_real_gateway_path_is_visible_to_a_fresh_registry():
+    from unittest.mock import AsyncMock, patch
+
+    from app.core.llm.gateway import LLMGateway
+
+    writer_health = RedisProviderHealthRegistry(redis_url=settings.celery_broker_url)
+    writer_health.reset()
+    gateway = LLMGateway(provider_health=writer_health)
+
+    async def rejected(**kwargs):
+        raise gemini_quota_error_for_this_file()
+
+    try:
+        with patch("app.core.llm.gateway.acompletion", new=AsyncMock(side_effect=rejected)):
+            with pytest.raises(Exception):
+                await gateway.generate(
+                    prompt="hi", model=GEMINI, allow_fallback=False, max_retries=0
+                )
+
+        # A completely independent instance -- nothing shared but Redis --
+        # must see the same state the gateway's own writer just produced.
+        reader = RedisProviderHealthRegistry(redis_url=settings.celery_broker_url)
+        reader_view = reader.status(GEMINI)
+        assert reader_view.status is ProviderStatus.QUOTA_EXHAUSTED
+        assert reader.is_blocked(GEMINI) is True
+    finally:
+        writer_health.reset()
+
+
+def gemini_quota_error_for_this_file() -> Exception:
+    """The same message shape LiteLLM raises for a spent Gemini daily
+    quota (matching `test_llm_resilience.py`'s `gemini_daily_quota_error`
+    convention: the gateway classifies by message content, not by
+    exception type, so a plain `Exception` with the right text is
+    enough), self-contained here rather than imported across test files."""
+    return Exception(
+        "litellm.RateLimitError: geminiException - {"
+        '"error": {"code": 429, "message": "You exceeded your current quota, '
+        'please check your plan and billing details.", "status": '
+        '"RESOURCE_EXHAUSTED", "details": [{"@type": '
+        '"type.googleapis.com/google.rpc.QuotaFailure", "violations": '
+        '[{"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}]}}'
+    )

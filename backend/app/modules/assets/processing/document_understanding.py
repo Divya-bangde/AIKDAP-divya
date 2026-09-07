@@ -198,12 +198,23 @@ class QwenDocumentUnderstandingService:
         sections = chunk_text(
             stripped, chunk_size=settings.qwen_max_input_characters, chunk_overlap=0
         )
-        logger.info(
-            "document_understanding_chunking",
-            character_count=len(stripped),
-            budget=settings.qwen_max_input_characters,
-            section_count=len(sections),
-        )
+        total_sections = len(sections)
+        if total_sections > settings.qwen_max_sections:
+            sections = sections[: settings.qwen_max_sections]
+            logger.warning(
+                "document_understanding_truncated",
+                character_count=len(stripped),
+                budget=settings.qwen_max_input_characters,
+                total_sections=total_sections,
+                processed_sections=len(sections),
+            )
+        else:
+            logger.info(
+                "document_understanding_chunking",
+                character_count=len(stripped),
+                budget=settings.qwen_max_input_characters,
+                section_count=len(sections),
+            )
         analyzed = [await self._analyze_section(section) for section in sections]
         return _merge_sections(analyzed)
 

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.logging.logger import get_logger
 from app.modules.assets.enums import EmbeddingStatus
+from app.modules.assets.processing.chunker import ProvenancedChunk
 from app.modules.assets.repository import AssetRepository
 from app.modules.knowledge_base.embeddings import EmbeddingProvider, get_embedding_provider
 from app.modules.knowledge_base.models import KnowledgeChunk
@@ -148,7 +149,8 @@ class KnowledgeBaseService:
         *,
         project_id: uuid.UUID,
         asset_id: uuid.UUID,
-        chunk_texts: list[str],
+        chunk_texts: list[str] | None = None,
+        chunks: list[ProvenancedChunk] | None = None,
     ) -> list[KnowledgeChunk]:
         """Replace all chunks for an asset with a freshly extracted set.
 
@@ -156,19 +158,44 @@ class KnowledgeBaseService:
         the public router). Deletes any chunks from a prior run first,
         so reprocessing an asset is idempotent rather than accumulating
         duplicates.
+
+        Accepts either bare `chunk_texts` (no provenance — used by
+        callers/tests that only care about content) or `chunks`
+        (Sprint 12.1's `ProvenancedChunk`, carrying page/sheet/section).
+        Exactly one must be supplied.
         """
+        if (chunk_texts is None) == (chunks is None):
+            raise ValueError("Pass exactly one of chunk_texts or chunks.")
+
         await self._repository.delete_by_asset(asset_id)
-        chunks = [
-            KnowledgeChunk(
-                project_id=project_id,
-                asset_id=asset_id,
-                chunk_index=index,
-                content=text,
-                embedding_status=EmbeddingStatus.PENDING,
-            )
-            for index, text in enumerate(chunk_texts)
-        ]
-        created = await self._repository.bulk_create(chunks)
+
+        if chunk_texts is not None:
+            rows = [
+                KnowledgeChunk(
+                    project_id=project_id,
+                    asset_id=asset_id,
+                    chunk_index=index,
+                    content=text,
+                    embedding_status=EmbeddingStatus.PENDING,
+                )
+                for index, text in enumerate(chunk_texts)
+            ]
+        else:
+            rows = [
+                KnowledgeChunk(
+                    project_id=project_id,
+                    asset_id=asset_id,
+                    chunk_index=index,
+                    content=chunk.text,
+                    page_number=chunk.page_number,
+                    sheet_name=chunk.sheet_name,
+                    section=chunk.section,
+                    embedding_status=EmbeddingStatus.PENDING,
+                )
+                for index, chunk in enumerate(chunks or [])
+            ]
+
+        created = await self._repository.bulk_create(rows)
         await self._session.commit()
         return created
 

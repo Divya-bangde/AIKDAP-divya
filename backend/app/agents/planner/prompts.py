@@ -101,11 +101,31 @@ Respond with a single JSON object and nothing else:
 {
   "answer": "the answer in markdown, with inline [c1]-style citations",
   "citation_ids": ["the ids you actually relied on"],
-  "grounding_status": "grounded" | "insufficient_evidence"
+  "grounding_status": "grounded" | "insufficient_evidence",
+  "claims": [
+    {
+      "claim_text": "the exact factual assertion, in your own words",
+      "claim_type": "numeric" | "categorical",
+      "claimed_value": "the exact number/percentage claimed, e.g. '73.5%' (omit for non-numeric claims)",
+      "scope": "aggregate" | "component" | null,
+      "source_reference_ids": ["the evidence ids this specific claim relies on"],
+      "attributed_to_primary": true
+    }
+  ]
 }
 
 Use "insufficient_evidence" when the evidence cannot answer the question.
-In that case, "answer" must explain what is missing and "citation_ids" must be empty."""
+In that case, "answer" must explain what is missing and "citation_ids" must be empty.
+
+List every distinct factual claim your answer makes as its own entry in
+"claims", each bound to the exact evidence id(s) that support THAT claim
+specifically (not just any id used elsewhere in the answer). Use
+scope="aggregate" only when the claim states an overall/total figure
+across everything the evidence describes; use scope="component" when it
+states a figure for one named part (a specific strategy, tier, category,
+or item). Leave "claimed_value" and "scope" null for claims that are not
+about a specific number. "claims" may be empty if the answer makes no
+distinct factual assertions beyond citing evidence."""
 
 GROUNDED_SYNTHESIS_USER_TEMPLATE = """Question:
 {query}

@@ -46,6 +46,16 @@ class KnowledgeChunk(BaseModel):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Sprint 12.1: provenance from the extracted unit this chunk came
+    # from. All nullable and format-dependent — a PDF chunk has
+    # `page_number`, an XLSX chunk has `sheet_name`, a plain-text chunk
+    # has none of the three. Never more than one of `page_number`/
+    # `sheet_name` is meaningful for a given chunk; `section` (a
+    # heading, slide title) can accompany either or stand alone.
+    page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sheet_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    section: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
     embedding_status: Mapped[EmbeddingStatus] = mapped_column(
         SQLEnum(
             EmbeddingStatus,

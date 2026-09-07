@@ -1,0 +1,252 @@
+{
+  "benchmark_suite": "sprint16-phase7a-container-runtime",
+  "generated_at": "2026-09-03T06:29:13.060253+00:00",
+  "docker_version": " Version:           29.5.3",
+  "host_context": "MINGW64_NT-10.0-26200 LAPTOP-DT3ISMUG 3.6.7-fb42d713.x86_64 2026-03-29 11:44 UTC x86_64 Msys",
+  "parts": {
+    "A_host_evidence": {
+      "docker_version_stdout": "Client:\n Version:           29.5.3\n API version:       1.54\n Go version:        go1.26.4\n Git commit:        d1c06ef\n Built:             Wed Jun  3 18:03:06 2026\n OS/Arch:           windows/amd64\n Context:           desktop-linux\n\nServer: Docker Desktop 4.79.0 (230596)\n Engine:\n  Version:          29.5.3\n  API version:      1.54 (minimum version 1.40)\n  Go version:       go1.26.4\n  Git commit:       285b471\n  Built:            Wed Jun  3 17:59:56 2026\n  OS/Arch:          linux/amd64\n  Experimental:     false\n containerd:\n  Version:          v2.2.5\n  GitCommit:        e53c7c1516c3b2bff98eb76f1f4117477e6f4e66\n runc:\n  Version:          1.3.6\n  GitCommit:        v1.3.6-0-g491b69ba\n docker-init:\n  Version:          0.19.0\n  GitCommit:        de40ad0\n",
+      "docker_info_stdout": "Client:\n Version:    29.5.3\n Context:    desktop-linux\n Debug Mode: false\n Plugins:\n  agent: Docker AI Agent Runner (Docker Inc.)\n    Version:  v1.79.0\n    Path:     C:\\Program Files\\Docker\\cli-plugins\\docker-agent.exe\n  ai: Docker AI Agent - Ask Gordon (Docker Inc.)\n    Version:  v1.25.0\n    Path:     C:\\Program Files\\Docker\\cli-plugins\\docker-ai.exe\n  buildx: Docker Buildx (Docker Inc.)\n    Version:  v0.34.1-desktop.1\n    Path:     C:\\Program Files\\Docker\\cli-plugins\\docker-buildx.exe\n  compose: Docker Compose (Docker Inc.)\n    Version:  v5.1.4\n    Path:     C:\\Program Files\\Docker\\cli-plugins\\docker-compose.exe\n  debug: Get a shell into any image or container (Docker Inc.)\n    Version:  0.0.47\n    Path:     C:\\Program Files\\Docker\\cli-plugins\\docker-debug.exe\n  desktop: Docker Desktop commands (Docker Inc.)\n    Version:  v0.4.1\n    Path:     C:\\Program Files\\Docker\\cli-plugins\\docker-desktop.exe\n  dhi: CLI for managing Docker Hardened Images (Docker Inc.)\n    Version:  v0.0.4\n    Path:     C:\\Program Files\\Docker\\cli-plugins\\docker-dhi.exe\n  extension: Manages Docker extensions (Docker Inc.)\n    Version:  v0.2.31\n    Path:     C:\\Program Files\\Docker\\cli-plugins\\docker-extension.exe\n  init: Creates Docker-related starter files for your project (Docker Inc.)\n    Version:  v1.4.0\n    Path:     C:\\Program Files\\Docker\\cli-plugins\\docker-init.exe\n  mcp: Docker MCP Plugin (Docker Inc.)\n    Version:  v0.42.2\n    Path:     C:\\Program Files\\Docker\\cli-plugins\\docker-mcp.exe\n  model: Docker Model Runner (Docker Inc.)\n    Version:  v1.2.1\n    Path:     C:\\Program Files\\Docker\\cli-plugins\\docker-model.exe\n  offload: Docker Offload (Docker Inc.)\n    Version:  v0.6.4\n    Path:     C:\\Program Files\\Docker\\cli-plugins\\docker-offload.exe\n  pass: Docker Pass Secrets Manager Plugin (beta) (Docker Inc.)\n    Version:  v0.1.5\n    Path:     C:\\Program Files\\Docker\\cli-plugins\\docker-pass.exe\n  sandbox: Docker Sandbox (Docker Inc.)\n    Version:  v0.12.0\n    Path:     C:\\Program Files\\Docker\\cli-plugins\\docker-sandbox.exe\n  scout: Docker Scout (Docker Inc.)\n    Version:  v1.21.0\n    Path:     C:\\Program Files\\Docker\\cli-plugins\\docker-scout.exe\n\nServer:\n Containers: 19\n  Running: 7\n  Paused: 0\n  Stopped: 12\n Images: 14\n Server Version: 29.5.3\n Storage Driver: overlayfs\n  driver-type: io.containerd.snapshotter.v1\n Logging Driver: json-file\n Cgroup Driver: cgroupfs\n Cgroup Version: 2\n Plugins:\n  Volume: local\n  Network: bridge host ipvlan macvlan null overlay\n  Log: awslogs fluentd gcplogs gelf journald json-file local splunk syslog\n CDI spec directories:\n  /etc/cdi\n  /var/run/cdi\n Discovered Devices:\n  cdi: docker.com/gpu=webgpu\n Swarm: inactive\n Runtimes: io.containerd.runc.v2 nvidia runc\n Default Runtime: runc\n Init Binary: docker-init\n containerd version: e53c7c1516c3b2bff98eb76f1f4117477e6f4e66\n runc version: v1.3.6-0-g491b69ba\n init version: de40ad0\n Security Options:\n  seccomp\n   Profile: builtin\n  cgroupns\n Kernel Version: 6.6.87.2-microsoft-standard-WSL2\n Operating System: Docker Desktop\n OSType: linux\n Architecture: x86_64\n CPUs: 20\n Total Memory: 7.568GiB\n Name: docker-desktop\n ID: f9d919b3-0565-41ef-a075-1bc0dff35456\n Docker Root Dir: /var/lib/docker\n Debug Mode: false\n HTTP Proxy: http.docker.internal:3128\n HTTPS Proxy: http.docker.internal:3128\n No Proxy: hubproxy.docker.internal\n Labels:\n  com.docker.desktop.address=npipe://\\\\.\\pipe\\docker_cli\n Experimental: false\n Insecure Registries:\n  hubproxy.docker.internal:5555\n  127.0.0.0/8\n  ::1/128\n Live Restore Enabled: false\n Firewall Backend: iptables\n\n",
+      "uname_a": "MINGW64_NT-10.0-26200 LAPTOP-DT3ISMUG 3.6.7-fb42d713.x86_64 2026-03-29 11:44 UTC x86_64 Msys"
+    },
+    "C_network_isolation": {
+      "postgres_compose_service": {
+        "target": "aikdap_postgres:5432",
+        "command": "docker run --rm --name phase7a-net-d6722889 --network none --memory 64m --cpus 0.5 python:3.12-slim python3 -c import socket,sys\ns=socket.socket(socket.AF_INET, socket.SOCK_STREAM)\ns.settimeout(3)\ntry:\n    s.connect(('aikdap_postgres', 5432))\n    print('CONNECTED')\nexcept Exception as e:\n    print('FAILED:' + type(e).__name__ + ':' + str(e))\n",
+        "exit_code": 0,
+        "stdout": "FAILED:gaierror:[Errno -3] Temporary failure in name resolution",
+        "stderr": "Unable to find image 'python:3.12-slim' locally\n3.12-slim: Pulling from library/python\nDigest: sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea\nStatus: Downloaded newer image for python:3.12-slim",
+        "elapsed_seconds": 12.047,
+        "network_reachable": false
+      },
+      "redis_compose_service": {
+        "target": "aikdap_redis:6379",
+        "command": "docker run --rm --name phase7a-net-53e864b4 --network none --memory 64m --cpus 0.5 python:3.12-slim python3 -c import socket,sys\ns=socket.socket(socket.AF_INET, socket.SOCK_STREAM)\ns.settimeout(3)\ntry:\n    s.connect(('aikdap_redis', 6379))\n    print('CONNECTED')\nexcept Exception as e:\n    print('FAILED:' + type(e).__name__ + ':' + str(e))\n",
+        "exit_code": 0,
+        "stdout": "FAILED:gaierror:[Errno -3] Temporary failure in name resolution",
+        "stderr": "",
+        "elapsed_seconds": 0.469,
+        "network_reachable": false
+      },
+      "ollama_host_gateway": {
+        "target": "host.docker.internal:11434",
+        "command": "docker run --rm --name phase7a-net-abeb83a0 --network none --memory 64m --cpus 0.5 python:3.12-slim python3 -c import socket,sys\ns=socket.socket(socket.AF_INET, socket.SOCK_STREAM)\ns.settimeout(3)\ntry:\n    s.connect(('host.docker.internal', 11434))\n    print('CONNECTED')\nexcept Exception as e:\n    print('FAILED:' + type(e).__name__ + ':' + str(e))\n",
+        "exit_code": 0,
+        "stdout": "FAILED:gaierror:[Errno -3] Temporary failure in name resolution",
+        "stderr": "",
+        "elapsed_seconds": 0.483,
+        "network_reachable": false
+      },
+      "cloud_metadata_endpoint": {
+        "target": "169.254.169.254:80",
+        "command": "docker run --rm --name phase7a-net-2888c648 --network none --memory 64m --cpus 0.5 python:3.12-slim python3 -c import socket,sys\ns=socket.socket(socket.AF_INET, socket.SOCK_STREAM)\ns.settimeout(3)\ntry:\n    s.connect(('169.254.169.254', 80))\n    print('CONNECTED')\nexcept Exception as e:\n    print('FAILED:' + type(e).__name__ + ':' + str(e))\n",
+        "exit_code": 0,
+        "stdout": "FAILED:OSError:[Errno 101] Network is unreachable",
+        "stderr": "",
+        "elapsed_seconds": 0.364,
+        "network_reachable": false
+      },
+      "public_internet": {
+        "target": "1.1.1.1:443",
+        "command": "docker run --rm --name phase7a-net-3946b8ed --network none --memory 64m --cpus 0.5 python:3.12-slim python3 -c import socket,sys\ns=socket.socket(socket.AF_INET, socket.SOCK_STREAM)\ns.settimeout(3)\ntry:\n    s.connect(('1.1.1.1', 443))\n    print('CONNECTED')\nexcept Exception as e:\n    print('FAILED:' + type(e).__name__ + ':' + str(e))\n",
+        "exit_code": 0,
+        "stdout": "FAILED:OSError:[Errno 101] Network is unreachable",
+        "stderr": "",
+        "elapsed_seconds": 0.411,
+        "network_reachable": false
+      },
+      "localhost": {
+        "target": "127.0.0.1:8000",
+        "command": "docker run --rm --name phase7a-net-8b401b18 --network none --memory 64m --cpus 0.5 python:3.12-slim python3 -c import socket,sys\ns=socket.socket(socket.AF_INET, socket.SOCK_STREAM)\ns.settimeout(3)\ntry:\n    s.connect(('127.0.0.1', 8000))\n    print('CONNECTED')\nexcept Exception as e:\n    print('FAILED:' + type(e).__name__ + ':' + str(e))\n",
+        "exit_code": 0,
+        "stdout": "FAILED:ConnectionRefusedError:[Errno 111] Connection refused",
+        "stderr": "",
+        "elapsed_seconds": 0.326,
+        "network_reachable": false
+      }
+    },
+    "D_filesystem_isolation": {
+      "isolation_probe": {
+        "command": "docker run --rm --name phase7a-fs-d9851975 --network none --memory 64m --cpus 0.5 python:3.12-slim python3 -c import os\nchecks = {\n    'root_listing': os.listdir('/'),\n    'app_source_dir_exists': os.path.isdir('/app') and bool(os.listdir('/app')) if os.path.isdir('/app') else False,\n    'dotenv_exists': os.path.exists('/app/.env') or os.path.exists('/.env'),\n    'host_c_drive_exists': os.path.exists('/c') or os.path.exists('/mnt/c'),\n    'docker_socket_exists': os.path.exists('/var/run/docker.sock'),\n    'postgres_data_marker': os.path.exists('/var/lib/postgresql/data'),\n    'uploads_dir_exists': os.path.exists('/app/uploads'),\n}\nimport json; print(json.dumps(checks))\n",
+        "exit_code": 0,
+        "stdout": "{\"root_listing\": [\"sbin\", \"mnt\", \"lib64\", \"media\", \"run\", \"root\", \"boot\", \"home\", \"etc\", \"usr\", \"proc\", \"srv\", \"lib\", \"dev\", \"var\", \"opt\", \"sys\", \"tmp\", \"bin\", \".dockerenv\"], \"app_source_dir_exists\": false, \"dotenv_exists\": false, \"host_c_drive_exists\": false, \"docker_socket_exists\": false, \"postgres_data_marker\": false, \"uploads_dir_exists\": false}",
+        "stderr": "",
+        "elapsed_seconds": 0.377
+      },
+      "mounts_probe": {
+        "command": "docker run -d --name phase7a-fs-mounts-565a1614 --network none --memory 64m --cpus 0.5 python:3.12-slim sleep 5 && docker inspect --format '{{json .Mounts}}' phase7a-fs-mounts-565a1614",
+        "docker_inspect_mounts_raw": "[]",
+        "mounts_present": false
+      }
+    },
+    "E_env_isolation": {
+      "command": "docker run --rm --name phase7a-env-3f016ac0 --network none --memory 64m --cpus 0.5 -e BENCH_MARKER=phase7a python:3.12-slim python3 -c python3 -c \"<print sorted env key names>\"",
+      "exit_code": 0,
+      "container_env_key_names": [
+        "BENCH_MARKER",
+        "GPG_KEY",
+        "HOME",
+        "HOSTNAME",
+        "LANG",
+        "PATH",
+        "PYTHON_SHA256",
+        "PYTHON_VERSION"
+      ],
+      "checked_secret_names": [
+        "GEMINI_API_KEY",
+        "GROQ_API_KEY",
+        "OPENROUTER_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "OPENAI_API_KEY",
+        "TAVILY_API_KEY",
+        "DATABASE_URL",
+        "CELERY_BROKER_URL",
+        "CELERY_RESULT_BACKEND",
+        "SECRET_KEY",
+        "POSTGRES_PASSWORD"
+      ],
+      "leaked_secret_names": [],
+      "secrets_absent": true,
+      "elapsed_seconds": 0.411
+    },
+    "F_startup_latency": {
+      "alpine_cold_start": {
+        "command": "docker run --rm --name phase7a-cold-48c3907a --network none alpine:3.19 true",
+        "image_was_cached_before": false,
+        "exit_code": 0,
+        "elapsed_seconds": 7.849
+      },
+      "alpine_warm_start": {
+        "repetitions": 7,
+        "min_seconds": 0.256,
+        "median_seconds": 0.271,
+        "max_seconds": 0.306,
+        "raw_seconds": [
+          0.267,
+          0.257,
+          0.301,
+          0.275,
+          0.306,
+          0.256,
+          0.271
+        ]
+      },
+      "python_slim_pull_or_cache_status": {
+        "image_was_cached_before": true
+      },
+      "python_slim_warm_start": {
+        "repetitions": 5,
+        "min_seconds": 0.254,
+        "median_seconds": 0.259,
+        "max_seconds": 0.309,
+        "raw_seconds": [
+          0.283,
+          0.309,
+          0.254,
+          0.256,
+          0.259
+        ]
+      }
+    },
+    "G_cpu_limit": {
+      "configured_cpu_limit": "0.5",
+      "workload_duration_seconds": 4,
+      "run_at_0.5_cpu": {
+        "command": "docker run --rm --name phase7a-cpu-007f3f79 --network none --cpus 0.5 --memory 64m python:3.12-slim python3 -c import time\ndeadline = time.time() + 4\niterations = 0\nwhile time.time() < deadline:\n    iterations += 1\nprint('iterations=' + str(iterations))\n",
+        "exit_code": 0,
+        "stdout": "iterations=22111353",
+        "elapsed_seconds": 4.302
+      },
+      "comparison_run_at_2.0_cpu": {
+        "command": "docker run --rm --name phase7a-cpu-cmp-dd266713 --network none --cpus 2.0 --memory 64m python:3.12-slim python3 -c import time\ndeadline = time.time() + 4\niterations = 0\nwhile time.time() < deadline:\n    iterations += 1\nprint('iterations=' + str(iterations))\n",
+        "exit_code": 0,
+        "stdout": "iterations=42106343",
+        "elapsed_seconds": 4.285
+      },
+      "interpretation_basis": "compare iteration counts between the two runs; a real CPU throttle should show materially fewer iterations at 0.5 CPU than at 2.0 CPU for the same wall-clock budget"
+    },
+    "H_memory_limit": {
+      "configured_memory_limit": "100m",
+      "command": "docker run --name phase7a-mem-00148769 --network none --memory 100m --memory-swap 100m python:3.12-slim python3 -c import time\nchunks = []\ntry:\n    for i in range(1, 40):\n        b = bytearray(20 * 1024 * 1024)\n        for j in range(0, len(b), 4096):\n            b[j] = 1\n        chunks.append(b)\n        print('allocated_mb=' + str(i * 20), flush=True)\n        time.sleep(0.05)\n    print('COMPLETED_WITHOUT_OOM')\nexcept MemoryError:\n    print('PYTHON_MEMORY_ERROR')\n",
+      "process_exit_code": 137,
+      "stdout_tail": "allocated_mb=20\nallocated_mb=40\nallocated_mb=60\nallocated_mb=80",
+      "stderr_tail": "",
+      "elapsed_seconds": 0.61,
+      "docker_inspect_oomkilled_exitcode_status": "true 137 exited",
+      "host_docker_daemon_responsive_after": true
+    },
+    "I_external_timeout": {
+      "workload_sleep_seconds": 120,
+      "external_timeout_budget_seconds": 5,
+      "start_command": "docker run -d --name phase7a-timeout-0c1b6739 --network none --memory 64m --cpus 0.5 python:3.12-slim python3 -c import time; time.sleep(120)",
+      "start_exit_code": 0,
+      "container_status_after_kill": "exited 137",
+      "container_exit_code_wait": "137",
+      "kill_to_confirmed_stopped_seconds": 0.138,
+      "container_still_running_after_kill": false,
+      "enforcement_mechanism": "host-side time.sleep() + docker kill, no signal.alarm, no in-container cooperation"
+    },
+    "J_cancellation": {
+      "start_command": "docker run -d --name phase7a-cancel-de061668 --network none --memory 64m --cpus 0.5 --pids-limit 32 python:3.12-slim python3 -c import subprocess, time\nchildren = [subprocess.Popen(['sleep', '300']) for _ in range(8)]\nprint('children_started=' + str(len(children)), flush=True)\ntime.sleep(300)\n",
+      "children_spawned_intended": 8,
+      "docker_top_before_cancel_process_line_count": 9,
+      "docker_top_before_cancel_raw": "UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD\nroot                4094                4069                5                   06:29               ?                   00:00:00            python3 -c import subprocess, time children = [subprocess.Popen(['sleep', '300']) for _ in range(8)] print('children_started=' + str(len(children)), flush=True) time.sleep(300)\nroot                4106                4094                0                   06:29               ?                   00:00:00            sleep 300\nroot                4107                4094                0                   06:29               ?                   00:00:00            sleep 300\nroot                4108                4094                0                   06:29               ?                   00:00:00            sleep 300\nroot                4109                4094                0                   06:29               ?                   00:00:00            sleep 300\nroot                4110                4094                0                   06:29               ?                   00:00:00            sleep 300\nroot                4111                4094                0                   06:29               ?                   00:00:00            sleep 300\nroot                4112                4094                0                   06:29               ?                   00:00:00            sleep 300\nroot                4113                4094                0                   06:29               ?                   00:00:00            sleep 300",
+      "cancel_command": "docker stop -t 5 phase7a-cancel-de061668",
+      "cancel_to_confirmed_stopped_seconds": 5.102,
+      "container_status_after_stop": "exited",
+      "docker_ps_after_stop": "phase7a-cancel-de061668\tExited (137) Less than a second ago"
+    },
+    "K_output_limit": {
+      "byte_ceiling": 1000000,
+      "total_lines_workload_would_emit_if_unbounded": 2000000,
+      "bytes_actually_collected": 1048576,
+      "host_stopped_reading_early": true,
+      "container_process_exit_code": 1,
+      "elapsed_seconds": 0.228,
+      "primitive_demonstrated": "host-side bounded read loop over docker run's stdout pipe; closing the pipe after the ceiling is reached causes the container's write to fail (broken pipe) rather than buffering the full unbounded output host-side",
+      "production_collector_note": "no production collector exists or was created; this only benchmarks the read-and-stop-early primitive a future collector would need to build on"
+    },
+    "L_cleanup": {
+      "terminate_command": "docker stop -t 3 phase7a-cleanup-e3fbfd73",
+      "terminate_to_stopped_seconds": 3.096,
+      "container_present_after_stop": true,
+      "remove_command": "docker rm phase7a-cleanup-e3fbfd73",
+      "stopped_to_removed_seconds": 0.06,
+      "container_fully_removed": true,
+      "orphan_check_docker_ps_a_phase7a_prefix": "",
+      "note": "the scratch file written inside the container's own writable layer is destroyed with the container on `docker rm`, since no volume was mounted for it -- verified by the absence of any bind mount in Part D's mounts probe"
+    },
+    "M_concurrency": {
+      "concurrent_container_count": 3,
+      "per_container_workload_seconds": 3,
+      "launch_call_seconds_each": [
+        0.009,
+        0.004,
+        0.005
+      ],
+      "results": [
+        {
+          "name": "phase7a-conc0-2b4783f3",
+          "exit_code": 0,
+          "stdout": "done"
+        },
+        {
+          "name": "phase7a-conc1-b4c57361",
+          "exit_code": 0,
+          "stdout": "done"
+        },
+        {
+          "name": "phase7a-conc2-90299b8e",
+          "exit_code": 0,
+          "stdout": "done"
+        }
+      ],
+      "all_succeeded": true,
+      "total_wall_seconds_for_all_n": 3.398,
+      "sequential_would_have_taken_at_least_seconds": 9,
+      "host_docker_ps_after_seconds": 0.094,
+      "host_responsive_after": true,
+      "caveat": "n=3 is a safety-bounded sample, not a production concurrency-cap measurement; see Phase 7 design review Section 10/28 for what a real cap derivation would require"
+    }
+  }
+}

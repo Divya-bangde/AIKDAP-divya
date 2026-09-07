@@ -32,6 +32,13 @@ class KnowledgeChunkRead(BaseModel):
     chunk_index: int
     content: str
     token_count: int | None
+    #: Sprint 12.1: where this chunk came from within its source asset,
+    #: when the extractor recorded a locator — a PDF page number, an
+    #: XLSX sheet name, a DOCX/HTML heading or PPTX slide title. `None`
+    #: for chunks with no such structure (plain text, CSV).
+    page_number: int | None = None
+    sheet_name: str | None = None
+    section: str | None = None
     embedding_status: EmbeddingStatus
     embedding_provider: EmbeddingProviderName | None
     created_at: datetime

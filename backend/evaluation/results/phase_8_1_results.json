@@ -1,0 +1,385 @@
+{
+  "phase": "Sprint 16 Phase 8.1 -- Evaluation Harness & Evidence Intelligence Benchmark",
+  "generated_at": "2026-09-05T12:43:04.277501+00:00",
+  "track_a_relevance": {
+    "row_count": 77,
+    "production_fixture_rows": 70,
+    "phase_8_1_curated_rows": 7,
+    "policies": {
+      "gate_off": {
+        "tp": 14,
+        "fp": 63,
+        "fn": 0,
+        "tn": 0,
+        "precision": 0.1818,
+        "recall": 1.0,
+        "f1": 0.3077,
+        "fpr": 1.0
+      },
+      "baseline_naive_threshold_0.0": {
+        "tp": 8,
+        "fp": 2,
+        "fn": 6,
+        "tn": 61,
+        "precision": 0.8,
+        "recall": 0.5714,
+        "f1": 0.6667,
+        "fpr": 0.0317
+      },
+      "production_calibrated_threshold": {
+        "tp": 12,
+        "fp": 2,
+        "fn": 2,
+        "tn": 61,
+        "precision": 0.8571,
+        "recall": 0.8571,
+        "f1": 0.8571,
+        "fpr": 0.0317,
+        "threshold_value": -2.0
+      },
+      "phase_8_1_auto_calibrated_threshold": {
+        "tp": 12,
+        "fp": 2,
+        "fn": 2,
+        "tn": 61,
+        "precision": 0.8571,
+        "recall": 0.8571,
+        "f1": 0.8571,
+        "fpr": 0.0317,
+        "threshold_value": -1.6
+      }
+    }
+  },
+  "track_b_evidence_intelligence": {
+    "provenance": "Hand-curated by Sprint 16 Phase 8.1. All scenario text is synthetic/authored for this benchmark, not extracted from real ingested documents (SYNTHETIC). The validation/verification code each scenario is run through is REAL, unmodified production code.",
+    "citation_grounding": {
+      "llm_only_accuracy": 0.6,
+      "llm_plus_verification_accuracy": 1.0,
+      "llm_only_report": {
+        "grounded": {
+          "grounded": 1
+        },
+        "partially_grounded": {
+          "grounded": 1
+        },
+        "insufficient_evidence": {
+          "grounded": 1,
+          "insufficient_evidence": 2
+        }
+      },
+      "verified_report": {
+        "grounded": {
+          "grounded": 1
+        },
+        "partially_grounded": {
+          "partially_grounded": 1
+        },
+        "insufficient_evidence": {
+          "insufficient_evidence": 3
+        }
+      },
+      "examples": [
+        {
+          "id": "cg-01",
+          "description": "Faithful model: cites only supplied evidence, claims grounded.",
+          "claimed": "grounded",
+          "gold": "grounded",
+          "verified": "grounded",
+          "verification_corrected_a_wrong_claim": false
+        },
+        {
+          "id": "cg-02",
+          "description": "Hallucinated citation: model cites an id never supplied, still claims grounded.",
+          "claimed": "grounded",
+          "gold": "partially_grounded",
+          "verified": "partially_grounded",
+          "verification_corrected_a_wrong_claim": true
+        },
+        {
+          "id": "cg-03",
+          "description": "Fully fabricated answer: every cited id is hallucinated, model still claims grounded.",
+          "claimed": "grounded",
+          "gold": "insufficient_evidence",
+          "verified": "insufficient_evidence",
+          "verification_corrected_a_wrong_claim": true
+        },
+        {
+          "id": "cg-04",
+          "description": "Honest model: no evidence supplied, model correctly reports insufficient_evidence.",
+          "claimed": "insufficient_evidence",
+          "gold": "insufficient_evidence",
+          "verified": "insufficient_evidence",
+          "verification_corrected_a_wrong_claim": false
+        },
+        {
+          "id": "cg-05",
+          "description": "Model under-claims: cites nothing despite valid evidence being supplied and usable.",
+          "claimed": "insufficient_evidence",
+          "gold": "insufficient_evidence",
+          "verified": "insufficient_evidence",
+          "verification_corrected_a_wrong_claim": false
+        }
+      ]
+    },
+    "cross_paper_structural": {
+      "note": "predicted=validator_passed, actual=gold_should_pass -- a mismatch means the real validator disagreed with the gold label (either missed a real flaw, or rejected valid output).",
+      "metrics": {
+        "tp": 1,
+        "fp": 1,
+        "fn": 0,
+        "tn": 3,
+        "precision": 0.5,
+        "recall": 1.0,
+        "f1": 0.6667,
+        "fpr": 0.25
+      },
+      "examples": [
+        {
+          "id": "xp-01",
+          "description": "Valid comparison: every item has source references pointing to known papers, hypothesis is modal.",
+          "gold_should_pass": true,
+          "actually_passed": true,
+          "violation_rule": null,
+          "caught_by_real_validator": true
+        },
+        {
+          "id": "xp-02",
+          "description": "Structural violation: comparison item has no source references at all.",
+          "gold_should_pass": false,
+          "actually_passed": false,
+          "violation_rule": "missing_source_references",
+          "caught_by_real_validator": true
+        },
+        {
+          "id": "xp-03",
+          "description": "Structural violation: comparison item cites a paper id that was never supplied (hallucinated source).",
+          "gold_should_pass": false,
+          "actually_passed": false,
+          "violation_rule": "invalid_source_reference",
+          "caught_by_real_validator": true
+        },
+        {
+          "id": "xp-04",
+          "description": "Structural violation: hypothesis uses deterministic language instead of modal.",
+          "gold_should_pass": false,
+          "actually_passed": false,
+          "violation_rule": "deterministic_hypothesis_language",
+          "caught_by_real_validator": true
+        },
+        {
+          "id": "xp-05",
+          "description": "SEMANTIC violation NOT caught by the real structural validator: primary_claim is stated about the primary paper, but its only source_reference is a supporting paper -- exactly the 'merge primary and supporting evidence' failure the constitution forbids, and the current validator has no rule for it.",
+          "gold_should_pass": false,
+          "actually_passed": true,
+          "violation_rule": "primary_supporting_merge_not_structurally_detectable",
+          "caught_by_real_validator": false
+        }
+      ],
+      "detected_but_not_structurally_catchable": [
+        "xp-05"
+      ]
+    },
+    "sufficiency_gap_contradiction": {
+      "note": "No production code verifies sufficiency/gap/contradiction claims against source text (confirmed absent by codebase survey) -- 'LLM-only' is the entire pipeline. 'llm_plus_verification_catch_rate' is reported as 0.0 by construction, not measured error: there is nothing for a harness to invoke that would catch these injected errors, which is the gap this section documents.",
+      "llm_only_sufficiency_accuracy": 0.5,
+      "llm_only_sufficiency_report": {
+        "sufficient": {
+          "sufficient": 1,
+          "insufficient": 1
+        },
+        "insufficient": {
+          "insufficient": 1,
+          "sufficient": 1
+        },
+        "ambiguous": {
+          "ambiguous": 1,
+          "sufficient": 1
+        }
+      },
+      "injected_error_scenarios": 3,
+      "llm_plus_verification_catch_rate": 0.0,
+      "examples": [
+        {
+          "id": "sgc-01",
+          "description": "Correct, honest sufficiency claim: paper fully answers the stated goal.",
+          "claimed_sufficiency": "sufficient",
+          "gold_sufficiency": "sufficient",
+          "sufficiency_claim_correct": true,
+          "gaps_match_gold": true,
+          "conflicts_match_gold": true,
+          "is_flawed_llm_output": false
+        },
+        {
+          "id": "sgc-02",
+          "description": "Correct, honest insufficiency claim with a REQUIRED gap named.",
+          "claimed_sufficiency": "insufficient",
+          "gold_sufficiency": "insufficient",
+          "sufficiency_claim_correct": true,
+          "gaps_match_gold": true,
+          "conflicts_match_gold": true,
+          "is_flawed_llm_output": false
+        },
+        {
+          "id": "sgc-03",
+          "description": "Correctly reports an internal contradiction between abstract and results table.",
+          "claimed_sufficiency": "ambiguous",
+          "gold_sufficiency": "ambiguous",
+          "sufficiency_claim_correct": true,
+          "gaps_match_gold": true,
+          "conflicts_match_gold": true,
+          "is_flawed_llm_output": false
+        },
+        {
+          "id": "sgc-04",
+          "description": "INJECTED ERROR: model over-claims sufficient when a REQUIRED variable (loss function) is actually never stated in the source text. No backend check exists to catch this today.",
+          "claimed_sufficiency": "sufficient",
+          "gold_sufficiency": "insufficient",
+          "sufficiency_claim_correct": false,
+          "gaps_match_gold": false,
+          "conflicts_match_gold": true,
+          "is_flawed_llm_output": true
+        },
+        {
+          "id": "sgc-05",
+          "description": "INJECTED ERROR: model silently drops a real numeric contradiction present in the source text (94% vs 91%) and reports no conflicts. No backend check exists to catch this today.",
+          "claimed_sufficiency": "sufficient",
+          "gold_sufficiency": "ambiguous",
+          "sufficiency_claim_correct": false,
+          "gaps_match_gold": true,
+          "conflicts_match_gold": false,
+          "is_flawed_llm_output": true
+        },
+        {
+          "id": "sgc-06",
+          "description": "INJECTED ERROR: model misclassifies an OPTIONAL gap (extra ablation study) as REQUIRED, inflating perceived insufficiency. No backend check exists to catch this today.",
+          "claimed_sufficiency": "insufficient",
+          "gold_sufficiency": "sufficient",
+          "sufficiency_claim_correct": false,
+          "gaps_match_gold": false,
+          "conflicts_match_gold": true,
+          "is_flawed_llm_output": true
+        }
+      ]
+    },
+    "evidence_state": {
+      "accuracy": 1.0,
+      "per_class": {
+        "verified": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "derived": {
+          "tp": 2,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "supporting": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "unknown": {
+          "tp": 3,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "contradicted": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        }
+      },
+      "confusion_matrix": {
+        "verified": {
+          "verified": 1
+        },
+        "derived": {
+          "derived": 2
+        },
+        "supporting": {
+          "supporting": 1
+        },
+        "unknown": {
+          "unknown": 3
+        },
+        "contradicted": {
+          "contradicted": 1
+        }
+      },
+      "examples": [
+        {
+          "id": "es-01",
+          "description": "Explicit fact, backend-accepted citation.",
+          "predicted": "verified",
+          "gold": "verified",
+          "correct": true
+        },
+        {
+          "id": "es-02",
+          "description": "Interpreted value, no citation check applies (document-understanding path).",
+          "predicted": "derived",
+          "gold": "derived",
+          "correct": true
+        },
+        {
+          "id": "es-03",
+          "description": "Strongly supported but not verbatim-explicit.",
+          "predicted": "derived",
+          "gold": "derived",
+          "correct": true
+        },
+        {
+          "id": "es-04",
+          "description": "Supporting-paper evidence backing a claim, not itself the primary source.",
+          "predicted": "supporting",
+          "gold": "supporting",
+          "correct": true
+        },
+        {
+          "id": "es-05",
+          "description": "No source pointer at all.",
+          "predicted": "unknown",
+          "gold": "unknown",
+          "correct": true
+        },
+        {
+          "id": "es-06",
+          "description": "Model's own certainty is UNKNOWN.",
+          "predicted": "unknown",
+          "gold": "unknown",
+          "correct": true
+        },
+        {
+          "id": "es-07",
+          "description": "Cross-paper relationship is CONTRADICTS.",
+          "predicted": "contradicted",
+          "gold": "contradicted",
+          "correct": true
+        },
+        {
+          "id": "es-08",
+          "description": "Citation claimed by the model but rejected by the real validator (hallucinated) -- must NOT be verified.",
+          "predicted": "unknown",
+          "gold": "unknown",
+          "correct": true
+        }
+      ]
+    }
+  }
+}

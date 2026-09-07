@@ -28,14 +28,16 @@ from app.core.logging.logger import get_logger
 from app.modules.assets.ai_profile import AIProfile, AIProfileStatus
 from app.modules.assets.enums import AssetProcessingStatus, EmbeddingStatus
 from app.modules.assets.models import Asset
-from app.modules.assets.processing.chunker import chunk_text
+from app.modules.assets.processing.chunker import chunk_document
 from app.modules.assets.processing.document_understanding import (
     DocumentUnderstandingError,
     QwenDocumentUnderstandingService,
     get_document_understanding_service,
 )
 from app.modules.assets.processing.extractors import (
+    ExtractionFailedError,
     ExtractionNotSupportedError,
+    OcrRequiredError,
     get_text_extractor,
 )
 from app.modules.assets.repository import AssetRepository
@@ -93,30 +95,49 @@ class AssetProcessingService:
         try:
             content = await self._storage.read(asset.storage_path)
             extractor = get_text_extractor(asset.mime_type)
-            text = await extractor.extract(content)
+            extracted = await extractor.extract(content)
+
+            if extracted.warnings:
+                logger.info(
+                    "asset_extraction_warnings",
+                    asset_id=str(asset_id),
+                    warnings=extracted.warnings,
+                )
 
             asset.processing_status = AssetProcessingStatus.CHUNKING
             await self._session.commit()
 
-            chunk_texts = chunk_text(
-                text, chunk_size=self._chunk_size, chunk_overlap=self._chunk_overlap
+            provenanced_chunks = chunk_document(
+                extracted, chunk_size=self._chunk_size, chunk_overlap=self._chunk_overlap
             )
+            if not provenanced_chunks:
+                # A supported format that parsed successfully but
+                # yielded no usable content (a genuinely blank DOCX, an
+                # empty spreadsheet). Never reported as COMPLETED with
+                # zero chunks -- FAILED, with a reason a user can
+                # actually act on.
+                raise ExtractionFailedError(
+                    "No extractable content found in this file "
+                    "(the document parsed successfully but appears to be empty)."
+                )
             chunks = await self._knowledge_base.replace_chunks_for_asset(
-                project_id=asset.project_id, asset_id=asset.id, chunk_texts=chunk_texts
+                project_id=asset.project_id, asset_id=asset.id, chunks=provenanced_chunks
             )
 
             asset.processing_status = AssetProcessingStatus.COMPLETED
             asset.processing_completed_at = datetime.now(timezone.utc)
             await self._session.commit()
             logger.info(
-                "asset_processing_completed", asset_id=str(asset_id), chunk_count=len(chunk_texts)
+                "asset_processing_completed",
+                asset_id=str(asset_id),
+                chunk_count=len(provenanced_chunks),
             )
 
             # Best-effort from here: the deterministic pipeline already
             # succeeded and `processing_status` is final. Neither the
             # Qwen nor the embedding step below can change it — only
             # `ai_profile` / each chunk's own `embedding_status`.
-            await self._run_ai_understanding(asset, text)
+            await self._run_ai_understanding(asset, extracted.full_text)
             await self._run_embedding(asset, chunks)
 
         except ExtractionNotSupportedError as exc:
@@ -125,6 +146,30 @@ class AssetProcessingService:
             asset.processing_completed_at = datetime.now(timezone.utc)
             await self._session.commit()
             logger.info("asset_processing_unsupported", asset_id=str(asset_id), reason=str(exc))
+
+        except OcrRequiredError as exc:
+            # Sprint 12.1: the file IS a supported format and DID parse
+            # structurally -- it's a scanned document with zero
+            # machine-readable text. Distinct from both UNSUPPORTED (no
+            # extractor exists at all) and FAILED (the bytes didn't
+            # parse), so the frontend can say something specific
+            # ("this needs OCR") instead of a generic failure.
+            asset.processing_status = AssetProcessingStatus.OCR_REQUIRED
+            asset.processing_error = str(exc)
+            asset.processing_completed_at = datetime.now(timezone.utc)
+            await self._session.commit()
+            logger.info("asset_processing_ocr_required", asset_id=str(asset_id), reason=str(exc))
+
+        except ExtractionFailedError as exc:
+            # A supported format whose bytes didn't actually parse:
+            # corrupted, truncated, or password-protected. Recorded as
+            # FAILED (not UNSUPPORTED) — this format works in general,
+            # this specific file is broken.
+            asset.processing_status = AssetProcessingStatus.FAILED
+            asset.processing_error = str(exc)
+            asset.processing_completed_at = datetime.now(timezone.utc)
+            await self._session.commit()
+            logger.info("asset_processing_extraction_failed", asset_id=str(asset_id), reason=str(exc))
 
         except Exception as exc:  # noqa: BLE001 - recorded on the asset, not swallowed
             asset.processing_status = AssetProcessingStatus.FAILED

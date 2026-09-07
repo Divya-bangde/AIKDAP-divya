@@ -48,7 +48,11 @@ describe("UploadDropzone", () => {
 
   it("names the exact formats the backend can actually extract", () => {
     renderWithProviders(<UploadDropzone projectId="project-1" />);
-    expect(screen.getByText(/Supported formats: \.txt, \.csv, \.md, \.json/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Supported formats: \.txt, \.csv, \.md, \.json, \.html, \.htm, \.pdf, \.docx, \.xlsx, \.pptx, \.png, \.jpg, \.jpeg, \.gif, \.webp/,
+      ),
+    ).toBeInTheDocument();
   });
 
   it("uploads the selected file and shows a loading state while it's in flight", async () => {

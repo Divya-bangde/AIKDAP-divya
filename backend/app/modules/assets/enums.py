@@ -54,6 +54,14 @@ class AssetProcessingStatus(str, enum.Enum):
     extractor is implemented yet for the asset's MIME type (a known,
     expected gap), as opposed to `FAILED`, which means something broke
     while processing a MIME type we do support.
+
+    `OCR_REQUIRED` (Sprint 12.1) is a third, equally deliberate terminal
+    state: the file parsed structurally (it IS a valid PDF) but
+    contained zero machine-readable text — the signature of a scanned
+    document. Distinct from both `UNSUPPORTED` (we don't have any
+    extractor for this MIME type at all) and `FAILED` (the file didn't
+    parse) — this format IS supported, this specific file just needs
+    OCR, which isn't available yet.
     """
 
     PENDING = "pending"
@@ -64,3 +72,4 @@ class AssetProcessingStatus(str, enum.Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     UNSUPPORTED = "unsupported"
+    OCR_REQUIRED = "ocr_required"

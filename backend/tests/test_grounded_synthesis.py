@@ -655,11 +655,13 @@ async def test_synthesis_node_records_grounding_and_model_metadata(litellm_call)
     documents = [asset_document(0, "ABC Poultry produced 1.2 million tonnes.")]
     litellm_call.return_value = model_reply(citation_ids=["c1", "ghost"])
 
+    from app.core.llm.gateway import LLMGateway
     dependencies = GraphDependencies(
         planner=get_planner(),
         asset_retriever=None,
         web_provider=None,
         synthesizer=GroundedSynthesizer(gateway=LLMGateway(), model=SYNTHESIS_MODEL),
+        llm_gateway=LLMGateway(),
     )
     state = {
         "run_id": str(uuid.uuid4()),
@@ -751,11 +753,13 @@ async def test_asset_retrieval_scopes_the_search_to_the_run_owner():
 
     owner_id = uuid.uuid4()
     project_id = uuid.uuid4()
+    from app.core.llm.gateway import LLMGateway
     dependencies = GraphDependencies(
         planner=get_planner(),
         asset_retriever=RecordingRetriever(),
         web_provider=None,
         synthesizer=ExtractiveSynthesizer(),
+        llm_gateway=LLMGateway(),
     )
 
     await asset_retrieval_node(

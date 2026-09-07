@@ -8,7 +8,9 @@ look.
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
+
+from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -19,6 +21,30 @@ from app.modules.research.enums import (
     ResearchStepStatus,
 )
 from app.modules.research.models import AgentMessage, ResearchRun
+
+# `ClaimSupport` (claim_verification.py) and `EvidenceState`
+# (evidence_state.py) are not imported here even though `VerifiedClaimRead`
+# below mirrors their values exactly: both of those modules import FROM
+# this one (`ResearchCertainty`, `ComparisonRelationship`), so this file
+# is upstream of them -- importing back would be circular. The `Literal`
+# aliases below name the identical values as the single source of
+# truth, not a second taxonomy.
+ClaimVerdictValue = Literal["supported", "contradicted", "insufficient_evidence", "unverifiable"]
+EvidenceStateValue = Literal["verified", "derived", "supporting", "unknown", "contradicted"]
+
+
+class ResearchWorkspaceContext(BaseModel):
+    """Explicit application state used to safely resolve ambiguous queries."""
+    
+    active_entity: str | None = Field(
+        default=None, description="The currently selected company or entity in the UI."
+    )
+    active_asset_id: uuid.UUID | None = Field(
+        default=None, description="The currently selected document ID in the UI."
+    )
+    active_research_document_id: uuid.UUID | None = Field(
+        default=None, description="The currently selected research paper ID."
+    )
 
 
 class ResearchRunCreate(BaseModel):
@@ -36,6 +62,10 @@ class ResearchRunCreate(BaseModel):
         default=True, description="Gather external references (simulated in this release)."
     )
     max_results: int = Field(default=5, ge=1, le=20)
+    
+    workspace_context: ResearchWorkspaceContext | None = Field(
+        default=None, description="Explicit UI state for resolving ambiguous queries."
+    )
 
 
 class ResearchRunAccepted(BaseModel):
@@ -62,6 +92,101 @@ class ResearchRunAccepted(BaseModel):
             query=run.query,
             created_at=run.created_at,
         )
+
+
+# ---------------------------------------------------------------------------
+# Grounded synthesis claims (Sprint 16 Phase 8.7)
+# ---------------------------------------------------------------------------
+#
+# Phase 8.6 found that parsing claims back out of the model's free-text
+# markdown answer is the bottleneck (formatting, paraphrase,
+# segmentation all break a hand-written parser). The fix is not a
+# better parser: `GroundedSynthesizer` already asks the model for
+# structured JSON, so the model is asked to emit its claims as part of
+# that same JSON instead of a second pass over its own prose.
+
+
+class SynthesisClaimType(str, Enum):
+    NUMERIC = "numeric"
+    CATEGORICAL = "categorical"
+
+
+class SynthesisClaimScope(str, Enum):
+    AGGREGATE = "aggregate"
+    COMPONENT = "component"
+
+
+class SynthesisClaim(BaseModel):
+    """One factual claim, exactly as the model returned it.
+
+    Untrusted model output, not a verified fact: `claim_type` and
+    `scope` are the model's own classification of what it just said,
+    and `source_reference_ids` are citation ids it says back it --
+    schema-valid does not mean supported. `synthesis._verify_claims`
+    is what actually checks each of these against the evidence the
+    model was given, using the real Phase 8.5 deterministic checks.
+    """
+
+    claim_text: str
+    claim_type: SynthesisClaimType
+    claimed_value: str | None = None
+    scope: SynthesisClaimScope | None = None
+    source_reference_ids: list[str] = Field(default_factory=list)
+    #: Whether the model attributes this claim to the primary paper
+    #: (`True`) rather than a supporting one. Always `True` in the
+    #: single-project grounded-synthesis path, which has no
+    #: primary/supporting concept of its own -- carried here so the
+    #: field exists when a future cross-paper-aware caller needs it.
+    #: Primary/supporting contamination stays a separate check
+    #: (`detect_primary_supporting_contamination`), not folded in here.
+    attributed_to_primary: bool = True
+
+
+class GroundedSynthesisResponse(BaseModel):
+    """The full JSON-schema-enforced envelope `GroundedSynthesizer` requests.
+
+    Passed to the gateway as `response_format={"type": "json_schema", ...}`
+    -- the same pattern Phase 8.2/8.3 already proved on
+    `ResearchDocumentUnderstanding`, not a new mechanism.
+    """
+
+    answer: str
+    citation_ids: list[str] = Field(default_factory=list)
+    grounding_status: str | None = None
+    claims: list[SynthesisClaim] = Field(default_factory=list)
+
+
+class VerifiedClaimRead(BaseModel):
+    """One claim after real, deterministic verification -- what the
+    Claim Evidence Panel renders.
+
+    Persisted inside `research_runs.citations` JSONB, alongside
+    ordinary citation objects, tagged `kind="claim"` so
+    `ResearchRunDetail.from_model` can split the two back apart at read
+    time without a schema migration.
+    """
+
+    kind: Literal["claim"] = "claim"
+    claim_text: str
+    claim_type: SynthesisClaimType
+    claimed_value: str | None = None
+    scope: SynthesisClaimScope | None = None
+    #: Citation ids the model gave for this claim that were actually
+    #: supplied to it -- the only ones the verifier checked against.
+    source_reference_ids: list[str] = Field(default_factory=list)
+    #: Ids the model gave for this claim that were never supplied at
+    #: all (rejected the same way top-level citation ids are). A claim
+    #: can carry both a valid and an invented id at once.
+    unresolved_citation_ids: list[str] = Field(default_factory=list)
+    attributed_to_primary: bool = True
+    #: `ClaimSupport` value (claim_verification.py) -- see
+    #: `ClaimVerdictValue`'s comment for why this is a `Literal`
+    #: rather than the enum type itself.
+    verdict: ClaimVerdictValue
+    #: `EvidenceState` value (evidence_state.py).
+    evidence_state: EvidenceStateValue
+    matched_evidence_ids: list[str] = Field(default_factory=list)
+    reason: str = ""
 
 
 class ResearchRunRead(BaseModel):
@@ -157,3 +282,190 @@ class ResearchRunDetail(ResearchRunRead):
 
     steps: list[ResearchStepRead] = Field(default_factory=list)
     messages: list[AgentMessageRead] = Field(default_factory=list)
+    #: Verified claims, split out of `citations` (see `from_model`) so a
+    #: client never has to distinguish claim entries from ordinary
+    #: citation entries itself.
+    claims: list[VerifiedClaimRead] = Field(default_factory=list)
+
+    @classmethod
+    def from_model(
+        cls,
+        run: ResearchRun,
+        *,
+        steps: list[ResearchStepRead],
+        messages: list[AgentMessageRead],
+    ) -> "ResearchRunDetail":
+        """Build the detail response, splitting claims out of `citations`.
+
+        `run.citations` is one JSONB array carrying both ordinary
+        citation dicts and claim dicts (`kind="claim"`) -- see
+        `nodes.synthesis_node`. This is the one place that split
+        happens, so every other reader of `ResearchRunDetail.citations`
+        keeps seeing exactly the citation shape it always has.
+        """
+        base = ResearchRunRead.model_validate(run)
+        raw = base.citations or []
+        claims = [VerifiedClaimRead.model_validate(item) for item in raw if item.get("kind") == "claim"]
+        citations = [item for item in raw if item.get("kind") != "claim"]
+        return cls(
+            **{**base.model_dump(), "citations": citations},
+            steps=steps,
+            messages=messages,
+            claims=claims,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Research Document Understanding (Sprint 16)
+# ---------------------------------------------------------------------------
+
+class ResearchCertainty(str, Enum):
+    EXPLICIT = "explicit"
+    STRONGLY_SUPPORTED = "strongly_supported"
+    INTERPRETED = "interpreted"
+    UNKNOWN = "unknown"
+
+class GapClassification(str, Enum):
+    REQUIRED = "required"
+    HELPFUL = "helpful"
+    OPTIONAL = "optional"
+    AMBIGUOUS = "ambiguous"
+
+class SufficiencyStatus(str, Enum):
+    SUFFICIENT = "sufficient"
+    PARTIALLY_SUFFICIENT = "partially_sufficient"
+    INSUFFICIENT = "insufficient"
+    AMBIGUOUS = "ambiguous"
+
+class ResearchVariable(BaseModel):
+    name: str
+    role: str
+    description: str | None = None
+    unit: str | None = None
+    source_evidence: str | None = None
+    confidence: ResearchCertainty
+
+class ResearchEquation(BaseModel):
+    expression: str
+    variables: list[str]
+    constants: list[str]
+    source_evidence: str | None = None
+    confidence: ResearchCertainty
+
+class ResearchGap(BaseModel):
+    gap_type: str
+    classification: GapClassification
+    description: str
+    why_needed: str
+    search_intent: str | None = None
+
+class ResearchConflict(BaseModel):
+    description: str
+    sources: list[str]
+
+class ResearchGoal(BaseModel):
+    type: str = Field(description="e.g. 'reproduce', 'understand', 'continue_research'")
+    description: str
+
+class ResearchDocumentUnderstanding(BaseModel):
+    title: str
+    abstract: str | None = None
+    domain: str | None = None
+    problem_statement: str | None = None
+    motivation: str | None = None
+    objectives: list[str] = Field(default_factory=list)
+    research_questions: list[str] = Field(default_factory=list)
+    methodology: str | None = None
+    dataset: str | None = None
+    preprocessing: str | None = None
+    models: list[str] = Field(default_factory=list)
+    algorithms: list[str] = Field(default_factory=list)
+    equations: list[ResearchEquation] = Field(default_factory=list)
+    variables: list[ResearchVariable] = Field(default_factory=list)
+    experimental_setup: str | None = None
+    evaluation_metrics: list[str] = Field(default_factory=list)
+    results: str | None = None
+    conclusions: str | None = None
+    limitations: list[str] = Field(default_factory=list)
+    future_work: list[str] = Field(default_factory=list)
+    explicit_assumptions: list[str] = Field(default_factory=list)
+    missing_information: list[ResearchGap] = Field(default_factory=list)
+    conflicts: list[ResearchConflict] = Field(default_factory=list)
+    sufficiency: SufficiencyStatus
+    sufficiency_reason: str
+
+class AnalyzeDocumentRequest(BaseModel):
+    goal: ResearchGoal
+    workspace_context: ResearchWorkspaceContext | None = None
+
+class CrossPaperAnalysisRequest(BaseModel):
+    supporting_asset_ids: list[uuid.UUID]
+    goal: ResearchGoal
+    workspace_context: ResearchWorkspaceContext | None = None
+
+# ---------------------------------------------------------------------------
+# Cross-Paper Comparison (Sprint 16 Phase 5)
+# ---------------------------------------------------------------------------
+
+class ComparisonRelationship(str, Enum):
+    SUPPORTS = "SUPPORTS"
+    EXTENDS = "EXTENDS"
+    CONTRADICTS = "CONTRADICTS"
+    DIFFERS = "DIFFERS"
+    COMPLEMENTS = "COMPLEMENTS"
+    UNRELATED = "UNRELATED"
+    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
+
+class GapResolutionState(str, Enum):
+    RESOLVED = "RESOLVED"
+    PARTIALLY_RESOLVED = "PARTIALLY_RESOLVED"
+    NOT_RESOLVED = "NOT_RESOLVED"
+    CONTRADICTED = "CONTRADICTED"
+    NEEDS_VERIFICATION = "NEEDS_VERIFICATION"
+
+class HypothesisStatus(str, Enum):
+    PROPOSED = "PROPOSED"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+
+class SourceReference(BaseModel):
+    paper_id: uuid.UUID
+    paper_title: str
+    page: int | None = None
+    chunk_index: int | None = None
+    evidence_scope: str = "FULL_TEXT"  # e.g., "FULL_TEXT", "ABSTRACT_ONLY"
+
+class ComparisonItem(BaseModel):
+    topic: str
+    primary_claim: str
+    supporting_claims: list[str]
+    relationship: ComparisonRelationship
+    evidence: str
+    certainty: ResearchCertainty
+    source_references: list[SourceReference]
+
+class GapResolution(BaseModel):
+    gap_id: str | None = None  # Reference to a ResearchGap identifier or index
+    gap_description: str
+    supporting_paper_ids: list[uuid.UUID]
+    resolution_state: GapResolutionState
+    explanation: str
+    evidence: str
+    unresolved_portion: str | None = None
+
+class ResearchHypothesis(BaseModel):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    description: str
+    supporting_sources: list[SourceReference]
+    rationale: str
+    certainty: ResearchCertainty
+    status: HypothesisStatus = HypothesisStatus.PROPOSED
+
+class CrossPaperComparison(BaseModel):
+    primary_paper_id: uuid.UUID
+    supporting_paper_ids: list[uuid.UUID]
+    comparison_items: list[ComparisonItem]
+    gap_resolutions: list[GapResolution]
+    hypotheses: list[ResearchHypothesis]
+    source_provenance: str = "Cross-Paper Reducer"
+

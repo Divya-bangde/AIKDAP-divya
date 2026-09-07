@@ -16,25 +16,31 @@ from pathlib import Path
 from fastapi import Depends, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import func, select
+
 from app.core.config import settings
 from app.core.logging.logger import get_logger
 from app.database.session import get_db
-from app.modules.assets.ai_profile import AIProfile
+from app.modules.assets.ai_profile import AIProfile, AIProfileStatus
 from app.modules.assets.enums import (
     AssetProcessingStatus,
     AssetSource,
     AssetStatus,
     AssetType,
+    EmbeddingStatus,
 )
 from app.modules.assets.models import Asset
 from app.modules.assets.repository import AssetRepository
 from app.modules.assets.schemas import AssetUpdate
 from app.modules.assets.storage import StorageProvider, get_storage_provider, sanitize_filename
 from app.modules.assets.validators import (
+    validate_content_matches_mime,
     validate_extension,
+    validate_extension_matches_mime,
     validate_file_size,
     validate_mime_type,
 )
+from app.modules.knowledge_base.models import KnowledgeChunk
 from app.modules.projects.repository import ProjectRepository
 from app.workers.tasks import process_uploaded_asset
 
@@ -49,6 +55,19 @@ class AssetNotFoundError(Exception):
 
 class ProjectAccessDeniedError(Exception):
     """Raised when the caller does not own the project an asset belongs to."""
+
+
+class DuplicateAssetError(Exception):
+    """Raised when a byte-identical file already exists (active) in the
+    same project. Carries the existing asset so the caller can point
+    the user at it instead of a bare rejection."""
+
+    def __init__(self, existing_asset: Asset) -> None:
+        self.existing_asset = existing_asset
+        super().__init__(
+            f"An identical file already exists in this project as "
+            f"'{existing_asset.file_name}' (asset {existing_asset.id})."
+        )
 
 
 class AssetService:
@@ -87,6 +106,7 @@ class AssetService:
         file_name = sanitize_filename(file.filename or "upload")
         extension = validate_extension(file_name)
         mime_type = validate_mime_type(file.content_type)
+        validate_extension_matches_mime(extension, mime_type)
 
         max_bytes = settings.max_upload_size_mb * 1024 * 1024
         declared_size = file.size
@@ -95,8 +115,21 @@ class AssetService:
 
         content = await file.read()
         validate_file_size(len(content), max_bytes=max_bytes)
+        validate_content_matches_mime(content, mime_type)
 
         checksum = hashlib.sha256(content).hexdigest()
+
+        # Sprint 12.4: a byte-identical file already active in this
+        # project would otherwise re-run extraction, Qwen understanding,
+        # and embedding from scratch for content already fully indexed
+        # -- `checksum` was already computed and stored (indexed) since
+        # Sprint 6/9 but never queried until now. Scoped per-project
+        # (not global) and to ACTIVE assets only, so archiving an asset
+        # clears the way for a fresh re-upload.
+        duplicate = await self._repository.find_active_by_checksum(project_id, checksum)
+        if duplicate is not None:
+            raise DuplicateAssetError(duplicate)
+
         storage_path = await self._storage.save(
             project_id=project_id, filename=file_name, content=content
         )
@@ -237,20 +270,82 @@ class AssetService:
         content = await self._storage.read(asset.storage_path)
         return asset, content
 
-    async def reprocess(self, current_user_id: uuid.UUID, asset_id: uuid.UUID) -> Asset:
+    async def reprocess(
+        self, current_user_id: uuid.UUID, asset_id: uuid.UUID, *, force: bool = False
+    ) -> Asset:
         """Re-queue an owned asset for the extract/chunk pipeline.
 
         Sets `processing_status=QUEUED` immediately so the response
         reflects reality, then enqueues the same Celery task the
-        upload path uses.
+        upload path uses -- unless the asset already completed
+        extraction, Qwen understanding, AND embedding successfully on
+        its last run (Sprint 12.8: `_already_fully_processed`) and the
+        caller did not ask to `force` a fresh run. Re-running the
+        pipeline against the same stored bytes would reproduce
+        identical chunks and pay the full Qwen/embedding cost again
+        for no different result; a genuinely different file is a new
+        upload (and a new asset), not a reprocess of this one.
+
+        `force=True` always re-queues regardless of current state --
+        the explicit escape hatch for "run it again anyway" (e.g. after
+        a pipeline/model upgrade), matching this endpoint's existing
+        documented purpose. A `FAILED`/partial/incomplete asset is
+        never skipped, forced or not.
         """
         asset = await self.get_owned(current_user_id, asset_id)
+
+        if not force and await self._already_fully_processed(asset):
+            logger.info(
+                "asset_reprocess_skipped_already_complete",
+                asset_id=str(asset_id),
+            )
+            return asset
+
         asset.processing_status = AssetProcessingStatus.QUEUED
         asset.processing_error = None
         await self._session.commit()
         await self._session.refresh(asset)
         process_uploaded_asset.delay(str(asset.id))
         return asset
+
+    async def _already_fully_processed(self, asset: Asset) -> bool:
+        """Whether `asset` completed extraction, Qwen understanding, AND
+        embedding on its last run, so reprocessing it now would repeat
+        identical work against identical stored content.
+
+        Deliberately conservative: every layer must show a genuine
+        success, or this returns `False` and reprocessing proceeds
+        normally. A prior `FAILED`/`UNAVAILABLE` AI-understanding
+        result, any chunk not yet (or no longer) `COMPLETED`, or zero
+        chunks at all -- each on its own is enough to force a real
+        reprocess. Chunk completeness is checked by count, not by
+        fetching every row, so this holds for an asset with any number
+        of chunks.
+        """
+        if asset.processing_status is not AssetProcessingStatus.COMPLETED:
+            return False
+
+        profile = AIProfile.model_validate(asset.ai_profile or {})
+        if profile.status is not AIProfileStatus.COMPLETED:
+            return False
+
+        total = await self._session.scalar(
+            select(func.count())
+            .select_from(KnowledgeChunk)
+            .where(KnowledgeChunk.asset_id == asset.id)
+        )
+        if not total:
+            return False
+
+        completed = await self._session.scalar(
+            select(func.count())
+            .select_from(KnowledgeChunk)
+            .where(
+                KnowledgeChunk.asset_id == asset.id,
+                KnowledgeChunk.embedding_status == EmbeddingStatus.COMPLETED,
+            )
+        )
+        return completed == total
 
 
 async def get_asset_service(

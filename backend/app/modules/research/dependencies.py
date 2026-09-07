@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.session import get_db
 from app.modules.auth.models import User
 from app.modules.auth.security import get_current_user
+from app.modules.research.experiment_service import ExperimentPlanService
 from app.modules.research.models import ResearchRun
 from app.modules.research.service import ResearchRunNotFoundError, ResearchService
 
@@ -21,6 +22,13 @@ from app.modules.research.service import ResearchRunNotFoundError, ResearchServi
 async def get_research_service(session: AsyncSession = Depends(get_db)) -> ResearchService:
     """FastAPI dependency provider for `ResearchService`."""
     return ResearchService(session)
+
+
+async def get_experiment_service(
+    session: AsyncSession = Depends(get_db),
+) -> ExperimentPlanService:
+    """FastAPI dependency provider for `ExperimentPlanService` (Sprint 16 Phase 6)."""
+    return ExperimentPlanService(session)
 
 
 async def get_owned_run(

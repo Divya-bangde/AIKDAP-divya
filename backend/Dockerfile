@@ -8,6 +8,15 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
+# OCR engine (Sprint 12.5). tesseract-ocr pulls in libtesseract5 and
+# English language data (tesseract-ocr-eng) automatically; ~19MB total.
+# Additional languages need their own tesseract-ocr-<lang> package --
+# not installed speculatively since nothing in this deployment needs
+# one yet.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends tesseract-ocr && \
+    rm -rf /var/lib/apt/lists/*
+
 # Install dependencies
 COPY requirements.txt .
 

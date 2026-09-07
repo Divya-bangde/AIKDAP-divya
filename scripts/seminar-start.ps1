@@ -51,8 +51,33 @@
     `-Start` and re-check the printed URL before every seminar; do not
     assume yesterday's URL still works.
 
+    SPRINT 11: -Watch adds an optional supervisor that keeps running
+    after startup instead of exiting. It periodically checks the tunnel
+    through its own public URL (not just "is the process alive" -- a
+    Quick Tunnel's control-stream connection to Cloudflare's edge can
+    die while the local `cloudflared` process keeps running, which is
+    exactly what happened during Sprint 11's investigation and is
+    invisible to a process-liveness check alone). On a confirmed dead
+    tunnel it restarts `cloudflared`, extracts the new URL with the same
+    parsing `Start-CloudflareTunnel` already uses, and -- only if
+    -VercelToken/-VercelProjectId are configured -- pushes the new URL
+    to Vercel's Production VITE_API_BASE_URL and triggers a redeploy via
+    a Deploy Hook. Without those, Watch mode still recovers the tunnel;
+    it just logs that you need to update Vercel yourself, exactly as the
+    non-Watch path already requires today.
+
 .EXAMPLE
-    # Seminar day:
+    # Seminar day, hands-off (recommended): start everything and keep
+    # watching/recovering the tunnel + syncing Vercel until Ctrl+C:
+    .\scripts\seminar-start.ps1 -Start -Watch `
+        -SupabaseDatabaseUrl "postgresql+psycopg://postgres.<ref>:<pw>@aws-<region>.pooler.supabase.com:5432/postgres?sslmode=require" `
+        -VercelOrigin "https://<your-project>.vercel.app"
+    # (-VercelToken / -VercelProjectId / -VercelDeployHookUrl default to
+    # $env:AIKDAP_VERCEL_TOKEN / $env:AIKDAP_VERCEL_PROJECT_ID /
+    # $env:AIKDAP_VERCEL_DEPLOY_HOOK_URL -- set those once per shell
+    # session rather than passing secrets on the command line.)
+
+    # Seminar day, original one-shot behavior (unchanged):
     .\scripts\seminar-start.ps1 -Start -SupabaseDatabaseUrl "postgresql+psycopg://postgres.<ref>:<pw>@aws-<region>.pooler.supabase.com:5432/postgres?sslmode=require" -VercelOrigin "https://<your-project>.vercel.app"
 
     # Check what's up:
@@ -90,7 +115,43 @@ param(
     # location; override if it's installed elsewhere or once it's on PATH.
     [Parameter(ParameterSetName = 'Start')]
     [Parameter(ParameterSetName = 'Status')]
-    [string]$CloudflaredPath = 'C:\Program Files (x86)\cloudflared\cloudflared.exe'
+    [string]$CloudflaredPath = 'C:\Program Files (x86)\cloudflared\cloudflared.exe',
+
+    # Sprint 11: keep running after startup, supervising the tunnel and
+    # auto-recovering it instead of exiting once. Ctrl+C to stop.
+    [Parameter(ParameterSetName = 'Start')]
+    [switch]$Watch,
+
+    # How often the supervisor checks <tunnel>/health.
+    [Parameter(ParameterSetName = 'Start')]
+    [int]$WatchIntervalSeconds = 30,
+
+    # Consecutive failed checks required before the tunnel is declared
+    # dead and restarted. >1 on purpose -- a single failed check is
+    # ordinary network jitter, not evidence the tunnel is actually down.
+    [Parameter(ParameterSetName = 'Start')]
+    [int]$WatchFailureThreshold = 3,
+
+    # Vercel Personal Access Token (Account Settings -> Tokens). Only
+    # used to look up and PATCH the Production VITE_API_BASE_URL env
+    # var. Never logged, never written to a file, never hardcoded here --
+    # same convention as -SupabaseDatabaseUrl above: pass it or set the
+    # env var, this script never invents or persists it.
+    [Parameter(ParameterSetName = 'Start')]
+    [string]$VercelToken = $env:AIKDAP_VERCEL_TOKEN,
+
+    # Vercel project ID or name (Project Settings -> General). Not a
+    # secret, but still not hardcoded -- it's project-specific and this
+    # script is meant to work for any AIKDAP checkout.
+    [Parameter(ParameterSetName = 'Start')]
+    [string]$VercelProjectId = $env:AIKDAP_VERCEL_PROJECT_ID,
+
+    # Deploy Hook URL (Project Settings -> Git -> Deploy Hooks, pick the
+    # production branch). Vercel's own docs treat this URL itself as a
+    # sensitive credential -- anyone with it can trigger a deploy -- so
+    # it gets the same never-logged treatment as -VercelToken.
+    [Parameter(ParameterSetName = 'Start')]
+    [string]$VercelDeployHookUrl = $env:AIKDAP_VERCEL_DEPLOY_HOOK_URL
 )
 
 $ErrorActionPreference = 'Stop'
@@ -134,6 +195,245 @@ function Wait-BackendHealth {
 function Get-BackendHealth {
     param([int]$Port = 8001)
     try { return Invoke-RestMethod -Uri "http://localhost:$Port/health" -TimeoutSec 5 } catch { return $null }
+}
+
+function Write-SupervisorLog {
+    # Timestamped event log for -Watch, written to console AND a log
+    # file (so a demo-day failure has a paper trail afterward, not just
+    # whatever scrolled off the terminal). NEVER pass a secret value
+    # (token, deploy hook URL) to this function -- callers below only
+    # ever log facts (URLs, counts, outcomes), never credentials.
+    param([string]$Message)
+    $line = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $Message"
+    Write-Output $line
+    $logFile = Join-Path $env:TEMP 'aikdap-supervisor.log'
+    Add-Content -Path $logFile -Value $line
+}
+
+function Start-CloudflareTunnel {
+    # Starts a fresh Quick Tunnel and returns @{ Url = ...; Process = ... }
+    # once verified reachable. Shared by both the initial `-Start` path
+    # and the -Watch supervisor's recovery path, so there is exactly one
+    # place that knows how to start/parse/verify a tunnel.
+    param([int]$Port = 8001)
+
+    $cloudflared = Resolve-Cloudflared
+    $cfArgs = @('tunnel', '--url', "http://localhost:$Port")
+    # Sprint 11: a unique filename per attempt, not a fixed shared path.
+    # A prior cloudflared process (e.g. one -Watch is about to replace,
+    # or an already-abandoned attempt) can still hold a fixed path open
+    # for a moment after Stop-Process returns, which would make this
+    # Remove-Item throw -- and worse, if swallowed, a still-running old
+    # process appending to the same shared file could make the URL
+    # regex below match its stale URL instead of the new one. A unique
+    # name removes the collision entirely rather than papering over it.
+    $logFile = Join-Path $env:TEMP "aikdap-cloudflared-$([guid]::NewGuid().ToString('N').Substring(0, 8)).log"
+
+    $proc = $null
+    $succeeded = $false
+    try {
+        # cloudflared logs its startup banner (including the assigned
+        # URL) to stderr, not stdout.
+        $proc = Start-Process -FilePath $cloudflared -ArgumentList $cfArgs -RedirectStandardError $logFile -WindowStyle Hidden -PassThru
+        $deadline = (Get-Date).AddSeconds(30)
+        $tunnelUrl = $null
+        while ((Get-Date) -lt $deadline -and -not $tunnelUrl) {
+            Start-Sleep -Seconds 1
+            if (Test-Path $logFile) {
+                $line = Get-Content $logFile | Select-String 'https://\S+\.trycloudflare\.com'
+                if ($line) { $tunnelUrl = $line.Matches[0].Value }
+            }
+        }
+        if (-not $tunnelUrl) { throw "cloudflared did not report a URL within 30s -- check $logFile" }
+
+        # Sprint 11: a fresh Quick Tunnel hostname can take a few seconds
+        # past its own banner before Cloudflare's edge actually resolves
+        # it (cloudflared's own startup message says as much: "it may
+        # take some time to be reachable") -- confirmed live during this
+        # sprint's testing, where a flat 3s wait + single attempt
+        # intermittently hit a DNS-not-ready error on a genuinely-fine
+        # new tunnel. Retrying briefly here avoids treating that as a
+        # hard failure. Occasionally a Quick Tunnel fails to register at
+        # all within this window -- Cloudflare's own "no uptime
+        # guarantee" applies to registration too, not just staying up --
+        # and that's a real failure this loop correctly gives up on.
+        $verifyDeadline = (Get-Date).AddSeconds(15)
+        $tunnelHealth = $null
+        $lastError = $null
+        while ((Get-Date) -lt $verifyDeadline -and -not $tunnelHealth) {
+            Start-Sleep -Seconds 2
+            try {
+                $tunnelHealth = Invoke-RestMethod -Uri "$tunnelUrl/health" -TimeoutSec 8
+            } catch {
+                $lastError = $_
+            }
+        }
+
+        if (-not $tunnelHealth) {
+            throw "tunnel did not become reachable within 15s of DNS propagation: $($lastError.Exception.Message)"
+        }
+        if ($tunnelHealth.services.postgres.status -ne 'healthy') {
+            throw 'tunnel reachable but backend/postgres unhealthy through it'
+        }
+
+        $succeeded = $true
+        return [pscustomobject]@{ Url = $tunnelUrl; Process = $proc }
+    } finally {
+        # Runs on an explicit throw above AND on external interruption
+        # (Ctrl+C / Stop-Job during -Watch's recovery attempt) alike --
+        # a `finally` unwinds on any scope exit, not just a `throw`. If
+        # this call is leaving without a verified success, whatever
+        # process it started must not survive it.
+        if (-not $succeeded -and $proc) {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Test-TunnelHealthy {
+    # A short, loop-friendly liveness check -- distinct from
+    # Start-CloudflareTunnel's one-time post-start verification, which
+    # can afford a longer timeout because it only runs once.
+    param([string]$TunnelUrl)
+    try {
+        $resp = Invoke-RestMethod -Uri "$TunnelUrl/health" -TimeoutSec 8
+        return [bool]$resp.status
+    } catch {
+        return $false
+    }
+}
+
+function Sync-VercelBackendUrl {
+    # Pushes a new tunnel origin to Vercel's Production VITE_API_BASE_URL
+    # and triggers a redeploy. Does nothing (loudly, not silently) if
+    # -VercelToken/-VercelProjectId aren't configured -- the existing
+    # manual workflow (update the dashboard yourself) keeps working
+    # exactly as it does today.
+    #
+    # SECRET HANDLING: $Token is only ever used inside the Authorization
+    # header of these two API calls. It is never written to
+    # Write-SupervisorLog, never interpolated into a log string, never
+    # persisted to a file. $DeployHookUrl gets the same treatment --
+    # Vercel's own docs call it as sensitive as a credential.
+    param(
+        [Parameter(Mandatory = $true)][string]$NewUrl,
+        [string]$Token,
+        [string]$ProjectId,
+        [string]$DeployHookUrl
+    )
+
+    if (-not $Token -or -not $ProjectId) {
+        Write-SupervisorLog 'Vercel token/project ID not configured -- automatic sync unavailable.'
+        Write-SupervisorLog "ACTION NEEDED: manually set Vercel Production VITE_API_BASE_URL to $NewUrl and redeploy."
+        return
+    }
+
+    Write-SupervisorLog 'Updating Vercel Production environment'
+    $headers = @{ Authorization = "Bearer $Token" }
+
+    $envList = Invoke-RestMethod -Uri "https://api.vercel.com/v10/projects/$ProjectId/env" -Headers $headers -Method Get
+    $existing = $envList.envs | Where-Object { $_.key -eq 'VITE_API_BASE_URL' -and $_.target -contains 'production' } | Select-Object -First 1
+    if (-not $existing) {
+        throw 'VITE_API_BASE_URL not found among Production env vars for this project -- create it once manually in the Vercel dashboard first, then Watch mode can keep it updated.'
+    }
+
+    $body = @{ value = $NewUrl } | ConvertTo-Json -Compress
+    Invoke-RestMethod -Uri "https://api.vercel.com/v9/projects/$ProjectId/env/$($existing.id)" -Headers $headers -Method Patch -ContentType 'application/json' -Body $body | Out-Null
+
+    if ($DeployHookUrl) {
+        Invoke-RestMethod -Uri $DeployHookUrl -Method Post | Out-Null
+        Write-SupervisorLog 'Vercel redeploy triggered'
+    } else {
+        Write-SupervisorLog 'No Deploy Hook configured (-VercelDeployHookUrl) -- env var updated but redeploy NOT triggered. Redeploy manually.'
+    }
+}
+
+function Start-TunnelSupervisor {
+    param(
+        [Parameter(Mandatory = $true)][string]$InitialUrl,
+        [Parameter(Mandatory = $true)]$InitialProcess,
+        [int]$Port = 8001,
+        [int]$IntervalSeconds = 30,
+        [int]$FailureThreshold = 3,
+        [string]$VercelToken,
+        [string]$VercelProjectId,
+        [string]$VercelDeployHookUrl
+    )
+
+    $currentUrl = $InitialUrl
+    $currentProc = $InitialProcess
+    $consecutiveFailures = 0
+
+    Write-SupervisorLog "Watch mode started (interval ${IntervalSeconds}s, failure threshold $FailureThreshold). Ctrl+C to stop."
+    Write-SupervisorLog "Tunnel healthy: $currentUrl"
+
+    try {
+        while ($true) {
+            Start-Sleep -Seconds $IntervalSeconds
+
+            # Case 1: the process itself is gone -- unambiguous, no need
+            # to wait out the failure threshold.
+            $stillRunning = Get-Process -Id $currentProc.Id -ErrorAction SilentlyContinue
+            $healthy = $false
+            if ($stillRunning) {
+                $healthy = Test-TunnelHealthy -TunnelUrl $currentUrl
+            }
+
+            if ($healthy) {
+                if ($consecutiveFailures -gt 0) { Write-SupervisorLog 'Tunnel healthy' }
+                $consecutiveFailures = 0
+                continue
+            }
+
+            if (-not $stillRunning) {
+                Write-SupervisorLog 'cloudflared process has exited'
+            } else {
+                $consecutiveFailures++
+                Write-SupervisorLog "Tunnel health check failed ($consecutiveFailures/$FailureThreshold)"
+                if ($consecutiveFailures -lt $FailureThreshold) { continue }
+            }
+
+            # Confirmed dead: process exited, OR FailureThreshold
+            # consecutive checks failed while it was still running (the
+            # exact "cloudflared alive, tunnel dead" case from the
+            # Sprint 11 investigation).
+            Write-SupervisorLog 'Restarting Cloudflare tunnel'
+            if ($stillRunning) {
+                Stop-Process -Id $currentProc.Id -Force -ErrorAction SilentlyContinue
+            }
+
+            $recovered = $null
+            try {
+                $recovered = Start-CloudflareTunnel -Port $Port
+            } catch {
+                Write-SupervisorLog "Tunnel restart failed: $($_.Exception.Message) -- will retry next interval"
+                $consecutiveFailures = 0
+                continue
+            }
+
+            Write-SupervisorLog "New tunnel URL detected: $($recovered.Url)"
+            Write-SupervisorLog 'New tunnel verified'
+
+            if ($recovered.Url -ne $currentUrl) {
+                Sync-VercelBackendUrl -NewUrl $recovered.Url -Token $VercelToken -ProjectId $VercelProjectId -DeployHookUrl $VercelDeployHookUrl
+            }
+
+            $currentUrl = $recovered.Url
+            $currentProc = $recovered.Process
+            $consecutiveFailures = 0
+            Write-SupervisorLog 'Recovery complete'
+        }
+    } finally {
+        # Only stop the cloudflared process THIS supervisor is currently
+        # tracking -- never a blanket `Get-Process cloudflared`, which
+        # could belong to something else on the machine.
+        $stillRunning = Get-Process -Id $currentProc.Id -ErrorAction SilentlyContinue
+        if ($stillRunning) {
+            Write-SupervisorLog "Stopping supervised cloudflared (pid $($currentProc.Id))"
+            Stop-Process -Id $currentProc.Id -Force -ErrorAction SilentlyContinue
+        }
+        Write-SupervisorLog 'Watch mode stopped'
+    }
 }
 
 function Backup-EnvFile {
@@ -207,42 +507,40 @@ function Start-Seminar {
     Write-Output "  ok (postgres: $($health.services.postgres.status), reranker: $($health.services.reranker.status))"
 
     Write-Output '[6/7] Starting Cloudflare Quick Tunnel on FastAPI port only...'
-    $cloudflared = Resolve-Cloudflared
-    $cfArgs = @('tunnel', '--url', "http://localhost:$FastApiPort")
-    $logFile = Join-Path $env:TEMP 'aikdap-cloudflared.log'
-    if (Test-Path $logFile) { Remove-Item $logFile -Force }
-    # cloudflared logs its startup banner (including the assigned URL) to
-    # stderr, not stdout.
-    $proc = Start-Process -FilePath $cloudflared -ArgumentList $cfArgs -RedirectStandardError $logFile -WindowStyle Hidden -PassThru
-    $deadline = (Get-Date).AddSeconds(30)
-    $tunnelUrl = $null
-    while ((Get-Date) -lt $deadline -and -not $tunnelUrl) {
-        Start-Sleep -Seconds 1
-        if (Test-Path $logFile) {
-            $line = Get-Content $logFile | Select-String 'https://\S+\.trycloudflare\.com'
-            if ($line) { $tunnelUrl = $line.Matches[0].Value }
-        }
-    }
-    if (-not $tunnelUrl) { throw "cloudflared did not report a URL within 30s -- check $logFile" }
-    Write-Output "  tunnel pid $($proc.Id): $tunnelUrl"
+    $tunnel = Start-CloudflareTunnel -Port $FastApiPort
+    Write-Output "  tunnel pid $($tunnel.Process.Id): $($tunnel.Url)"
 
-    Write-Output '[7/7] Verifying the tunnel actually reaches FastAPI...'
-    Start-Sleep -Seconds 3
-    $tunnelHealth = Invoke-RestMethod -Uri "$tunnelUrl/health" -TimeoutSec 20
-    if ($tunnelHealth.services.postgres.status -ne 'healthy') { throw 'tunnel reachable but backend/postgres unhealthy through it' }
+    Write-Output '[7/7] Verified the tunnel actually reaches FastAPI.'
     Write-Output '  ok'
 
     Write-Output ''
     Write-Output '=== READY ==='
-    Write-Output "Public API URL: $tunnelUrl"
+    Write-Output "Public API URL: $($tunnel.Url)"
     Write-Output ''
-    Write-Output 'Next (manual -- this script has no Vercel session):'
+
+    if ($Watch) {
+        if ($VercelToken -and $VercelProjectId) {
+            Write-Output 'Watch mode: tunnel + Vercel sync will be kept up automatically. Ctrl+C to stop.'
+        } else {
+            Write-Output 'Watch mode: tunnel will be kept up automatically, but Vercel sync is OFF'
+            Write-Output '  (set $env:AIKDAP_VERCEL_TOKEN and $env:AIKDAP_VERCEL_PROJECT_ID to enable it).'
+            Write-Output "  Until then, update Vercel's Production VITE_API_BASE_URL yourself whenever the URL above changes."
+        }
+        Write-Output ''
+        Start-TunnelSupervisor -InitialUrl $tunnel.Url -InitialProcess $tunnel.Process -Port $FastApiPort `
+            -IntervalSeconds $WatchIntervalSeconds -FailureThreshold $WatchFailureThreshold `
+            -VercelToken $VercelToken -VercelProjectId $VercelProjectId -VercelDeployHookUrl $VercelDeployHookUrl
+        return
+    }
+
+    Write-Output 'Next (manual -- this script has no Vercel session unless you also pass -Watch):'
     Write-Output "  1. vercel env rm VITE_API_BASE_URL production   (if one is already set)"
-    Write-Output "  2. echo $tunnelUrl | vercel env add VITE_API_BASE_URL production"
+    Write-Output "  2. echo $($tunnel.Url) | vercel env add VITE_API_BASE_URL production"
     Write-Output '  3. vercel --prod                                  (redeploy so the build picks up the new value)'
     Write-Output "  4. Open $VercelOrigin and confirm login works end to end."
     Write-Output ''
     Write-Output 'When the seminar is over, run: .\scripts\seminar-start.ps1 -Stop'
+    Write-Output 'To keep the tunnel supervised and auto-recovering instead of a one-shot start, re-run with -Watch.'
 }
 
 function Stop-Seminar {

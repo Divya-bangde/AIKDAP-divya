@@ -7,6 +7,7 @@ import { TechnicalDetails } from "@/components/common/TechnicalDetails";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnswerBody } from "@/features/research/AnswerBody";
 import { CitationList } from "@/features/research/CitationList";
+import { ClaimEvidencePanel } from "@/features/research/ClaimEvidencePanel";
 import { EvidenceDrawer } from "@/features/research/EvidenceDrawer";
 import { EvidenceFunnel } from "@/features/research/EvidenceFunnel";
 import { fadeUp } from "@/lib/motion";
@@ -25,6 +26,7 @@ export function ResearchResult({ run }: { run: ResearchRunDetail }) {
   const [selected, setSelected] = useState<{ citation: Citation; index: number } | null>(null);
 
   const citations = (run.citations ?? []).map(asCitation);
+  const claims = run.claims ?? [];
   const steps = run.steps ?? [];
   const synthesisStep = steps.find((step) => step.node_name === "synthesis");
   const synthesis = asSynthesisOutput(synthesisStep?.output_payload ?? null);
@@ -76,6 +78,16 @@ export function ResearchResult({ run }: { run: ResearchRunDetail }) {
           </Card>
 
           <EvidenceFunnel steps={steps} citations={citations} />
+
+          {/* A declined answer can still carry claims (Sprint 16 Phase
+           * 8.7) -- the model may state something in its explanation
+           * before concluding the evidence is insufficient, and that
+           * statement is checked the same way a grounded answer's is. */}
+          <ClaimEvidencePanel
+            claims={claims}
+            citations={citations}
+            onSelectCitation={openEvidence}
+          />
         </motion.div>
 
         <EvidenceDrawer
@@ -186,6 +198,8 @@ export function ResearchResult({ run }: { run: ResearchRunDetail }) {
         </Card>
 
         <EvidenceFunnel steps={steps} citations={citations} />
+
+        <ClaimEvidencePanel claims={claims} citations={citations} onSelectCitation={openEvidence} />
 
         {citations.length > 0 ? (
           <CitationList citations={citations} onSelect={openEvidence} />

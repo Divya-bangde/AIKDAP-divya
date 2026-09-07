@@ -1,0 +1,209 @@
+{
+  "_provenance": "Hand-curated by Sprint 16 Phase 8.1. All scenario text is synthetic/authored for this benchmark, not extracted from real ingested documents (SYNTHETIC). The validation/verification code each scenario is run through is REAL, unmodified production code.",
+
+  "citation_grounding": [
+    {
+      "id": "cg-01",
+      "description": "Faithful model: cites only supplied evidence, claims grounded.",
+      "supplied_citations": [{"id": "c1"}, {"id": "c2"}],
+      "claimed_cited_ids": ["c1", "c2"],
+      "claimed_grounding_status": "grounded",
+      "gold_grounding_status": "grounded",
+      "is_flawed_llm_output": false
+    },
+    {
+      "id": "cg-02",
+      "description": "Hallucinated citation: model cites an id never supplied, still claims grounded.",
+      "supplied_citations": [{"id": "c1"}, {"id": "c2"}],
+      "claimed_cited_ids": ["c1", "c9-hallucinated"],
+      "claimed_grounding_status": "grounded",
+      "gold_grounding_status": "partially_grounded",
+      "is_flawed_llm_output": true
+    },
+    {
+      "id": "cg-03",
+      "description": "Fully fabricated answer: every cited id is hallucinated, model still claims grounded.",
+      "supplied_citations": [{"id": "c1"}],
+      "claimed_cited_ids": ["c9-hallucinated", "c10-hallucinated"],
+      "claimed_grounding_status": "grounded",
+      "gold_grounding_status": "insufficient_evidence",
+      "is_flawed_llm_output": true
+    },
+    {
+      "id": "cg-04",
+      "description": "Honest model: no evidence supplied, model correctly reports insufficient_evidence.",
+      "supplied_citations": [],
+      "claimed_cited_ids": [],
+      "claimed_grounding_status": "insufficient_evidence",
+      "gold_grounding_status": "insufficient_evidence",
+      "is_flawed_llm_output": false
+    },
+    {
+      "id": "cg-05",
+      "description": "Model under-claims: cites nothing despite valid evidence being supplied and usable.",
+      "supplied_citations": [{"id": "c1"}, {"id": "c2"}],
+      "claimed_cited_ids": [],
+      "claimed_grounding_status": "insufficient_evidence",
+      "gold_grounding_status": "insufficient_evidence",
+      "is_flawed_llm_output": false
+    }
+  ],
+
+  "cross_paper_structural": [
+    {
+      "id": "xp-01",
+      "description": "Valid comparison: every item has source references pointing to known papers, hypothesis is modal.",
+      "primary_id": "11111111-1111-1111-1111-111111111111",
+      "supporting_ids": ["22222222-2222-2222-2222-222222222222"],
+      "comparison_items": [
+        {"topic": "learning rate", "primary_claim": "0.001", "supporting_claims": [], "relationship": "SUPPORTS", "evidence": "stated in section 3", "certainty": "explicit",
+         "source_references": [{"paper_id": "11111111-1111-1111-1111-111111111111", "paper_title": "Primary", "page": 3}]}
+      ],
+      "gap_resolutions": [],
+      "hypotheses": [
+        {"description": "This approach may improve convergence on similar datasets.", "supporting_sources": [{"paper_id": "22222222-2222-2222-2222-222222222222", "paper_title": "Supporting"}], "rationale": "consistent trend", "certainty": "interpreted"}
+      ],
+      "gold_should_pass_validation": true,
+      "is_flawed_llm_output": false
+    },
+    {
+      "id": "xp-02",
+      "description": "Structural violation: comparison item has no source references at all.",
+      "primary_id": "11111111-1111-1111-1111-111111111111",
+      "supporting_ids": ["22222222-2222-2222-2222-222222222222"],
+      "comparison_items": [
+        {"topic": "dataset size", "primary_claim": "10,000 samples", "supporting_claims": [], "relationship": "SUPPORTS", "evidence": "unclear", "certainty": "interpreted",
+         "source_references": []}
+      ],
+      "gap_resolutions": [],
+      "hypotheses": [],
+      "gold_should_pass_validation": false,
+      "gold_violation_rule": "missing_source_references",
+      "is_flawed_llm_output": true
+    },
+    {
+      "id": "xp-03",
+      "description": "Structural violation: comparison item cites a paper id that was never supplied (hallucinated source).",
+      "primary_id": "11111111-1111-1111-1111-111111111111",
+      "supporting_ids": ["22222222-2222-2222-2222-222222222222"],
+      "comparison_items": [
+        {"topic": "accuracy", "primary_claim": "94%", "supporting_claims": [], "relationship": "SUPPORTS", "evidence": "table 2", "certainty": "explicit",
+         "source_references": [{"paper_id": "99999999-9999-9999-9999-999999999999", "paper_title": "Unknown paper", "page": 2}]}
+      ],
+      "gap_resolutions": [],
+      "hypotheses": [],
+      "gold_should_pass_validation": false,
+      "gold_violation_rule": "invalid_source_reference",
+      "is_flawed_llm_output": true
+    },
+    {
+      "id": "xp-04",
+      "description": "Structural violation: hypothesis uses deterministic language instead of modal.",
+      "primary_id": "11111111-1111-1111-1111-111111111111",
+      "supporting_ids": ["22222222-2222-2222-2222-222222222222"],
+      "comparison_items": [],
+      "gap_resolutions": [],
+      "hypotheses": [
+        {"description": "This method will guarantee better performance on all datasets.", "supporting_sources": [{"paper_id": "22222222-2222-2222-2222-222222222222", "paper_title": "Supporting"}], "rationale": "trend observed", "certainty": "interpreted"}
+      ],
+      "gold_should_pass_validation": false,
+      "gold_violation_rule": "deterministic_hypothesis_language",
+      "is_flawed_llm_output": true
+    },
+    {
+      "id": "xp-05",
+      "description": "SEMANTIC violation NOT caught by the real structural validator: primary_claim is stated about the primary paper, but its only source_reference is a supporting paper -- exactly the 'merge primary and supporting evidence' failure the constitution forbids, and the current validator has no rule for it.",
+      "primary_id": "11111111-1111-1111-1111-111111111111",
+      "supporting_ids": ["22222222-2222-2222-2222-222222222222"],
+      "comparison_items": [
+        {"topic": "final accuracy", "primary_claim": "Primary paper reports 97% accuracy", "supporting_claims": [], "relationship": "SUPPORTS", "evidence": "value only appears in the supporting paper", "certainty": "explicit",
+         "source_references": [{"paper_id": "22222222-2222-2222-2222-222222222222", "paper_title": "Supporting"}]}
+      ],
+      "gap_resolutions": [],
+      "hypotheses": [],
+      "gold_should_pass_validation": false,
+      "gold_violation_rule": "primary_supporting_merge_not_structurally_detectable",
+      "is_flawed_llm_output": true
+    }
+  ],
+
+  "sufficiency_gap_contradiction": [
+    {
+      "id": "sgc-01",
+      "description": "Correct, honest sufficiency claim: paper fully answers the stated goal.",
+      "claimed_sufficiency": "sufficient",
+      "gold_sufficiency": "sufficient",
+      "claimed_gaps": [],
+      "gold_gaps_expected": [],
+      "claimed_conflicts": [],
+      "gold_conflicts_expected": [],
+      "is_flawed_llm_output": false
+    },
+    {
+      "id": "sgc-02",
+      "description": "Correct, honest insufficiency claim with a REQUIRED gap named.",
+      "claimed_sufficiency": "insufficient",
+      "gold_sufficiency": "insufficient",
+      "claimed_gaps": [{"gap_type": "missing_hyperparameter", "classification": "required"}],
+      "gold_gaps_expected": [{"gap_type": "missing_hyperparameter", "classification": "required"}],
+      "claimed_conflicts": [],
+      "gold_conflicts_expected": [],
+      "is_flawed_llm_output": false
+    },
+    {
+      "id": "sgc-03",
+      "description": "Correctly reports an internal contradiction between abstract and results table.",
+      "claimed_sufficiency": "ambiguous",
+      "gold_sufficiency": "ambiguous",
+      "claimed_gaps": [],
+      "gold_gaps_expected": [],
+      "claimed_conflicts": [{"description": "Abstract states 92% accuracy, Table 1 states 89%."}],
+      "gold_conflicts_expected": [{"description": "Abstract states 92% accuracy, Table 1 states 89%."}],
+      "is_flawed_llm_output": false
+    },
+    {
+      "id": "sgc-04",
+      "description": "INJECTED ERROR: model over-claims sufficient when a REQUIRED variable (loss function) is actually never stated in the source text. No backend check exists to catch this today.",
+      "claimed_sufficiency": "sufficient",
+      "gold_sufficiency": "insufficient",
+      "claimed_gaps": [],
+      "gold_gaps_expected": [{"gap_type": "missing_loss_function", "classification": "required"}],
+      "claimed_conflicts": [],
+      "gold_conflicts_expected": [],
+      "is_flawed_llm_output": true
+    },
+    {
+      "id": "sgc-05",
+      "description": "INJECTED ERROR: model silently drops a real numeric contradiction present in the source text (94% vs 91%) and reports no conflicts. No backend check exists to catch this today.",
+      "claimed_sufficiency": "sufficient",
+      "gold_sufficiency": "ambiguous",
+      "claimed_gaps": [],
+      "gold_gaps_expected": [],
+      "claimed_conflicts": [],
+      "gold_conflicts_expected": [{"description": "Section 4 states 94% accuracy, Section 5 states 91% accuracy."}],
+      "is_flawed_llm_output": true
+    },
+    {
+      "id": "sgc-06",
+      "description": "INJECTED ERROR: model misclassifies an OPTIONAL gap (extra ablation study) as REQUIRED, inflating perceived insufficiency. No backend check exists to catch this today.",
+      "claimed_sufficiency": "insufficient",
+      "gold_sufficiency": "sufficient",
+      "claimed_gaps": [{"gap_type": "missing_ablation_study", "classification": "required"}],
+      "gold_gaps_expected": [{"gap_type": "missing_ablation_study", "classification": "optional"}],
+      "claimed_conflicts": [],
+      "gold_conflicts_expected": [],
+      "is_flawed_llm_output": true
+    }
+  ],
+
+  "evidence_state": [
+    {"id": "es-01", "description": "Explicit fact, backend-accepted citation.", "certainty": "explicit", "relationship": null, "citation_accepted": true, "is_primary_source": true, "has_source_evidence": true, "gold_state": "verified"},
+    {"id": "es-02", "description": "Interpreted value, no citation check applies (document-understanding path).", "certainty": "interpreted", "relationship": null, "citation_accepted": null, "is_primary_source": true, "has_source_evidence": true, "gold_state": "derived"},
+    {"id": "es-03", "description": "Strongly supported but not verbatim-explicit.", "certainty": "strongly_supported", "relationship": null, "citation_accepted": null, "is_primary_source": true, "has_source_evidence": true, "gold_state": "derived"},
+    {"id": "es-04", "description": "Supporting-paper evidence backing a claim, not itself the primary source.", "certainty": "strongly_supported", "relationship": "SUPPORTS", "citation_accepted": null, "is_primary_source": false, "has_source_evidence": true, "gold_state": "supporting"},
+    {"id": "es-05", "description": "No source pointer at all.", "certainty": "unknown", "relationship": null, "citation_accepted": null, "is_primary_source": true, "has_source_evidence": false, "gold_state": "unknown"},
+    {"id": "es-06", "description": "Model's own certainty is UNKNOWN.", "certainty": "unknown", "relationship": null, "citation_accepted": null, "is_primary_source": true, "has_source_evidence": true, "gold_state": "unknown"},
+    {"id": "es-07", "description": "Cross-paper relationship is CONTRADICTS.", "certainty": "explicit", "relationship": "CONTRADICTS", "citation_accepted": null, "is_primary_source": true, "has_source_evidence": true, "gold_state": "contradicted"},
+    {"id": "es-08", "description": "Citation claimed by the model but rejected by the real validator (hallucinated) -- must NOT be verified.", "certainty": "explicit", "relationship": null, "citation_accepted": false, "is_primary_source": true, "has_source_evidence": true, "gold_state": "unknown"}
+  ]
+}

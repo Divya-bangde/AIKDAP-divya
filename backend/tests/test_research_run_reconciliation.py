@@ -19,6 +19,7 @@ import pytest
 import pytest_asyncio
 
 from app.core.config import settings
+from app.database.session import engine
 from app.modules.research.enums import ResearchRunStatus
 from app.modules.research.models import ResearchRun
 from app.workers.reconciliation import (
@@ -35,7 +36,19 @@ async def clean_ambient_stale_runs():
     Sprint 9H manual test. Reconciling once before each test gives
     every test a known-clean baseline to assert exact counts against,
     which is itself just an ordinary (idempotent) use of the function
-    under test, not a workaround."""
+    under test, not a workaround.
+
+    `engine.dispose()` first is the same narrow, test-local workaround
+    every `test_execution_*` file already uses for the repository's known
+    module-level-engine + function-scoped-event-loop interaction: without
+    it, this fixture is the first thing in the file to touch the pool on
+    a fresh loop and inherits whichever connections the previously-run
+    test file left bound to a dead one, producing `attached to a
+    different loop` errors in fixture SETUP (3 of this file's 7 tests,
+    varying with test ordering). Does not touch
+    `app/database/session.py`, `conftest.py`, or `pytest.ini`.
+    """
+    await engine.dispose()
     await reconcile_stale_research_runs()
 
 

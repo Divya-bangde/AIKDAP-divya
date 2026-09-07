@@ -22,6 +22,7 @@ from app.database.base import Base
 # model imports alongside this one as they are implemented.
 from app.modules.assets.models import Asset  # noqa: F401
 from app.modules.auth.models import User  # noqa: F401
+from app.modules.execution.models import ExecutionAttempt, ExecutionJob  # noqa: F401
 from app.modules.knowledge_base.models import KnowledgeChunk  # noqa: F401
 from app.modules.projects.models import Project  # noqa: F401
 from app.modules.research.models import (  # noqa: F401

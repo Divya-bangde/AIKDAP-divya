@@ -1,0 +1,94 @@
+{
+  "_provenance": "Sprint 16 Phase 8.5. Every claim, evidence snippet, and required value below is REAL text: cv-01/02 and si-01/02 are copied verbatim from real Phase 8.4 research runs (run ids given per case) against real ingested SANS papers; cv-03 is copied verbatim from the same real aguilar_cti PDF's own knowledge_chunks rows (chunk_index 24 and 42), captured directly from Postgres for this phase, and reproduces the real internal contradiction Phase 8.2's document-understanding pass already found in that paper. cv-04 is the Phase 8.1 xp-05 scenario, reused unmodified from gold_evidence_intelligence.json -- that scenario's text is SYNTHETIC (hand-authored for Phase 8.1), labeled as such there and here. The verification code every case is run through (app.modules.research.claim_verification) is REAL production code written this phase.",
+
+  "numeric_claims": [
+    {
+      "id": "cv-01",
+      "description": "REAL: run 23d1361f-9d05-4d86-8f0f-a9705773a19b (aguilar_cti, gate_on, answerable, rep 1). Qwen reported 73.5% as the OVERALL pass rate; every cited occurrence of 73.5% is the S4 row of a per-strategy table, never labelled as an aggregate.",
+      "claimed_value": "73.5%",
+      "is_aggregate_claim": true,
+      "evidence": [
+        ["c1", "he mean composite scores, dimension scores, and pass rates for each of the five prompt strategies. Strategy N Avg Action. Avg Rigor Avg Language Avg Structure Composite / Pass % S0: Baseline 200 3.60 3.77 3.30 2.96 3.50 / 61.0% S1: Template 200 3.22 3.20 3.53 2.85 3.22 / 1.5% S2: Template + BLUF 200 3.28 3.19 3.58 3.68 3.37 / 20.0% S3: One-Shot Template 200 3.37 3.54 3.66 3.14 3.44 / 38.0% S4: One-Shot + BLUF 200 3.55 3.35 3.70 4.07 3.60 / 73.5% Figure 1: Prompt Strategy Summary (AI-Instrument Scoring, N = 1,000) 3.2.1 The Underperformance of S1 The most counterintuitive finding in the dataset is S1’s severe under performance relative to the unstructured baseline S0. The addition of a..."],
+        ["c2", "onds versus an estimated 8-hour human midpoint represents a reduction of over 99% in drafting time. At the S4 configuration’s 73.5% AI-instrument pass rate, and assuming the 26.5% of failing reports still require meaningful analyst revision, an estimated 4 to 12 analyst-hours are recovered per week for a small CTI team. Second, the quality of that output depends on both the prompt design and the scoring instrument used to evaluate it. Under AI-instrument scoring, S4 achieves a 73.5% pass rate. The human-analyst inter-rater validation exercise, however, revealed a 61.7% verdict-flip rate and a mean absolute composite divergence of 0.517 across 60 dual-scored reports, indicating that actual..."],
+        ["c4", "n and intelligence standards, is a conditional yes, and the condition points to prompt engineering. Gemma3:27b, running on consumer-grade hardware through a standard RAG pipeline, produced passing-quality executive CTI reports at a 73.5% rate under the S4 prompt configuration per AI-instrument scoring, with individual reports generated in an average of 17.76 seconds. That finding has direct operational significance for small CTI teams whose reporting burden exceeds their capacity: the drafting bottleneck can be substantially relieved without enterprise AI infrastructure, without exposing sensitive intelligence to the cloud, and without fine-tuning or model customization. The conditions..."]
+      ],
+      "gold_verdict": "contradicted",
+      "note_the_true_aggregate_38_8_percent_was_never_in_the_evidence_supplied_to_the_model": "Confirmed by the real Phase 8.2 document-understanding extraction of this same PDF (results.json 'results' field: 'overall pass rate was 38.8%'), but that figure is not present in any of the 5 chunks this run's retrieval actually supplied to synthesis -- a retrieval-coverage gap compounding the model's aggregation error. Not added to the evidence list here: doing so would fabricate evidence the model was never actually given."
+    },
+    {
+      "id": "cv-02",
+      "description": "REAL: same run as cv-01, the model's other numeric claims ('S0 (61.0%)', 'S3 (38.0%)') ARE correctly scoped -- used as the non-aggregate control case.",
+      "claimed_value": "61.0%",
+      "is_aggregate_claim": false,
+      "evidence": [
+        ["c1", "S0: Baseline 200 3.60 3.77 3.30 2.96 3.50 / 61.0% S1: Template 200 3.22 3.20 3.53 2.85 3.22 / 1.5%"]
+      ],
+      "gold_verdict": "supported"
+    }
+  ],
+
+  "categorical_claims": [
+    {
+      "id": "cv-03",
+      "description": "REAL: chunk_index 24 vs chunk_index 42 of the real ingested aguilar_cti PDF (asset c1854871-a178-4a48-ba8d-0632c29da6fe), fetched directly from the knowledge_chunks table for this phase. This is the source document contradicting itself -- the same real internal conflict Phase 8.2's document-understanding pass reported ('Chunk 25 states Claude Sonnet 4.6 ... Chunk 42/43/44 ... label the AI scoring instrument as Gemma3').",
+      "claim_text": "Reports were submitted to Claude (Sonnet 4.6) in randomized batches with identifying information removed: the scoring instrument had no visibility into which prompt strategy produced a given rep",
+      "evidence": [
+        ["chunk-24", "Reports were submitted to Claude (Sonnet 4.6) in randomized batches with identifying information removed: the scoring instrument had no visibility into which prompt strategy produced a given rep"],
+        ["chunk-42", "Gemma3 Pass → Human Fail 17 28.3% Model over-credited report quality Gemma3 Fail → Human Pass 20 33.3% Model under-credited report quality Pass/Fail agreement rate 23 38.3% Both raters reached same verdict Mean composite, Gemma3 3.431 N/A Average across dual-scored set"]
+      ],
+      "contradicting_phrases": ["Gemma3"],
+      "gold_verdict": "contradicted"
+    },
+    {
+      "id": "si-01",
+      "description": "REAL: run 50163fe6-5f61-4cf7-935a-70f23719aad2 (sinanian_lte, gate_on, answerable, rep 1). Qwen's claim is correct and near-verbatim in the cited evidence.",
+      "claim_text": "Allowlist suppression was the decisive factor that raised stalkerware family detection within a ten-flow review budget from just two out of five families to all five families.",
+      "evidence": [
+        ["c1", "k and SpyGuard from resource-constrained hardware to a scalable platform running Suricata and Zeek. Detection combined signature-based rules with an unsupervised Isolation Forest trained on benign traffic and evaluated under a review-budget framing (Hit@k, Precision@k, Recall@k) against five commercial stalkerware vendors. A three-phase experiment isolated the contribution of each design choice — a single benign baseline, post-scoring allowlist suppression, and an expanded eight-sample baseline. The results revealed that the allowlist suppression was the decisive factor, raising detection within a ten-flow review budget from just two out of five families to all five. A quantitative..."]
+      ],
+      "gold_verdict": "supported"
+    }
+  ],
+
+  "sufficiency_claims": [
+    {
+      "id": "si-02",
+      "description": "REAL: run 637d6cf1-1f5e-470e-9332-431b6e0ca575 (vaniscak_c2, gate_on, answerable, rep 1). Qwen declined to answer ('does not provide a single aggregate percentage representing that highest rate'), but the evidence actually supplied to it states 'JA4 fingerprints (100% detection)' -- the highest rate in the evidence set.",
+      "claimed_insufficient": true,
+      "evidence_supplied": [
+        "sing 51 packet captures (3 baselines, 6 automated browser tests and 6 framework tests per service). Across four detection tiers, Reputation-based detection failed to identify any C2 channels; Beacon Detection was marginally viable when using clustering (2/4); Traffic Metadata was partially viable, with mixed results other than JA4 fingerprints (100% detection); and Traffic Patterns proved most viable, with both TLS session resumption near-zero (vs 22%+ for browser) and a 2.6x upload/download ratio gap (1.41 vs 0.55 means). Structural and behavioral indicators, such as TLS session resumption and JA4 fingerprinting, outperform reputation in detecting trusted service abuse.",
+        "Network Artifacts of Trusted Service Abuse Author: Nicholas A. Vaniscak, vaniscak.nicholas@gmail.com Advisor: Lee Crognale Accepted: June 19th, 2026 Abstract...",
+        "Network Artifacts of Trusted Service Abuse 27 ... tested four publicly available C2 frameworks that operate over trusted services, Discord, Dropbox, Gmail, and OneNote, and found that both reputation-based detection and traditional beacon detection are ineffective...",
+        "Network Artifacts of Trusted Service Abuse 12 ... Figure 5: Network Connections ... 3.2. Reputation — Not Viable Domain and IP reputation are the primary detection methods that abuse of trusted services is intended to defeat...",
+        "Network Artifacts of Trusted Service Abuse 13 ... Filtering to the malicious and dual-use channels, VirusTotal flagged 7/41. None of the C2 channels were detected..."
+      ],
+      "required_values": ["100% detection"],
+      "gold_verdict": "model_failed_to_use_sufficient_evidence"
+    },
+    {
+      "id": "si-03",
+      "description": "REAL: runs 80f5f264-a55a-4e72-a4ce-78e7a5c73b3b / ba737f0b-a9fc-42a0-8465-a0089c7c02b1 / fae9c44f-1ba0-4e9b-84fb-2a51e837b86b (aguilar_cti, gate_on, unanswerable/SQuAD question, reps 1-3). The relevance gate withheld all 5 retrieved chunks as irrelevant; grounded_synthesis_skipped fired and no model call was made. This paper genuinely never discusses SQuAD -- a real, correct insufficiency.",
+      "claimed_insufficient": true,
+      "evidence_supplied": [],
+      "required_values": ["SQuAD"],
+      "gold_verdict": "source_insufficient"
+    }
+  ],
+
+  "primary_supporting_contamination": [
+    {
+      "id": "cv-04-xp05",
+      "description": "SYNTHETIC (reused unmodified from Phase 8.1's gold_evidence_intelligence.json, scenario xp-05): primary_claim 'Primary paper reports 97% accuracy' whose only source_reference points at the supporting paper, not the primary one -- a semantic violation the real structural validator (_validate_cross_paper_result) does not catch (it only checks that source ids resolve to *some* known paper).",
+      "claim_attributed_to_primary": true,
+      "source_is_primary": [false],
+      "gold_contamination": true
+    },
+    {
+      "id": "cv-05-no-contamination",
+      "description": "SYNTHETIC control case: same shape as xp-05, but the primary paper is among the sources -- no contamination.",
+      "claim_attributed_to_primary": true,
+      "source_is_primary": [true, false],
+      "gold_contamination": false
+    }
+  ]
+}

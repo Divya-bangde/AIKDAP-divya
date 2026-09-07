@@ -66,12 +66,56 @@ orjson==3.11.2
 tenacity==9.1.2
 
 # ===========================
+# Execution launcher (Sprint 16 Phase 7B.25) -- real Docker client.
+# Import stays confined to execution_launcher/launcher.py; no other
+# module in this codebase is permitted to import `docker` directly
+# (see that module's docstring and test_execution_docker_isolation.py).
+# ===========================
+docker==7.2.0
+
+# ===========================
 # Data Processing
 # ===========================
 pandas==2.3.2
 numpy==2.3.2
 openpyxl==3.1.5
 python-multipart==0.0.20
+# Deterministic equation/constraint math for the Experiment Plan Engine
+# (Sprint 16 Phase 6) -- equation parsing, free-symbol identification,
+# and mathematically-derived constraints never go through the LLM.
+sympy==1.13.3
+
+# ===========================
+# Document ingestion (Sprint 12.1)
+# ===========================
+# PDF text extraction. Pure Python, no system dependency (poppler/etc).
+pypdf==6.16.2
+# DOCX/PPTX structure-aware extraction (paragraphs+headings, slides).
+python-docx==1.2.0
+python-pptx==1.0.2
+# HTML text extraction. lxml as the parser backend -- faster and more
+# tolerant of malformed markup than the stdlib html.parser.
+beautifulsoup4==4.15.0
+lxml==6.1.2
+
+# ===========================
+# OCR (Sprint 12.5)
+# ===========================
+# Decodes embedded/standalone raster images (PNG/JPEG, and the images
+# pypdf extracts from a scanned PDF page) before handing them to
+# Tesseract. Already present transitively (via reportlab); pinned
+# directly since this sprint imports it in production code, not just
+# test fixtures.
+Pillow==12.3.0
+# Thin wrapper around the `tesseract` CLI binary -- no ML framework in
+# the Python process itself. Chosen over EasyOCR/PaddleOCR (each pulls
+# in PyTorch/PaddlePaddle, multi-GB, GPU-oriented) and over PyMuPDF-based
+# rasterization (AGPL-3.0/commercial dual license -- a real risk for a
+# project that may become closed-source SaaS, versus Tesseract's
+# Apache-2.0). Requires the `tesseract-ocr` system package (see
+# Dockerfile) -- ~19MB installed, Apache-2.0, fully offline, no API key,
+# no per-call cost. See extractors.py/ocr.py for the integration.
+pytesseract==0.3.13
 
 # ===========================
 # Validation & Serialization
@@ -89,6 +133,12 @@ structlog==25.4.0
 pytest==8.4.1
 pytest-asyncio==1.1.0
 pytest-cov==6.2.1
+# Test-only: generates real, correctly-structured PDF fixtures for
+# extractor tests (Sprint 12.1) -- pypdf reads PDFs but has no text-
+# authoring API, and hand-rolling a byte-correct xref table by hand is
+# exactly the kind of fragile-and-wrong-in-a-subtle-way risk not worth
+# taking for a test suite that needs to be trusted.
+reportlab==5.0.1
 
 # ===========================
 # Code Quality

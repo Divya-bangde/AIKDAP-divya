@@ -18,6 +18,7 @@ from app.modules.assets.schemas import AssetRead, AssetUpdate
 from app.modules.assets.service import (
     AssetNotFoundError,
     AssetService,
+    DuplicateAssetError,
     ProjectAccessDeniedError,
     get_asset_service,
 )
@@ -73,6 +74,8 @@ async def upload_asset(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
+    except DuplicateAssetError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return AssetRead.from_model(asset)
 
 
@@ -108,6 +111,15 @@ async def search_assets(
 @router.post("/{asset_id}/process", response_model=AssetRead, status_code=status.HTTP_202_ACCEPTED)
 async def reprocess_asset(
     asset_id: uuid.UUID,
+    force: bool = Query(
+        default=False,
+        description=(
+            "Re-run the pipeline even if this asset already completed "
+            "extraction, understanding, and embedding successfully. "
+            "Without this, reprocessing an already-fully-processed asset "
+            "is a no-op (Sprint 12.8)."
+        ),
+    ),
     current_user: User = Depends(get_current_user),
     service: AssetService = Depends(get_asset_service),
 ) -> AssetRead:
@@ -115,10 +127,13 @@ async def reprocess_asset(
 
     Assets are queued automatically on upload; this endpoint is for
     retrying a `FAILED` asset or reprocessing after the pipeline
-    changes.
+    changes. A `FAILED` or otherwise incomplete asset is always
+    reprocessed regardless of `force`; only an asset that already
+    completed every stage successfully is skipped, and only when
+    `force` is not set.
     """
     try:
-        asset = await service.reprocess(current_user.id, asset_id)
+        asset = await service.reprocess(current_user.id, asset_id, force=force)
     except AssetNotFoundError as exc:
         raise _NOT_FOUND from exc
     return AssetRead.from_model(asset)

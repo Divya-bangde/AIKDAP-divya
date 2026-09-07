@@ -1,0 +1,44 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "files": [
+          "design/business-analytics-dashboard-mockup.html"
+        ],
+        "createdAt": "2026-09-04T17:11:49.060Z",
+        "reason": "matches AIKDAP's existing shipped typeface, see frontend/src/styles/fonts.css"
+      },
+      {
+        "rule": "overused-font",
+        "value": "space grotesk",
+        "files": [
+          "design/business-analytics-dashboard-mockup.html"
+        ],
+        "createdAt": "2026-09-04T17:11:49.141Z",
+        "reason": "matches AIKDAP's existing shipped typeface, see frontend/src/styles/fonts.css"
+      },
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "files": [
+          "frontend/design/research-analysis-dashboard-mockup.html"
+        ],
+        "createdAt": "2026-09-04T17:44:55.637Z",
+        "reason": "matches AIKDAP's existing shipped typeface, see frontend/src/styles/fonts.css"
+      },
+      {
+        "rule": "overused-font",
+        "value": "space grotesk",
+        "files": [
+          "frontend/design/research-analysis-dashboard-mockup.html"
+        ],
+        "createdAt": "2026-09-04T17:44:55.716Z",
+        "reason": "matches AIKDAP's existing shipped typeface, see frontend/src/styles/fonts.css"
+      }
+    ]
+  }
+}

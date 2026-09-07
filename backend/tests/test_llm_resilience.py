@@ -999,7 +999,9 @@ async def test_an_empty_openrouter_completion_falls_back_like_any_other_failure(
         openrouter_empty_completion_error(),
     ]
 
-    with pytest.raises(LLMProviderError, match="no content"):
+    # Sprint 16 Phase 8.3: message reworded to cover `content=""` too
+    # (reproduced for real against a local Ollama model), not just `None`.
+    with pytest.raises(LLMProviderError, match="empty content"):
         await chained().generate(prompt="hi")
 
     assert models_called(call) == [GEMINI, GROQ, GROQ, GROQ, OPENROUTER]

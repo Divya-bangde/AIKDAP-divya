@@ -2,7 +2,12 @@ import type { components } from "@/types/api";
 
 type AssetRead = components["schemas"]["AssetRead"];
 
-const TERMINAL_PROCESSING_STATUSES = new Set(["completed", "failed", "unsupported"]);
+const TERMINAL_PROCESSING_STATUSES = new Set([
+  "completed",
+  "failed",
+  "unsupported",
+  "ocr_required",
+]);
 const TERMINAL_EMBEDDING_STATUSES = new Set(["completed", "failed", "not_applicable"]);
 
 /** Whether an asset has finished everything the backend will ever do to it.

@@ -826,6 +826,34 @@ class LLMGateway:
         not.
         """
         provider = provider_of(model)
+        if provider == "ollama" and response_format is not None:
+            # Sprint 16 Phase 8.3: LiteLLM's plain `ollama` provider calls
+            # Ollama's `/api/generate` endpoint, whose JSON-mode transform
+            # reads only the raw `response` field. A hybrid-reasoning model
+            # (e.g. qwen3.5) asked for JSON puts its entire answer in the
+            # separate `thinking` field instead and leaves `response`
+            # empty -- LiteLLM then hands back "success" with blank
+            # content (reproduced directly against a real local model:
+            # `eval_count` > 0, `done_reason: stop`, `response: ""`).
+            # `ollama_chat` calls `/api/chat`, which correctly separates
+            # `message.content` from `message.thinking` regardless of
+            # reasoning mode -- confirmed against the same model with the
+            # same prompt. Rewriting only when a response_format is
+            # requested, since that's the reproduced failure; a caller
+            # that already wrote `ollama_chat/...` is left untouched.
+            model = "ollama_chat/" + model.split("/", 1)[1]
+            provider = "ollama_chat"
+            if think is None:
+                # A short "say hello"-sized prompt reproduces cleanly with
+                # `ollama_chat` alone. A real 30-page document under the
+                # full target JSON schema did not: the model's `<think>`
+                # pass consumed the entire token budget and `content`
+                # was still "" at `done_reason=stop` -- confirmed by
+                # forcing `think: false` on the same real document and
+                # schema, which returned real, complete JSON in 15s.
+                # Only defaulted when the caller has no opinion; an
+                # explicit `think=True` is still honoured.
+                think = False
         request: dict[str, Any] = {
             "model": model,
             "messages": [message.as_dict() for message in messages],
@@ -845,7 +873,17 @@ class LLMGateway:
             request["api_base"] = settings.ollama_base_url
         if response_format is not None:
             request["response_format"] = response_format
-        if think is not None:
+        if think is not None and provider in _OLLAMA_PROVIDERS:
+            # `think` is Ollama's hybrid-reasoning toggle (Sprint 12.5),
+            # not a general completion parameter. `litellm.drop_params`
+            # strips *recognized* optional params a provider doesn't
+            # support, but `think` is an arbitrary custom key that
+            # LiteLLM passes straight through as extra body -- forwarded
+            # unscoped, it reached Groq's OpenAI-compatible endpoint on
+            # every fallback attempt and was rejected as an unsupported
+            # property (Sprint 12.6 Phase 2/3 finding). A caller asking
+            # only Ollama to skip its reasoning pass must not also ask
+            # every fallback provider to do the same.
             request["think"] = think
 
         # Logged without the request payload or the key: prompts can
@@ -942,9 +980,15 @@ class LLMGateway:
 
         message = getattr(choices[0], "message", None)
         content = getattr(message, "content", None) if message is not None else None
-        if content is None:
+        # Sprint 16 Phase 8.3: `content is None` alone let a real failure
+        # through -- a local reasoning model in JSON mode returned
+        # `content=""` (not None) with `finish_reason="stop"` and a
+        # nonzero token count, which read as a normal, successful,
+        # blank answer. Blank is never a valid answer for this gateway's
+        # callers, so it is a failure here too, not just an absent field.
+        if not content or not content.strip():
             raise LLMProviderError(
-                "The provider returned a choice with no content.", model=model
+                "The provider returned a choice with empty content.", model=model
             )
 
         usage = getattr(completion, "usage", None)
