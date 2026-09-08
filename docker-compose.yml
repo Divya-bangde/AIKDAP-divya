@@ -72,10 +72,20 @@ services:
     # container-specific values here stops that drift class from
     # recurring: a future `.env` edit alone can no longer silently
     # desync from what's actually running.
+    # Sprint 16 Phase 8.13 prerequisite: root .env's DEFAULT_LLM/
+    # SYNTHESIS_MODEL are gemini/gemini-flash-latest with the free-tier
+    # quota exhausted -- confirmed live via `docker exec ... printenv`
+    # before this edit. Pinning both here to the local Qwen model (the
+    # same one already verified working end-to-end in Phase 8.4) means
+    # a request never silently falls through the cloud fallback chain,
+    # which would make the new UnsourcedSynthesizer's answers just as
+    # untrustworthy as 8.11's diagnosis found the old ones to be.
     environment:
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       RERANKER_BASE_URL: http://host.docker.internal:8090
       BACKEND_CORS_ORIGINS: "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174,https://aikdap-divya.vercel.app,https://tourist-egg-passive-extending.trycloudflare.com"
+      DEFAULT_LLM: ollama/qwen3.5:4b
+      SYNTHESIS_MODEL: ollama/qwen3.5:4b
 
     ports:
       - "8001:8000"
@@ -105,11 +115,14 @@ services:
 
     # See the backend service's identical block above for why this is
     # needed (Compose `environment:` overrides `env_file` and is
-    # re-applied on every recreate).
+    # re-applied on every recreate), including the Phase 8.13
+    # DEFAULT_LLM/SYNTHESIS_MODEL pin.
     environment:
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       RERANKER_BASE_URL: http://host.docker.internal:8090
       BACKEND_CORS_ORIGINS: "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174,https://aikdap-divya.vercel.app,https://tourist-egg-passive-extending.trycloudflare.com"
+      DEFAULT_LLM: ollama/qwen3.5:4b
+      SYNTHESIS_MODEL: ollama/qwen3.5:4b
 
     volumes:
       - ./backend:/app

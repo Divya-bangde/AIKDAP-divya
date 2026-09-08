@@ -64,6 +64,15 @@ class TaskAccessDeniedError(Exception):
     """Raised when the caller does not own the task a run is linked to."""
 
 
+class UnsourcedSynthesisFailedError(Exception):
+    """Raised when the unsourced-answer model call itself failed.
+
+    The new run row is still persisted as `FAILED` before this is
+    raised, so the attempt stays in the audit trail even though the
+    caller gets an error back.
+    """
+
+
 class ResearchService:
     """Request-scoped coordination of research run creation and retrieval."""
 
@@ -193,6 +202,82 @@ class ResearchService:
         # await self._session.commit()
         
         return comparison
+
+    async def create_unsourced_run(self, run: ResearchRun) -> ResearchRun:
+        """Answer `run`'s query from general knowledge, outside the evidence boundary.
+
+        `run` is already ownership-checked by the caller (`get_owned_run`
+        resolved it from the path), so this does not re-check ownership
+        -- exactly like `get_trace` above. A new, linked `ResearchRun`
+        row is created rather than mutating `run`: the original stays
+        the honest record of "the platform declined to answer", and
+        this new row is the separate, explicit record of "the user then
+        asked anyway" (Sprint 16 Phase 8.13 Part B).
+
+        Executed synchronously in the request, like `analyze_document`
+        above -- one model call, no retrieval, no gate, no context
+        builder, so there is nothing here for a Celery task to do that
+        this request cannot do itself.
+        """
+        from app.agents.planner.synthesis import UnsourcedSynthesizer
+
+        new_run = ResearchRun(
+            project_id=run.project_id,
+            owner_id=run.owner_id,
+            task_id=run.task_id,
+            query=run.query,
+            status=ResearchRunStatus.RUNNING,
+            include_assets=False,
+            include_web=False,
+            max_results=run.max_results,
+            started_at=datetime.now(timezone.utc),
+        )
+        created = await self._runs.create(new_run)
+        await self._session.commit()
+
+        logger.info(
+            "unsourced_research_run_created",
+            run_id=str(created.id),
+            source_run_id=str(run.id),
+            project_id=str(created.project_id),
+        )
+
+        monotonic_start = time.monotonic()
+        try:
+            result = await UnsourcedSynthesizer().synthesize(query=run.query)
+        except Exception as exc:  # noqa: BLE001 - recorded on the run, not swallowed
+            created.status = ResearchRunStatus.FAILED
+            created.error_message = f"{type(exc).__name__}: {exc}"
+            created.completed_at = datetime.now(timezone.utc)
+            created.duration_ms = _elapsed_ms(monotonic_start)
+            await self._session.commit()
+            logger.error(
+                "unsourced_research_run_failed",
+                run_id=str(created.id),
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+            )
+            raise UnsourcedSynthesisFailedError(str(created.id)) from exc
+
+        created.status = ResearchRunStatus.COMPLETED
+        created.final_answer = result.answer
+        # Always `[]` by construction -- see `UnsourcedSynthesizer`.
+        # Never filtered or validated here; there is nothing to filter.
+        created.citations = result.citations
+        created.grounding_status = ResearchGroundingStatus.UNSOURCED
+        created.completed_at = datetime.now(timezone.utc)
+        created.duration_ms = _elapsed_ms(monotonic_start)
+        await self._session.commit()
+        await self._session.refresh(created)
+
+        logger.info(
+            "unsourced_research_run_completed",
+            run_id=str(created.id),
+            duration_ms=created.duration_ms,
+            model=result.model,
+            provider=result.provider,
+        )
+        return created
 
     async def get_owned_run(self, owner_id: uuid.UUID, run_id: uuid.UUID) -> ResearchRun:
         """Fetch a run, ensuring it belongs to the given user."""

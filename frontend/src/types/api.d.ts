@@ -497,6 +497,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/research/runs/{run_id}/unsourced": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Unsourced Run Route
+         * @description Answer `run`'s query from general knowledge, on the caller's explicit request.
+         *
+         *     Sprint 16 Phase 8.13: reached only after `run` already returned
+         *     `insufficient_evidence` and the user pressed the dedicated control
+         *     to leave the evidence boundary. Creates a new, separately auditable
+         *     run rather than mutating `run` itself; `get_owned_run` already
+         *     enforces ownership, transitively through the project, the same as
+         *     every other run-scoped route.
+         */
+        post: operations["create_unsourced_run_route_api_v1_research_runs__run_id__unsourced_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/research/documents/{asset_id}/analyze": {
         parameters: {
             query?: never;
@@ -2059,7 +2086,7 @@ export interface components {
          *     it was grounded is not evidence that it was.
          * @enum {string}
          */
-        ResearchGroundingStatus: "grounded" | "partially_grounded" | "insufficient_evidence" | "failed";
+        ResearchGroundingStatus: "grounded" | "partially_grounded" | "insufficient_evidence" | "failed" | "unsourced";
         /** ResearchHypothesis */
         ResearchHypothesis: {
             /**
@@ -3709,6 +3736,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResearchRunDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_unsourced_run_route_api_v1_research_runs__run_id__unsourced_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchRunRead"];
                 };
             };
             /** @description Validation Error */

@@ -45,8 +45,10 @@ from pydantic import ValidationError
 
 from app.agents.planner.prompts import (
     GROUNDED_SYNTHESIS_SYSTEM_PROMPT,
+    UNSOURCED_SYNTHESIS_SYSTEM_PROMPT,
     render_grounded_evidence,
     render_grounded_synthesis_prompt,
+    render_unsourced_synthesis_prompt,
 )
 from app.agents.planner.state import Citation, RetrievedDocument
 from app.core.config import settings
@@ -63,6 +65,7 @@ from app.modules.research.schemas import (
     SynthesisClaim,
     SynthesisClaimScope,
     SynthesisClaimType,
+    UnsourcedSynthesisResponse,
 )
 
 logger = get_logger(__name__)
@@ -511,6 +514,89 @@ class GroundedSynthesizer(Synthesizer):
         return supplied, withheld_simulated, len(grounded) - len(supplied)
 
 
+class UnsourcedSynthesizer:
+    """Answers from the model's own knowledge -- deliberately not evidence-bound.
+
+    Not a `Synthesizer`: that ABC's contract (`documents`, `citations`,
+    `context`, `full_evidence_text`) describes grounding in retrieved
+    evidence, and this class has none of that to receive. It exists
+    beside `ExtractiveSynthesizer`/`GroundedSynthesizer` in this module
+    (Sprint 16 Phase 8.13), reached only through a dedicated service
+    call after a run already returned `insufficient_evidence` and the
+    user explicitly chose to leave the evidence boundary -- never a
+    branch inside `GroundedSynthesizer`, and never invoked by
+    `get_synthesizer()` or the graph.
+
+    The no-fabricated-citations guarantee is structural, not a checked
+    rule: `UnsourcedSynthesisResponse` has no `citation_ids` field for
+    the model to populate, so `SynthesisResult.citations` below is
+    always the literal `[]` -- there is no accepted/rejected split to
+    compute, because there is nothing supplied to validate against.
+    """
+
+    name = "unsourced_llm_v1"
+
+    def __init__(self, *, gateway: LLMGateway | None = None, model: str | None = None) -> None:
+        self._gateway = gateway or get_llm_gateway()
+        self._model = model or settings.synthesis_model
+
+    @property
+    def model(self) -> str:
+        """The model this synthesizer asks the gateway for."""
+        return self._model
+
+    async def synthesize(self, *, query: str) -> SynthesisResult:
+        """Answer `query` from the model's own knowledge alone."""
+        prompt = render_unsourced_synthesis_prompt(query=query)
+
+        logger.info("unsourced_synthesis_started", model=self._model)
+
+        response = await self._gateway.generate(
+            prompt=prompt,
+            system_prompt=UNSOURCED_SYNTHESIS_SYSTEM_PROMPT,
+            model=self._model,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "UnsourcedSynthesisResponse",
+                    "schema": UnsourcedSynthesisResponse.model_json_schema(),
+                },
+            },
+        )
+
+        answer, would_need = _parse_unsourced_response(response.content)
+
+        logger.info(
+            "unsourced_synthesis_completed",
+            model=response.model,
+            provider=response.provider,
+            latency_ms=response.latency_ms,
+            fallback_used=response.fallback_used,
+            primary_model=response.primary_model,
+            primary_error_type=response.primary_error_type,
+            llm_attempts=response.attempts,
+        )
+
+        return SynthesisResult(
+            answer=_compose_unsourced_answer(answer=answer, would_need=would_need),
+            # Never derived from the model's response -- there is no
+            # `citation_ids` field in `UnsourcedSynthesisResponse` for it
+            # to populate, so this is the only value this line could
+            # ever hold.
+            citations=[],
+            grounding_status=ResearchGroundingStatus.UNSOURCED,
+            evidence_supplied=0,
+            model=response.model,
+            provider=response.provider,
+            latency_ms=response.latency_ms,
+            fallback_used=response.fallback_used,
+            primary_model=response.primary_model,
+            primary_error_type=response.primary_error_type,
+            llm_attempts=response.attempts,
+            prompt=prompt,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Response handling
 # ---------------------------------------------------------------------------
@@ -586,6 +672,58 @@ def _parse_response(
         claimed_ids,
         claimed_status if isinstance(claimed_status, str) else None,
         claims,
+    )
+
+
+def _parse_unsourced_response(content: str) -> tuple[str, str]:
+    """Pull the answer and the citability requirement out of the model's JSON.
+
+    Strict the same way `_parse_response` is strict about the answer:
+    a response that is not a JSON object with a non-empty `answer` is
+    unusable. `would_need` is required by the schema but degrades to a
+    generic notice rather than failing the whole response -- it is a
+    disclosure enhancement, not the load-bearing field `answer` is.
+    """
+    text = (content or "").strip()
+    fenced = _JSON_FENCE.match(text)
+    if fenced:
+        text = fenced.group(1).strip()
+
+    if not text:
+        raise SynthesisResponseError("The synthesis model returned an empty response.")
+
+    try:
+        payload = json.loads(text)
+    except ValueError as exc:
+        raise SynthesisResponseError("The synthesis model did not return JSON.") from exc
+
+    if not isinstance(payload, dict):
+        raise SynthesisResponseError("The synthesis model returned JSON that is not an object.")
+
+    answer = payload.get("answer")
+    if not isinstance(answer, str) or not answer.strip():
+        raise SynthesisResponseError("The synthesis model returned no answer text.")
+
+    would_need = payload.get("would_need")
+    if not isinstance(would_need, str) or not would_need.strip():
+        would_need = "a source directly addressing this question has not been identified."
+
+    return answer.strip(), would_need.strip()
+
+
+def _compose_unsourced_answer(*, answer: str, would_need: str) -> str:
+    """Build the full disclosure text, self-sufficient once copied elsewhere.
+
+    The container this renders in on screen is visually distinct on
+    purpose, but a container is lost the moment someone copies the text
+    into a draft (Sprint 16 Phase 8.13 Part C) -- so the warning is
+    written into the text itself, not layered on top of it by the UI.
+    """
+    return (
+        "**Not in your uploaded papers. From general knowledge:**\n\n"
+        f"{answer}\n\n"
+        "## To make this citable\n"
+        f"You would need a source establishing: {would_need}\n"
     )
 
 

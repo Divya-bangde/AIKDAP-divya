@@ -61,6 +61,7 @@ from app.modules.research.service import (
     ProjectAccessDeniedError,
     ResearchService,
     TaskAccessDeniedError,
+    UnsourcedSynthesisFailedError,
 )
 
 router = APIRouter(prefix="/research", tags=["Research"])
@@ -129,6 +130,31 @@ async def get_research_run(
         # `message_metadata` attribute to the `metadata` API field.
         messages=[AgentMessageRead.from_model(message) for message in messages],
     )
+
+
+@router.post(
+    "/runs/{run_id}/unsourced", response_model=ResearchRunRead, status_code=status.HTTP_201_CREATED
+)
+async def create_unsourced_run_route(
+    run: ResearchRun = Depends(get_owned_run),
+    service: ResearchService = Depends(get_research_service),
+) -> ResearchRun:
+    """Answer `run`'s query from general knowledge, on the caller's explicit request.
+
+    Sprint 16 Phase 8.13: reached only after `run` already returned
+    `insufficient_evidence` and the user pressed the dedicated control
+    to leave the evidence boundary. Creates a new, separately auditable
+    run rather than mutating `run` itself; `get_owned_run` already
+    enforces ownership, transitively through the project, the same as
+    every other run-scoped route.
+    """
+    try:
+        return await service.create_unsourced_run(run)
+    except UnsourcedSynthesisFailedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The unsourced answer could not be generated.",
+        ) from exc
 
 
 @router.post("/documents/{asset_id}/analyze", response_model=ResearchDocumentUnderstanding)

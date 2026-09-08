@@ -1,4 +1,5 @@
 import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { EvidenceGapPanel } from "@/features/research/EvidenceGapPanel";
@@ -77,7 +78,11 @@ describe("EvidenceGapPanel", () => {
     vi.mocked(researchService.analyzeResearchDocument).mockResolvedValue(analysis);
 
     renderWithProviders(
-      <EvidenceGapPanel projectId="project-1" query="What rate did it achieve against X?" />,
+      <EvidenceGapPanel
+        projectId="project-1"
+        query="What rate did it achieve against X?"
+        runId="run-1"
+      />,
     );
 
     expect(
@@ -112,7 +117,7 @@ describe("EvidenceGapPanel", () => {
       sufficiency_reason: "Most of the question is answered; one sub-part is not.",
     });
 
-    renderWithProviders(<EvidenceGapPanel projectId="project-1" query="q" />);
+    renderWithProviders(<EvidenceGapPanel projectId="project-1" query="q" runId="run-1" />);
 
     expect(
       await screen.findByText("No specific gap was identified for this question."),
@@ -122,10 +127,135 @@ describe("EvidenceGapPanel", () => {
   it("still offers the upload action when the project has no asset to analyze", async () => {
     vi.mocked(assetsService.listAssets).mockResolvedValue([]);
 
-    renderWithProviders(<EvidenceGapPanel projectId="project-1" query="q" />);
+    renderWithProviders(<EvidenceGapPanel projectId="project-1" query="q" runId="run-1" />);
 
     await waitFor(() => expect(assetsService.listAssets).toHaveBeenCalledWith("project-1"));
     expect(researchService.analyzeResearchDocument).not.toHaveBeenCalled();
     expect(await screen.findByText(/drag/i)).toBeInTheDocument();
+  });
+
+  // Sprint 16 Phase 8.13: the opt-in "answer from general knowledge"
+  // control. `analyzeResearchDocument` is left unresolved in these
+  // tests -- they exercise the unsourced control, not the gap list.
+  describe("answering from general knowledge (Sprint 16 Phase 8.13)", () => {
+    function renderPanel() {
+      vi.mocked(assetsService.listAssets).mockResolvedValue([]);
+      return renderWithProviders(
+        <EvidenceGapPanel projectId="project-1" query="What is X?" runId="run-1" />,
+      );
+    }
+
+    it("never calls the unsourced endpoint until the control is pressed", async () => {
+      renderPanel();
+
+      await screen.findByRole("button", { name: "Answer from general knowledge instead" });
+      expect(researchService.createUnsourcedAnswer).not.toHaveBeenCalled();
+    });
+
+    it("renders the returned answer in a visually distinct container, never a badge on a normal answer", async () => {
+      vi.mocked(researchService.createUnsourcedAnswer).mockResolvedValue({
+        id: "run-2",
+        project_id: "project-1",
+        owner_id: "owner-1",
+        task_id: null,
+        query: "What is X?",
+        status: "completed",
+        include_assets: false,
+        include_web: false,
+        max_results: 5,
+        objective: null,
+        plan: null,
+        final_answer:
+          "**Not in your uploaded papers. From general knowledge:**\n\nX is generally understood as Y.\n\n## To make this citable\nYou would need a source establishing: Z.\n",
+        citations: [],
+        grounding_status: "unsourced",
+        error_message: null,
+        celery_task_id: null,
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+        duration_ms: 500,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      const user = userEvent.setup();
+      renderPanel();
+
+      await user.click(
+        await screen.findByRole("button", { name: "Answer from general knowledge instead" }),
+      );
+
+      expect(researchService.createUnsourcedAnswer).toHaveBeenCalledWith("run-1");
+      expect(await screen.findByText("X is generally understood as Y.")).toBeInTheDocument();
+      // The container's own heading, and the answer's embedded
+      // disclosure line, both say "From general knowledge" -- by
+      // design, since the disclosure must survive independently of
+      // the container (see the copy test below).
+      expect(screen.getAllByText(/From general knowledge/).length).toBeGreaterThanOrEqual(2);
+      // Framed as a research lead, not an answer -- the disclosure text
+      // itself carries the boundary, not merely a badge next to it.
+      expect(screen.getByText(/To make this citable/)).toBeInTheDocument();
+      // The control is replaced, not duplicated, once an answer exists.
+      expect(
+        screen.queryByRole("button", { name: "Answer from general knowledge instead" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("copies the disclaimer prepended into the copied text, not merely shown alongside it", async () => {
+      const finalAnswer =
+        "**Not in your uploaded papers. From general knowledge:**\n\nX is Y.\n\n## To make this citable\nYou would need a source establishing: Z.\n";
+      vi.mocked(researchService.createUnsourcedAnswer).mockResolvedValue({
+        id: "run-2",
+        project_id: "project-1",
+        owner_id: "owner-1",
+        task_id: null,
+        query: "What is X?",
+        status: "completed",
+        include_assets: false,
+        include_web: false,
+        max_results: 5,
+        objective: null,
+        plan: null,
+        final_answer: finalAnswer,
+        citations: [],
+        grounding_status: "unsourced",
+        error_message: null,
+        celery_task_id: null,
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+        duration_ms: 500,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      // `userEvent.setup()` installs its own clipboard stub on
+      // `navigator.clipboard` for copy/paste simulation, which would
+      // silently replace a mock assigned before this call -- so the
+      // mock is layered on top of it afterwards instead.
+      const user = userEvent.setup();
+      const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
+      renderPanel();
+
+      await user.click(
+        await screen.findByRole("button", { name: "Answer from general knowledge instead" }),
+      );
+      await screen.findByText(/X is Y\./);
+      await user.click(screen.getByRole("button", { name: "Copy" }));
+
+      expect(writeText).toHaveBeenCalledWith(finalAnswer);
+      expect(writeText.mock.calls[0][0]).toContain("Not in your uploaded papers");
+    });
+
+    it("shows an error rather than a fabricated answer when the model call fails", async () => {
+      vi.mocked(researchService.createUnsourcedAnswer).mockRejectedValue(new Error("502"));
+      const user = userEvent.setup();
+      renderPanel();
+
+      await user.click(
+        await screen.findByRole("button", { name: "Answer from general knowledge instead" }),
+      );
+
+      expect(
+        await screen.findByText(/Could not generate an unsourced answer/),
+      ).toBeInTheDocument();
+    });
   });
 });

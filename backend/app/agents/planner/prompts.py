@@ -178,6 +178,49 @@ def render_grounded_synthesis_prompt(
     )
 
 
+# ---------------------------------------------------------------------------
+# Unsourced synthesis (Sprint 16 Phase 8.13)
+# ---------------------------------------------------------------------------
+#
+# Reached only after `insufficient_evidence` was already shown and the
+# user explicitly asked to leave the evidence boundary. No evidence
+# block exists in this prompt at all -- there is nothing to cite
+# against, which is what makes fabricated sourcing structurally
+# impossible here rather than merely checked for.
+
+UNSOURCED_SYNTHESIS_SYSTEM_PROMPT = """You are the AIKDAP research synthesis engine, now answering WITHOUT any retrieved evidence.
+
+The user's uploaded documents were already determined not to contain enough information to answer this question, and the user has been told so. They are now explicitly asking you to answer anyway, from your own general knowledge, understanding this is not verified against their material.
+
+Rules:
+- You have not been supplied any evidence and there are no citation ids. Never invent one, and never write an inline citation marker like [c1].
+- Never claim, imply, or reference "the paper", "the document", "the evidence", "the uploaded material", or any source from this project -- none was supplied to you.
+- Answer from general knowledge, clearly and directly.
+- Also state, separately, what a real source (a specific paper, dataset, or measurement) would need to establish for this answer to become a properly cited claim.
+
+Respond with a single JSON object and nothing else:
+
+{
+  "answer": "the answer in markdown, from general knowledge only, with no citation markers",
+  "would_need": "what a source would need to establish for this to become a citable claim"
+}"""
+
+UNSOURCED_SYNTHESIS_USER_TEMPLATE = """Question:
+{query}
+
+Answer from general knowledge. No evidence has been supplied."""
+
+
+def render_unsourced_synthesis_prompt(*, query: str) -> str:
+    """Render the user half of the unsourced synthesis request.
+
+    The system half is `UNSOURCED_SYNTHESIS_SYSTEM_PROMPT`; kept
+    separate for the same reason `render_grounded_synthesis_prompt` is
+    -- the gateway sends them as distinct messages.
+    """
+    return UNSOURCED_SYNTHESIS_USER_TEMPLATE.format(query=query)
+
+
 def render_planner_prompt(*, query: str, sources: list[str], max_results: int) -> str:
     """Render the full planner prompt exactly as it would be sent."""
     return "\n\n".join(

@@ -15,6 +15,7 @@ import type { components } from "@/types/api";
 vi.mock("@/services/assets", () => ({ listAssets: vi.fn(() => new Promise(() => {})) }));
 vi.mock("@/services/research", () => ({
   analyzeResearchDocument: vi.fn(() => new Promise(() => {})),
+  createUnsourcedAnswer: vi.fn(() => new Promise(() => {})),
 }));
 
 const render = renderWithProviders;

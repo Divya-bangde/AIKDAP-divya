@@ -65,6 +65,13 @@ class ResearchGroundingStatus(str, enum.Enum):
     #: Synthesis itself could not run or produced an unusable response.
     #: No answer and no citations are recorded in this state.
     FAILED = "failed"
+    #: Answered deliberately without sources, on an explicit user action
+    #: taken after `INSUFFICIENT_EVIDENCE` was already shown (Sprint 16
+    #: Phase 8.13). Distinct from `INSUFFICIENT_EVIDENCE`, which means
+    #: the platform declined to answer -- this means it answered anyway,
+    #: from the model's own knowledge, with the user's explicit consent
+    #: to leave the evidence boundary. Always paired with zero citations.
+    UNSOURCED = "unsourced"
 
 
 class AgentMessageRole(str, enum.Enum):

@@ -83,6 +83,12 @@ const MAPS: Record<string, Record<string, (value: string) => { variant: Variant;
     // just isn't a distinction a reader needs made twice in different
     // words for the same outcome.
     failed: badge("destructive", "Research Failed"),
+    // Sprint 16 Phase 8.13: a deliberate, opt-in general-knowledge
+    // answer -- never confusable with `grounded`/`partially_grounded`.
+    // Warning (amber), the same variant `insufficient_evidence` uses:
+    // both are "this did not come from your evidence," just with a
+    // different reason why.
+    unsourced: badge("warning", "Unsourced"),
   },
   health: {
     healthy: badge("success"),

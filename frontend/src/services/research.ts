@@ -24,6 +24,12 @@ export function listResearchRuns(projectId?: string) {
   return request<ResearchRunRead[]>(`/api/v1/research/runs${query}`);
 }
 
+export function createUnsourcedAnswer(runId: string) {
+  return request<ResearchRunRead>(`/api/v1/research/runs/${runId}/unsourced`, {
+    method: "POST",
+  });
+}
+
 export function analyzeResearchDocument(
   assetId: string,
   projectId: string,

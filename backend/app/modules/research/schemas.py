@@ -156,6 +156,21 @@ class GroundedSynthesisResponse(BaseModel):
     claims: list[SynthesisClaim] = Field(default_factory=list)
 
 
+class UnsourcedSynthesisResponse(BaseModel):
+    """The JSON-schema-enforced envelope `UnsourcedSynthesizer` requests.
+
+    Deliberately has no `citation_ids` field at all -- unlike
+    `GroundedSynthesisResponse`, there is no evidence in this prompt for
+    the model to cite against, so the schema itself gives it nothing to
+    invent a citation into (Sprint 16 Phase 8.13).
+    """
+
+    answer: str
+    would_need: str = Field(
+        description="What a source would need to establish for this answer to become a citable claim."
+    )
+
+
 class VerifiedClaimRead(BaseModel):
     """One claim after real, deterministic verification -- what the
     Claim Evidence Panel renders.

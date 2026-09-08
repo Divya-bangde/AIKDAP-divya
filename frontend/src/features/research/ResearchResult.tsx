@@ -84,7 +84,7 @@ export function ResearchResult({ run }: { run: ResearchRunDetail }) {
            * just hit -- what's missing, and an upload action right
            * there, instead of leaving "insufficient evidence" as a
            * dead end. */}
-          <EvidenceGapPanel projectId={run.project_id} query={run.query} />
+          <EvidenceGapPanel projectId={run.project_id} query={run.query} runId={run.id} />
 
           {/* A declined answer can still carry claims (Sprint 16 Phase
            * 8.7) -- the model may state something in its explanation
