@@ -20,7 +20,7 @@ type VerifiedClaim = components["schemas"]["VerifiedClaimRead"];
  * must be able to spot the one contradicted claim without reading
  * every badge. Supported claims stay neutral — they are the expected
  * outcome, not something to highlight. */
-function cardTintFor(verdict: VerifiedClaim["verdict"]): string {
+export function cardTintFor(verdict: VerifiedClaim["verdict"]): string {
   switch (verdict) {
     case "contradicted":
       return "border-destructive/30 bg-destructive/5";
@@ -46,7 +46,7 @@ function cardTintFor(verdict: VerifiedClaim["verdict"]): string {
  *   never part of the evidence it was given at all. This is the one
  *   genuinely adversarial case and is the only one styled destructive.
  */
-function EvidenceChip({
+export function EvidenceChip({
   id,
   state,
   onOpen,

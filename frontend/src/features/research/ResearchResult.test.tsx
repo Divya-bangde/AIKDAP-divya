@@ -1,9 +1,23 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { ResearchResult } from "@/features/research/ResearchResult";
+import { renderWithProviders } from "@/test/render";
 import type { components } from "@/types/api";
+
+// `EvidenceGapPanel` (Sprint 16 Phase 8.11 Part C) fetches assets and
+// calls the document-analysis endpoint whenever the insufficient-
+// evidence branch renders -- mocked here so these tests exercise
+// `ResearchResult`'s own rendering decisions, not a real network call.
+// An unresolved promise is enough: these tests only assert on content
+// `ResearchResult` itself renders synchronously.
+vi.mock("@/services/assets", () => ({ listAssets: vi.fn(() => new Promise(() => {})) }));
+vi.mock("@/services/research", () => ({
+  analyzeResearchDocument: vi.fn(() => new Promise(() => {})),
+}));
+
+const render = renderWithProviders;
 
 type ResearchRunDetail = components["schemas"]["ResearchRunDetail"];
 

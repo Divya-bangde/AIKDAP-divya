@@ -61,6 +61,7 @@ export function DocumentsSection({ projectId }: { projectId: string }) {
                   asset={asset}
                   isSelected={asset.id === selectedAsset?.id}
                   onSelect={() => setSelectedId(asset.id)}
+                  projectId={projectId}
                 />
               </StaggerItem>
             ))}

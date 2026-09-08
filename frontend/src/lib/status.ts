@@ -142,6 +142,17 @@ const MAPS: Record<string, Record<string, (value: string) => { variant: Variant;
     unknown: badge("muted", "Unknown"),
     contradicted: badge("destructive", "Contradicted"),
   },
+  // Sprint 16 Phase 8.11: `ResearchGap.classification` from
+  // `analysis.py`'s document-understanding gaps -- rendered, never
+  // computed here. Required is the one that blocks an answer, so it's
+  // the only destructive one; helpful/optional are informative, not
+  // urgent.
+  gapClassification: {
+    required: badge("destructive", "Required"),
+    helpful: badge("warning", "Helpful"),
+    optional: badge("muted", "Optional"),
+    ambiguous: badge("outline", "Ambiguous"),
+  },
 };
 
 export type StatusDomain = keyof typeof MAPS;

@@ -24,3 +24,10 @@ export function uploadAsset(projectId: string, file: File) {
 export function reprocessAsset(assetId: string) {
   return request<AssetRead>(`/api/v1/assets/${assetId}/process`, { method: "POST" });
 }
+
+/** Deletes the asset and its stored file. The backend cascades the
+ * delete to `knowledge_chunks` at the database level (`ondelete=
+ * CASCADE` on `asset_id`) — no orphaned chunks are left behind. */
+export function deleteAsset(assetId: string) {
+  return request<void>(`/api/v1/assets/${assetId}`, { method: "DELETE" });
+}

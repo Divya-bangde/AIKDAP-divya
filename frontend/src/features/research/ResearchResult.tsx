@@ -7,9 +7,10 @@ import { TechnicalDetails } from "@/components/common/TechnicalDetails";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnswerBody } from "@/features/research/AnswerBody";
 import { CitationList } from "@/features/research/CitationList";
-import { ClaimEvidencePanel } from "@/features/research/ClaimEvidencePanel";
 import { EvidenceDrawer } from "@/features/research/EvidenceDrawer";
 import { EvidenceFunnel } from "@/features/research/EvidenceFunnel";
+import { EvidenceGapPanel } from "@/features/research/EvidenceGapPanel";
+import { EvidenceWorkspace } from "@/features/research/EvidenceWorkspace";
 import { fadeUp } from "@/lib/motion";
 import { asSynthesisOutput } from "@/types/research-meta";
 import { asCitation, type Citation } from "@/types/citation";
@@ -79,11 +80,18 @@ export function ResearchResult({ run }: { run: ResearchRunDetail }) {
 
           <EvidenceFunnel steps={steps} citations={citations} />
 
+          {/* Sprint 16 Phase 8.11 Part C: the exact wall the reader
+           * just hit -- what's missing, and an upload action right
+           * there, instead of leaving "insufficient evidence" as a
+           * dead end. */}
+          <EvidenceGapPanel projectId={run.project_id} query={run.query} />
+
           {/* A declined answer can still carry claims (Sprint 16 Phase
            * 8.7) -- the model may state something in its explanation
            * before concluding the evidence is insufficient, and that
            * statement is checked the same way a grounded answer's is. */}
-          <ClaimEvidencePanel
+          <EvidenceWorkspace
+            query={run.query}
             claims={claims}
             citations={citations}
             onSelectCitation={openEvidence}
@@ -199,7 +207,7 @@ export function ResearchResult({ run }: { run: ResearchRunDetail }) {
 
         <EvidenceFunnel steps={steps} citations={citations} />
 
-        <ClaimEvidencePanel claims={claims} citations={citations} onSelectCitation={openEvidence} />
+        <EvidenceWorkspace query={run.query} claims={claims} citations={citations} onSelectCitation={openEvidence} />
 
         {citations.length > 0 ? (
           <CitationList citations={citations} onSelect={openEvidence} />

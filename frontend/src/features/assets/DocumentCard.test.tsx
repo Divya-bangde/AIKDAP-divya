@@ -1,0 +1,111 @@
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { DocumentCard } from "@/features/assets/DocumentCard";
+import * as assetsService from "@/services/assets";
+import { renderWithProviders } from "@/test/render";
+import type { components } from "@/types/api";
+
+vi.mock("@/services/assets");
+
+type AssetRead = components["schemas"]["AssetRead"];
+
+function makeAsset(overrides: Partial<AssetRead> = {}): AssetRead {
+  return {
+    id: "asset-1",
+    project_id: "project-1",
+    owner_id: "owner-1",
+    title: "doc",
+    description: null,
+    asset_type: "other",
+    status: "active",
+    mime_type: "text/plain",
+    file_name: "abc_poultry.txt",
+    file_extension: ".txt",
+    file_size: 1024,
+    checksum: "abc",
+    source: "upload",
+    version: 1,
+    tags: [],
+    metadata: {},
+    ai_profile: {
+      embedding_status: "completed",
+      status: "completed",
+    },
+    created_by: null,
+    processing_status: "completed",
+    processing_error: null,
+    processing_started_at: null,
+    processing_completed_at: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+describe("DocumentCard", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+  });
+
+  it("does not delete without confirming first", async () => {
+    const user = userEvent.setup();
+    const deleteAsset = vi.mocked(assetsService.deleteAsset);
+    const onSelect = vi.fn();
+    renderWithProviders(
+      <DocumentCard asset={makeAsset()} isSelected={false} onSelect={onSelect} projectId="project-1" />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete abc_poultry.txt" }));
+
+    expect(screen.getByText('Delete "abc_poultry.txt"?')).toBeInTheDocument();
+    expect(deleteAsset).not.toHaveBeenCalled();
+    // Opening the confirm dialog is a separate action from selecting
+    // the document -- the card's own click handler must not also fire.
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("deletes and invalidates the asset list on confirm", async () => {
+    const user = userEvent.setup();
+    const deleteAsset = vi.mocked(assetsService.deleteAsset).mockResolvedValue(undefined);
+    renderWithProviders(
+      <DocumentCard asset={makeAsset()} isSelected={false} onSelect={vi.fn()} projectId="project-1" />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete abc_poultry.txt" }));
+    await user.click(screen.getByRole("button", { name: /delete document/i }));
+
+    await waitFor(() => expect(deleteAsset).toHaveBeenCalledWith("asset-1"));
+    await waitFor(() =>
+      expect(screen.queryByText('Delete "abc_poultry.txt"?')).not.toBeInTheDocument(),
+    );
+  });
+
+  it("closes without deleting on cancel", async () => {
+    const user = userEvent.setup();
+    const deleteAsset = vi.mocked(assetsService.deleteAsset);
+    renderWithProviders(
+      <DocumentCard asset={makeAsset()} isSelected={false} onSelect={vi.fn()} projectId="project-1" />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete abc_poultry.txt" }));
+    await user.click(screen.getByRole("button", { name: /cancel/i }));
+
+    expect(deleteAsset).not.toHaveBeenCalled();
+    expect(screen.queryByText('Delete "abc_poultry.txt"?')).not.toBeInTheDocument();
+  });
+
+  it("selecting the card still works independently of the delete control", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    renderWithProviders(
+      <DocumentCard asset={makeAsset()} isSelected={false} onSelect={onSelect} projectId="project-1" />,
+    );
+
+    await user.click(screen.getByText("abc_poultry.txt"));
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+});

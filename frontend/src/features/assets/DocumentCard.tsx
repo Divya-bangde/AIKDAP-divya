@@ -1,11 +1,23 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import { FileText } from "lucide-react";
+import { FileText, Trash2 } from "lucide-react";
+import { useState } from "react";
 
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { formatBytes, formatRelativeTime } from "@/lib/format";
 import { isSettled } from "@/features/assets/asset-state";
 import { cn } from "@/lib/utils";
+import * as assetsService from "@/services/assets";
 import type { components } from "@/types/api";
 
 type AssetRead = components["schemas"]["AssetRead"];
@@ -14,13 +26,25 @@ interface DocumentCardProps {
   asset: AssetRead;
   isSelected: boolean;
   onSelect: () => void;
+  projectId: string;
 }
 
-export function DocumentCard({ asset, isSelected, onSelect }: DocumentCardProps) {
+export function DocumentCard({ asset, isSelected, onSelect, projectId }: DocumentCardProps) {
   // "Still working" is the exact inverse of the settle check the
   // polling loop uses, so the indicator and the polling can never
   // disagree about whether this document is finished.
   const working = !isSettled(asset);
+
+  const queryClient = useQueryClient();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const deleteMutation = useMutation({
+    mutationFn: () => assetsService.deleteAsset(asset.id),
+    onSuccess: () => {
+      setConfirmOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["assets", projectId] });
+    },
+  });
 
   return (
     <motion.div whileHover={{ x: 2 }} transition={{ duration: 0.15 }}>
@@ -54,7 +78,24 @@ export function DocumentCard({ asset, isSelected, onSelect }: DocumentCardProps)
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <p className="truncate text-sm font-medium">{asset.file_name}</p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="min-w-0 truncate text-sm font-medium">{asset.file_name}</p>
+              {/* `stopPropagation` so this doesn't also trigger the
+               * card's own `onSelect` -- the card's outer wrapper is
+               * `role="button"` for selection, and this is a second,
+               * independent action nested inside it. */}
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setConfirmOpen(true);
+                }}
+                className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span className="sr-only">Delete {asset.file_name}</span>
+              </button>
+            </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <StatusBadge domain="assetProcessing" value={asset.processing_status} />
               <StatusBadge domain="aiProfile" value={asset.ai_profile.status} />
@@ -67,6 +108,33 @@ export function DocumentCard({ asset, isSelected, onSelect }: DocumentCardProps)
           </div>
         </CardContent>
       </Card>
+
+      {/* Also stops propagation implicitly -- Radix Dialog renders
+       * into a portal outside the card, so clicks inside it never
+       * reach the card's own click handler. */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent onClick={(event) => event.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Delete "{asset.file_name}"?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes the document, its stored file, and every chunk and
+              embedding built from it. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate()}
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete Document"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }

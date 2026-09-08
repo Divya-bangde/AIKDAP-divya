@@ -64,6 +64,19 @@ services:
     env_file:
       - .env
 
+    # Sprint 16 Phase 8.12: `environment:` overrides `env_file` in
+    # Compose, and is re-read on every `up`/`recreate` -- unlike
+    # `env_file`, which is only read at container CREATION (the exact
+    # reason 8.11 found this container still running with a stale
+    # SYNTHESIS_MODEL long after `.env` had been edited). Pinning the
+    # container-specific values here stops that drift class from
+    # recurring: a future `.env` edit alone can no longer silently
+    # desync from what's actually running.
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      RERANKER_BASE_URL: http://host.docker.internal:8090
+      BACKEND_CORS_ORIGINS: "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174,https://aikdap-divya.vercel.app,https://tourist-egg-passive-extending.trycloudflare.com"
+
     ports:
       - "8001:8000"
 
@@ -89,6 +102,14 @@ services:
 
     env_file:
       - .env
+
+    # See the backend service's identical block above for why this is
+    # needed (Compose `environment:` overrides `env_file` and is
+    # re-applied on every recreate).
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      RERANKER_BASE_URL: http://host.docker.internal:8090
+      BACKEND_CORS_ORIGINS: "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174,https://aikdap-divya.vercel.app,https://tourist-egg-passive-extending.trycloudflare.com"
 
     volumes:
       - ./backend:/app
