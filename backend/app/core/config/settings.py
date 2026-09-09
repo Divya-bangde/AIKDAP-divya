@@ -107,6 +107,11 @@ class Settings(BaseSettings):
     deepseek_api_key: SecretStr | None = None
     #: OpenRouter (Sprint 9H): the third fallback, replacing DeepSeek.
     openrouter_api_key: SecretStr | None = None
+    #: Jina AI: embeddings (`jina_ai/jina-embeddings-v3`) and reranking,
+    #: for deployments with no local model server. Not part of the
+    #: generation fallback chain — Jina serves neither completions nor
+    #: any model this codebase generates text with.
+    jina_api_key: SecretStr | None = None
 
     #: Model used when a caller does not name one — the primary in the
     #: fallback chain.
@@ -318,6 +323,11 @@ class Settings(BaseSettings):
             self.openrouter_api_key and self.openrouter_api_key.get_secret_value().strip()
         )
 
+    @property
+    def has_jina_credentials(self) -> bool:
+        """Whether a non-empty Jina AI API key is configured."""
+        return bool(self.jina_api_key and self.jina_api_key.get_secret_value().strip())
+
     # ------------------------------------------------------------------
     # Local document intelligence — Ollama + Qwen (Sprint 9B)
     #
@@ -447,14 +457,23 @@ class Settings(BaseSettings):
     qwen_max_sections: int = Field(default=20, gt=0)
 
     # ------------------------------------------------------------------
-    # Local embeddings — BGE-M3 through Ollama + pgvector (Sprint 9C)
+    # Embeddings — pgvector, model selected by provider prefix (Sprint 9C)
     #
     # `embedding_model` reuses the `EMBEDDING_MODEL` env var that
     # already existed in `.env` (previously an orphaned setting: no
     # `Settings` field read it, and it named a cloud OpenAI model
     # `text-embedding-3-small` that nothing in this codebase calls).
-    # Repointed at the local model this sprint actually implements
-    # rather than introducing a second config key for the same concept.
+    # Repointed at the model this codebase actually implements rather
+    # than introducing a second config key for the same concept.
+    #
+    # The value carries a LiteLLM provider prefix, exactly like
+    # `default_llm` and every other model setting: `ollama/bge-m3` for a
+    # host running a local model server, `jina_ai/jina-embeddings-v3`
+    # for a deployment (Render, Fly, ...) that has none. The prefix is
+    # the only thing that selects the backend — see
+    # `knowledge_base.embeddings.GatewayEmbeddingProvider`. Both of
+    # those models emit 1024 floats, so they share this column width;
+    # any model that does not requires an Alembic migration first.
     #
     # `embedding_dimension` is not a guess: verified live against this
     # host's Ollama instance (`litellm.aembedding(model="ollama/bge-m3",
@@ -463,7 +482,7 @@ class Settings(BaseSettings):
     # definition) because the column type must match whatever this
     # value is, and Alembic reads it at migration time.
     # ------------------------------------------------------------------
-    embedding_model: str = "bge-m3"
+    embedding_model: str = "ollama/bge-m3"
     embedding_dimension: int = Field(default=1024, gt=0)
     # ------------------------------------------------------------------
     # Two-stage retrieval reranking — BGE-Reranker-v2-m3 (Sprint 9D)
@@ -506,7 +525,19 @@ class Settings(BaseSettings):
     #: llama-server's liveness route (Sprint 9G). `GET`ting it is free —
     #: it loads no context and scores nothing — which is exactly why
     #: `/health` probes this instead of sending a real rerank request.
+    #:
+    #: Empty disables the probe, for a hosted reranker that publishes no
+    #: liveness route (Jina AI, Cohere). Probing a path such a provider
+    #: does not serve would report a permanently unhealthy reranker that
+    #: reranks perfectly well, so absence of a probe is reported as
+    #: "not probed", never as failure — see `check_reranker_health`.
     reranker_health_path: str = "/health"
+    #: Bearer token for a hosted reranker. Empty for a local llama-server,
+    #: which needs no auth. Kept vendor-neutral (not a Jina-specific
+    #: field) for the same reason `reranker_base_url` is: this provider
+    #: speaks the standard rerank contract, so swapping the endpoint
+    #: behind it stays configuration rather than code.
+    reranker_api_key: SecretStr | None = None
     #: Health probes must not inherit the 60s inference timeout: an
     #: unreachable reranker would then stall the health endpoint for a
     #: minute, turning a diagnostic into an outage of its own.

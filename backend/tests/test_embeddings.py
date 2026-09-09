@@ -23,7 +23,7 @@ from app.modules.assets.processing.document_understanding import QwenDocumentUnd
 from app.modules.assets.processing.pipeline import AssetProcessingService
 from app.modules.assets.repository import AssetRepository
 from app.modules.assets.storage import StorageProvider
-from app.modules.knowledge_base.embeddings import EmbeddingProvider, OllamaBgeM3EmbeddingProvider
+from app.modules.knowledge_base.embeddings import EmbeddingProvider, GatewayEmbeddingProvider
 from app.modules.knowledge_base.enums import EmbeddingProviderName
 from app.modules.knowledge_base.repository import KnowledgeChunkRepository
 
@@ -122,9 +122,33 @@ def _make_asset(**overrides: Any) -> Asset:
 def test_provider_initializes_with_configured_name_and_dimension():
     from app.core.config import settings
 
-    provider = OllamaBgeM3EmbeddingProvider(gateway=GatewayDouble())  # type: ignore[arg-type]
+    provider = GatewayEmbeddingProvider(gateway=GatewayDouble())  # type: ignore[arg-type]
     assert provider.name == EmbeddingProviderName.LOCAL
     assert provider.dimensions == settings.embedding_dimension == 1024
+
+
+def test_provider_label_follows_the_configured_provider_prefix(monkeypatch):
+    """Switching backends is a config change, and the provenance label
+    stored on every chunk must follow it — otherwise a re-embed onto a
+    hosted provider would still be recorded as `local`."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "embedding_model", "jina_ai/jina-embeddings-v3")
+    provider = GatewayEmbeddingProvider(gateway=GatewayDouble())  # type: ignore[arg-type]
+
+    assert provider.name == EmbeddingProviderName.JINA_AI
+
+
+def test_provider_rejects_a_model_id_with_no_provider_prefix(monkeypatch):
+    """A bare model name is refused at construction rather than embedded
+    under a guessed label: the label identifies which vector space a
+    stored embedding belongs to, so a wrong one is unrecoverable."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "embedding_model", "bge-m3")
+
+    with pytest.raises(ValueError, match="no recognized provider prefix"):
+        GatewayEmbeddingProvider(gateway=GatewayDouble())  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -137,11 +161,11 @@ async def test_embed_requests_the_configured_bge_m3_model():
     from app.core.config import settings
 
     gateway = GatewayDouble(vectors=[_vector()])
-    provider = OllamaBgeM3EmbeddingProvider(gateway=gateway)  # type: ignore[arg-type]
+    provider = GatewayEmbeddingProvider(gateway=gateway)  # type: ignore[arg-type]
 
     await provider.embed([TEST_TEXT])
 
-    assert gateway.calls[0]["model"] == f"ollama/{settings.embedding_model}"
+    assert gateway.calls[0]["model"] == settings.embedding_model
     assert gateway.calls[0]["texts"] == [TEST_TEXT]
 
 
@@ -153,7 +177,7 @@ async def test_embed_requests_the_configured_bge_m3_model():
 @pytest.mark.asyncio
 async def test_embed_returns_vectors_of_the_expected_dimension():
     gateway = GatewayDouble(vectors=[_vector(1024), _vector(1024, seed=0.02)])
-    provider = OllamaBgeM3EmbeddingProvider(gateway=gateway)  # type: ignore[arg-type]
+    provider = GatewayEmbeddingProvider(gateway=gateway)  # type: ignore[arg-type]
 
     vectors = await provider.embed(["a", "b"])
 
@@ -171,7 +195,7 @@ async def test_embed_rejects_a_dimension_mismatch():
     """A model returning the wrong width must not silently populate a
     pgvector(1024) column with something that doesn't fit."""
     gateway = GatewayDouble(vectors=[_vector(512)])
-    provider = OllamaBgeM3EmbeddingProvider(gateway=gateway)  # type: ignore[arg-type]
+    provider = GatewayEmbeddingProvider(gateway=gateway)  # type: ignore[arg-type]
 
     with pytest.raises(ValueError, match="1024"):
         await provider.embed([TEST_TEXT])
@@ -218,7 +242,7 @@ async def test_embedding_failure_preserves_chunk_content_and_marks_failed(sessio
     await session.commit()
 
     failing_gateway = GatewayDouble(raises=LLMConnectionError("connection refused"))
-    embeddings = OllamaBgeM3EmbeddingProvider(gateway=failing_gateway)  # type: ignore[arg-type]
+    embeddings = GatewayEmbeddingProvider(gateway=failing_gateway)  # type: ignore[arg-type]
     pipeline = AssetProcessingService(
         session, storage, chunk_size=1000, chunk_overlap=100,
         understanding=FakeQwen(),  # type: ignore[arg-type]
@@ -260,7 +284,7 @@ async def test_successful_embedding_updates_status_and_stores_vector(session, pr
     await session.commit()
 
     gateway = GatewayDouble(vectors=[_vector()])
-    embeddings = OllamaBgeM3EmbeddingProvider(gateway=gateway)  # type: ignore[arg-type]
+    embeddings = GatewayEmbeddingProvider(gateway=gateway)  # type: ignore[arg-type]
     pipeline = AssetProcessingService(
         session, storage, chunk_size=1000, chunk_overlap=100,
         understanding=FakeQwen(),  # type: ignore[arg-type]
@@ -316,7 +340,7 @@ async def test_qwen_and_embedding_steps_are_independent(session, project, monkey
     pipeline = AssetProcessingService(
         session, storage, chunk_size=1000, chunk_overlap=100,
         understanding=FakeQwen(),  # type: ignore[arg-type] -- would always fail if ever called
-        embeddings=OllamaBgeM3EmbeddingProvider(gateway=gateway),  # type: ignore[arg-type]
+        embeddings=GatewayEmbeddingProvider(gateway=gateway),  # type: ignore[arg-type]
     )
     await pipeline.process_asset(asset.id)
 

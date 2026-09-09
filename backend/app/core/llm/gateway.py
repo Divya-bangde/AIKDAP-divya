@@ -726,6 +726,15 @@ class LLMGateway:
             "input": texts,
             "timeout": timeout or self._timeout,
         }
+
+        # Same credential resolution `complete()` performs. Embeddings
+        # only ever ran against Ollama, which needs no key, so this path
+        # never needed one — a hosted embedding model (Jina AI) does,
+        # and without it LiteLLM sends an unauthenticated request that
+        # comes back AUTH_MISSING_API_KEY.
+        api_key = self._credentials_for(provider, model)
+        if api_key is not None:
+            request["api_key"] = api_key
         if provider in _OLLAMA_PROVIDERS:
             request["api_base"] = settings.ollama_base_url
 
@@ -1311,6 +1320,14 @@ _PROVIDER_CREDENTIALS: dict[str, tuple[str, Any, Any]] = {
         "OPENROUTER_API_KEY",
         lambda: settings.has_openrouter_credentials,
         lambda: settings.openrouter_api_key.get_secret_value(),  # type: ignore[union-attr]
+    ),
+    #: Embeddings only (`jina_ai/jina-embeddings-v3`) — registered so a
+    #: missing key fails with a credential error at the call site rather
+    #: than a 401 from LiteLLM's own env-var resolution.
+    "jina_ai": (
+        "JINA_API_KEY",
+        lambda: settings.has_jina_credentials,
+        lambda: settings.jina_api_key.get_secret_value(),  # type: ignore[union-attr]
     ),
 }
 

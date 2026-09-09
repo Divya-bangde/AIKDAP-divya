@@ -52,6 +52,7 @@ from enum import Enum
 from typing import Any
 
 import httpx
+from pydantic import SecretStr
 
 from app.core.config import settings
 from app.core.logging.logger import get_logger
@@ -173,6 +174,7 @@ class HttpRerankerProvider(RerankerProvider):
         endpoint_path: str | None = None,
         timeout: float | None = None,
         max_document_characters: int | None = None,
+        api_key: SecretStr | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._model = model or settings.reranker_model
@@ -182,6 +184,7 @@ class HttpRerankerProvider(RerankerProvider):
         self._max_document_characters = (
             max_document_characters or settings.reranker_max_document_characters
         )
+        self._api_key = api_key or settings.reranker_api_key
         # Injected only by tests, so the real request building, parsing,
         # and error mapping below are exercised against a
         # `MockTransport` rather than stubbed out wholesale.
@@ -195,6 +198,20 @@ class HttpRerankerProvider(RerankerProvider):
     def endpoint(self) -> str:
         """The full rerank URL this provider posts to."""
         return f"{self._base_url}{self._endpoint_path}"
+
+    def _headers(self) -> dict[str, str]:
+        """Auth headers, if this endpoint needs any.
+
+        A local llama-server takes none; a hosted reranker takes a
+        bearer token. Built per request and never logged — `endpoint` is
+        logged, these are not.
+        """
+        # An unset `RERANKER_API_KEY=` in a .env parses as SecretStr("")
+        # rather than None, so emptiness is checked, not just absence —
+        # otherwise a local llama-server would receive a bare `Bearer `.
+        if self._api_key is None or not self._api_key.get_secret_value().strip():
+            return {}
+        return {"Authorization": f"Bearer {self._api_key.get_secret_value()}"}
 
     async def rerank(
         self, *, query: str, candidates: list[RerankCandidate], top_k: int
@@ -225,7 +242,9 @@ class HttpRerankerProvider(RerankerProvider):
             async with httpx.AsyncClient(
                 timeout=self._timeout, transport=self._transport
             ) as client:
-                response = await client.post(self.endpoint, json=payload)
+                response = await client.post(
+                    self.endpoint, json=payload, headers=self._headers()
+                )
         except httpx.TimeoutException as exc:
             raise RerankerUnavailableError(
                 f"The reranker at {self.endpoint} timed out after {self._timeout}s."
@@ -335,6 +354,13 @@ class RerankerHealthStatus(str, Enum):
     #: Reranking is switched off by configuration, so there is nothing
     #: to be unhealthy about.
     DISABLED = "disabled"
+    #: Enabled and configured, but this endpoint publishes no liveness
+    #: route to probe (`RERANKER_HEALTH_PATH` empty — hosted providers
+    #: such as Jina AI serve rerank requests and nothing else). Not a
+    #: claim that it works: the only honest report when nothing was
+    #: measured. Probing a route the provider does not serve would
+    #: instead label a perfectly working reranker `unavailable`.
+    CONFIGURED = "configured"
 
 
 @dataclass(frozen=True)
@@ -394,6 +420,17 @@ async def check_reranker_health(
             model=model,
             endpoint=endpoint,
             detail="RERANKER_ENABLED is false; stage 2 is switched off.",
+        )
+
+    if not settings.reranker_health_path:
+        return RerankerHealth(
+            status=RerankerHealthStatus.CONFIGURED,
+            model=model,
+            endpoint=f"{base_url}{settings.reranker_endpoint_path}",
+            detail=(
+                "RERANKER_HEALTH_PATH is empty; this endpoint publishes no "
+                "liveness route, so reranking is configured but unverified."
+            ),
         )
 
     start = time.monotonic()

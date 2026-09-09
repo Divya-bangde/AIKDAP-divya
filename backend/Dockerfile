@@ -28,4 +28,7 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Shell form so ${PORT} expands: managed hosts (Render, Fly) assign the
+# port at runtime and route to it. Defaults to 8000 when unset, which is
+# what docker-compose and the EXPOSE above expect locally.
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

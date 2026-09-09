@@ -1,0 +1,222 @@
+# AIKDAP on Render — permanent HTTPS URL, no tunnel.
+#
+# Replaces the Cloudflare Quick Tunnel the Vercel frontend used to call.
+# Quick Tunnels get a new random *.trycloudflare.com hostname on every
+# `cloudflared` restart, and VITE_API_BASE_URL is baked into the Vite
+# bundle at BUILD time — so every rotation silently broke the deployed
+# frontend until someone re-set the env var and redeployed. A Render
+# service URL never changes.
+#
+# ---------------------------------------------------------------------
+# WHAT RUNS WHERE
+# ---------------------------------------------------------------------
+#   backend  -> this blueprint (Docker web service)
+#   worker   -> this blueprint (Docker background worker)
+#   Redis    -> this blueprint (Render Key Value)
+#   Postgres -> Supabase, NOT here. Render's own Postgres free tier
+#               expires; Supabase's does not, and it ships pgvector,
+#               which this app requires (KnowledgeChunk.embedding is a
+#               pgvector column). Set DATABASE_URL to the Supabase
+#               SESSION POOLER URL — see .env.example for why the
+#               pooler host and not the direct connection.
+#
+# ---------------------------------------------------------------------
+# NO LOCAL MODEL SERVERS EXIST HERE
+# ---------------------------------------------------------------------
+# docker-compose points OLLAMA_BASE_URL and RERANKER_BASE_URL at
+# host.docker.internal — your laptop. Render has neither, so both the
+# embedding model and the reranker move to hosted Jina AI endpoints,
+# and generation runs on the Gemini/Groq/OpenRouter chain that .env
+# already configures. Nothing here sets OLLAMA_BASE_URL.
+#
+# ---------------------------------------------------------------------
+# Everything both services share lives in the `aikdap-shared` env var
+# group at the bottom, so the API and the worker cannot drift apart —
+# they run the same synthesis and embedding code paths, and a silent
+# divergence between them is a bug class this project has already been
+# bitten by (see docker-compose.yml's note on env_file drift).
+#
+# Values marked `sync: false` are secrets: set them by hand in the
+# Render dashboard before the first deploy. They never belong in git.
+# ---------------------------------------------------------------------
+
+services:
+  # -------------------------------------------------------------------
+  # API
+  # -------------------------------------------------------------------
+  - type: web
+    name: aikdap-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    # Free web services sleep after ~15 minutes idle and cold-start in
+    # roughly 30s. Fine for a demo; move to `starter` if a marker or
+    # reviewer should never wait.
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    envVars:
+      - fromGroup: aikdap-shared
+
+      # Refused at startup if empty (validate_cors_configuration, SEC-1):
+      # production must never fall back to the `*` wildcard while
+      # credentialed CORS is on. This is the deployed frontend's origin,
+      # and it is the one setting that is genuinely API-only — the
+      # worker serves no HTTP.
+      - key: BACKEND_CORS_ORIGINS
+        value: https://aikdap-divya.vercel.app
+
+      # `fromService` is only valid inside a service, never in an env
+      # var group, so the Redis wiring is repeated per service rather
+      # than shared. Both resolve to the same instance.
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: aikdap-keyvalue
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: aikdap-keyvalue
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: aikdap-keyvalue
+          property: connectionString
+
+  # -------------------------------------------------------------------
+  # Celery worker — same image, different command.
+  # -------------------------------------------------------------------
+  # Render has no free plan for background workers. Without this the API
+  # still serves projects, assets, search and the knowledge base; only
+  # research runs (dispatched to Celery) stop completing.
+  - type: worker
+    name: aikdap-worker
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: celery -A app.workers.worker worker --loglevel=info
+    plan: starter
+    region: singapore
+    envVars:
+      - fromGroup: aikdap-shared
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: aikdap-keyvalue
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: aikdap-keyvalue
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: aikdap-keyvalue
+          property: connectionString
+
+  # -------------------------------------------------------------------
+  # Redis (Celery broker + result backend, provider-health registry)
+  # -------------------------------------------------------------------
+  - type: keyvalue
+    name: aikdap-keyvalue
+    plan: free
+    region: singapore
+    # Only Render services may connect; nothing is exposed publicly.
+    ipAllowList: []
+    # Fail writes rather than silently evicting queued Celery tasks.
+    # Note the free plan does not persist to disk at all — a restart
+    # empties the queue, which is survivable for research runs (they are
+    # re-runnable) and is the reason not to keep durable state here.
+    maxmemoryPolicy: noeviction
+
+envVarGroups:
+  - name: aikdap-shared
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+
+      # No local model server exists here. Empty disables the Ollama
+      # liveness probe, which would otherwise fail on every health poll
+      # and hold the whole report at `degraded` permanently. Nothing
+      # else reads this value in a hosted deployment: RERANKER_BASE_URL
+      # is set explicitly below (so it never falls back to this), and
+      # the gateway only passes it as `api_base` for `ollama/*` models,
+      # none of which are configured here.
+      - key: OLLAMA_BASE_URL
+        value: ""
+
+      # Supabase session-pooler URL, including ?sslmode=require.
+      - key: DATABASE_URL
+        sync: false
+      # Must be identical across both services — they issue and verify
+      # the same JWTs.
+      - key: SECRET_KEY
+        sync: false
+
+      # ---- Generation: cloud chain only, no Ollama ------------------
+      - key: DEFAULT_LLM
+        value: gemini/gemini-flash-latest
+      - key: FALLBACK_LLM
+        value: groq/openai/gpt-oss-120b
+      - key: SECONDARY_FALLBACK_LLM
+        value: openrouter/nvidia/nemotron-3-super-120b-a12b:free
+      - key: PLANNER_MODEL
+        value: gemini/gemini-flash-latest
+      - key: SYNTHESIS_MODEL
+        value: gemini/gemini-flash-latest
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+
+      # ---- Embeddings: Jina, 1024-dim like BGE-M3 -------------------
+      # Same width as the local model, so the pgvector column and
+      # EMBEDDING_DIMENSION are unchanged and no migration is needed.
+      # The vectors themselves are NOT interchangeable: anything
+      # embedded by bge-m3 must be re-embedded before search means
+      # anything.
+      - key: EMBEDDING_MODEL
+        value: jina_ai/jina-embeddings-v3
+      - key: EMBEDDING_DIMENSION
+        value: "1024"
+      - key: JINA_API_KEY
+        sync: false
+
+      # ---- Reranking: Jina's rerank endpoint ------------------------
+      # HttpRerankerProvider already speaks the standard rerank contract
+      # ({model, query, documents} -> {results:[{index, relevance_score}]}),
+      # which is exactly Jina's API shape, so this is configuration
+      # only. RERANKER_HEALTH_PATH is deliberately empty: Jina publishes
+      # no liveness route, and probing one it does not serve would
+      # report a working reranker as `unavailable`. Health then reports
+      # `configured` — honest about being unverified.
+      - key: RERANKER_ENABLED
+        value: "true"
+      - key: RERANKER_BASE_URL
+        value: https://api.jina.ai
+      - key: RERANKER_ENDPOINT_PATH
+        value: /v1/rerank
+      - key: RERANKER_HEALTH_PATH
+        value: ""
+      - key: RERANKER_MODEL
+        value: jina-reranker-v2-base-multilingual
+      - key: RERANKER_API_KEY
+        sync: false
+
+      # PROVISIONAL — MUST be recalibrated against this corpus.
+      # The local default (-2.0) is a raw BGE cross-encoder logit,
+      # observed roughly -10..0. Jina returns a normalised 0..1 score,
+      # so -2.0 would admit EVERY candidate and silently disable the
+      # evidence-quality filter entirely. 0.3 is a starting point, not a
+      # measured value: run real queries and tune it, exactly as
+      # settings.py instructs ("recalibrate rather than reusing this
+      # number").
+      - key: RERANKER_RELEVANCE_THRESHOLD
+        value: "0.3"

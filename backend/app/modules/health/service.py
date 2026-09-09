@@ -136,6 +136,7 @@ _RERANKER_STATUS_MAP: dict[RerankerHealthStatus, ComponentStatus] = {
     RerankerHealthStatus.LOADING: ComponentStatus.LOADING,
     RerankerHealthStatus.UNAVAILABLE: ComponentStatus.UNAVAILABLE,
     RerankerHealthStatus.DISABLED: ComponentStatus.DISABLED,
+    RerankerHealthStatus.CONFIGURED: ComponentStatus.CONFIGURED,
 }
 
 
@@ -392,7 +393,25 @@ class HealthService:
         `CRITICAL_COMPONENTS`) — embedding and document-understanding
         degrade without it, but projects, assets, and existing search
         results keep working.
+
+        An empty `OLLAMA_BASE_URL` skips the probe entirely, the same
+        way an empty `RERANKER_HEALTH_PATH` does. A hosted deployment
+        (Render) runs no local model server at all — embeddings go to
+        Jina and generation to the Gemini/Groq chain — so probing
+        Ollama there would report a dependency the deployment does not
+        have, and park the whole report at `degraded` forever. A
+        permanently false alarm is worse than no alarm: it is what
+        teaches people to stop reading the health page.
         """
+        if not settings.ollama_base_url:
+            return ComponentHealth(
+                status=ComponentStatus.DISABLED,
+                detail=(
+                    "OLLAMA_BASE_URL is empty; this deployment runs no local "
+                    "model server."
+                ),
+            )
+
         endpoint = f"{settings.ollama_base_url.rstrip('/')}/"
         start = time.monotonic()
         try:

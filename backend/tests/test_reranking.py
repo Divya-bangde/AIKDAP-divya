@@ -18,6 +18,7 @@ import uuid
 
 import httpx
 import pytest
+from pydantic import SecretStr
 
 from app.modules.assets.enums import (
     AssetProcessingStatus,
@@ -201,6 +202,38 @@ async def test_request_sends_the_configured_model_and_query():
     assert seen["model"] == "qllama/bge-reranker-v2-m3:latest"
     assert seen["query"] == QUERY
     assert seen["documents"] == [DOCUMENTS["C"]]
+
+
+@pytest.mark.asyncio
+async def test_a_configured_api_key_is_sent_as_a_bearer_token():
+    """A hosted reranker (Jina AI) authenticates by bearer token; the
+    local llama-server needs none. Same provider, same contract."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["auth"] = request.headers.get("Authorization")
+        return httpx.Response(200, json={"results": [{"index": 0, "relevance_score": 1.0}]})
+
+    provider = _mock_provider(handler, api_key=SecretStr("jina-test-key"))
+    await provider.rerank(query=QUERY, candidates=_candidates([DOCUMENTS["C"]]), top_k=1)
+
+    assert seen["auth"] == "Bearer jina-test-key"
+
+
+@pytest.mark.asyncio
+async def test_an_empty_api_key_sends_no_authorization_header():
+    """`RERANKER_API_KEY=` in a .env parses as SecretStr("") rather than
+    None, which must not become a bare `Bearer ` sent at llama-server."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["auth"] = request.headers.get("Authorization")
+        return httpx.Response(200, json={"results": [{"index": 0, "relevance_score": 1.0}]})
+
+    provider = _mock_provider(handler, api_key=SecretStr(""))
+    await provider.rerank(query=QUERY, candidates=_candidates([DOCUMENTS["C"]]), top_k=1)
+
+    assert seen["auth"] is None
 
 
 # ---------------------------------------------------------------------------
