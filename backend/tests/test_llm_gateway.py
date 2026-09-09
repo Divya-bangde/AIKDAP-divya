@@ -529,6 +529,39 @@ def test_scrub_secrets_redacts_credential_shapes():
 
 
 @pytest.mark.asyncio
+async def test_embedding_sends_the_provider_credential(monkeypatch):
+    """Regression: `embed()` resolved no credentials at all.
+
+    Embeddings only ever ran against Ollama, which needs no key, so the
+    omission was invisible until a hosted embedding model was
+    configured — LiteLLM then sent an unauthenticated request and the
+    provider answered AUTH_MISSING_API_KEY. Caught against the real
+    Jina API, not in review.
+    """
+    monkeypatch.setattr(settings, "jina_api_key", SecretStr(FAKE_KEY))
+    mock = AsyncMock(return_value=SimpleNamespace(data=[{"embedding": [0.1] * 8}]))
+    monkeypatch.setattr(gateway_module, "aembedding", mock)
+
+    await LLMGateway().embed(texts=["one"], model="jina_ai/jina-embeddings-v3")
+
+    assert mock.await_args.kwargs["api_key"] == FAKE_KEY
+
+
+@pytest.mark.asyncio
+async def test_ollama_embedding_sends_a_base_url_and_no_credential(monkeypatch):
+    """The local path must keep working exactly as before: Ollama takes
+    an `api_base` and no key, and registering cloud credentials must not
+    start sending one to it."""
+    mock = AsyncMock(return_value=SimpleNamespace(data=[{"embedding": [0.1] * 8}]))
+    monkeypatch.setattr(gateway_module, "aembedding", mock)
+
+    await LLMGateway().embed(texts=["one"], model="ollama/bge-m3")
+
+    assert "api_key" not in mock.await_args.kwargs
+    assert mock.await_args.kwargs["api_base"] == settings.ollama_base_url
+
+
+@pytest.mark.asyncio
 async def test_api_key_is_sent_to_provider_but_never_logged_or_raised(
     gemini_key, monkeypatch, caplog
 ):

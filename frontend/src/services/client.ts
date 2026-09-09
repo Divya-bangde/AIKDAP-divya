@@ -34,7 +34,11 @@ async function refreshAccessToken(): Promise<string | null> {
 
   refreshInFlight = (async () => {
     try {
-      const response = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
+      // Goes through `doFetch` like every other call: a refresh that
+      // bypassed it would miss the transport headers set there, and a
+      // failed refresh silently clears the session — so this path
+      // breaking looks like a random logout rather than a network fault.
+      const response = await doFetch("/api/v1/auth/refresh", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: refreshToken }),
@@ -63,8 +67,22 @@ interface RequestOptions {
   auth?: boolean;
 }
 
+/** The single point where a request leaves the app.
+ *
+ * `ngrok-skip-browser-warning` is sent on every request because ngrok's
+ * free tier answers a browser-looking request with an HTML interstitial
+ * instead of proxying to the API — which would surface as a JSON parse
+ * failure on every call, not as an obvious "the tunnel is showing a
+ * warning page". Any other backend ignores an unrecognized request
+ * header, so this is set unconditionally rather than by sniffing
+ * `BASE_URL` for an ngrok hostname. The backend allows it through CORS
+ * preflight (`allow_headers=["*"]`).
+ */
 async function doFetch(path: string, init: RequestInit): Promise<Response> {
-  return fetch(`${BASE_URL}${path}`, init);
+  return fetch(`${BASE_URL}${path}`, {
+    ...init,
+    headers: { ...(init.headers as Record<string, string>), "ngrok-skip-browser-warning": "true" },
+  });
 }
 
 /** JSON request/response. Attaches the bearer token unless
