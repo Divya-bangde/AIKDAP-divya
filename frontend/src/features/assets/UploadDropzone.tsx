@@ -41,16 +41,33 @@ export function UploadDropzone({ projectId }: { projectId: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
+  // Per-file error messages from the last batch; one bad file never
+  // cancels the others.
+  const [failures, setFailures] = useState<string[]>([]);
+
   const uploadMutation = useMutation({
-    mutationFn: (file: File) => assetsService.uploadAsset(projectId, file),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["assets", projectId] });
+    mutationFn: async (files: File[]) => {
+      const results = await Promise.allSettled(
+        files.map((file) => assetsService.uploadAsset(projectId, file)),
+      );
+      return results.flatMap((result, index) => {
+        if (result.status === "fulfilled") return [];
+        const message = messageFor(result.reason);
+        return [files.length > 1 ? `${files[index]?.name}: ${message}` : message];
+      });
+    },
+    onMutate: () => setFailures([]),
+    onSuccess: setFailures,
+    onSettled: () => {
+      // The `["assets"]` prefix also refreshes the cross-project list the
+      // Active Work toast polls.
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
     },
   });
 
   function handleFiles(files: FileList | null) {
-    const file = files?.[0];
-    if (file) uploadMutation.mutate(file);
+    const list = Array.from(files ?? []);
+    if (list.length > 0) uploadMutation.mutate(list);
   }
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
@@ -65,6 +82,7 @@ export function UploadDropzone({ projectId }: { projectId: string }) {
   }
 
   const uploading = uploadMutation.isPending;
+  const uploadCount = uploadMutation.variables?.length ?? 0;
 
   return (
     <div className="flex flex-col gap-2">
@@ -119,7 +137,11 @@ export function UploadDropzone({ projectId }: { projectId: string }) {
               </div>
               <div>
                 <p className="text-sm font-medium">
-                  {uploading ? "Uploading document…" : "Drag & drop, or choose a file"}
+                  {uploading
+                    ? uploadCount > 1
+                      ? `Uploading ${uploadCount} documents…`
+                      : "Uploading document…"
+                    : "Drag & drop, or choose files"}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {uploading
@@ -134,16 +156,19 @@ export function UploadDropzone({ projectId }: { projectId: string }) {
           id="document-upload-input"
           ref={inputRef}
           type="file"
+          multiple
           accept={SUPPORTED_EXTENSIONS.join(",")}
           className="sr-only"
           onChange={handleChange}
         />
       </motion.div>
 
-      {uploadMutation.isError && (
-        <p role="alert" className="text-sm text-destructive">
-          {messageFor(uploadMutation.error)}
-        </p>
+      {failures.length > 0 && (
+        <div role="alert" className="flex flex-col gap-1 text-sm text-destructive">
+          {failures.map((failure) => (
+            <p key={failure}>{failure}</p>
+          ))}
+        </div>
       )}
     </div>
   );

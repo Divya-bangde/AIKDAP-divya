@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { Loader2, Search, Sparkles } from "lucide-react";
 import { type FormEvent, useState } from "react";
@@ -10,11 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { messageFor } from "@/lib/api-error";
 import { fadeUp } from "@/lib/motion";
+import { submitOnEnter } from "@/lib/utils";
 import * as projectsService from "@/services/projects";
 import * as researchService from "@/services/research";
 
 export function ResearchPrompt() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const [projectId, setProjectId] = useState(searchParams.get("project") ?? "");
   const [query, setQuery] = useState("");
@@ -26,12 +28,16 @@ export function ResearchPrompt() {
 
   const submitMutation = useMutation({
     mutationFn: researchService.startResearchRun,
-    onSuccess: (accepted) => navigate(`/research/${accepted.run_id}`),
+    onSuccess: (accepted) => {
+      // Wakes the Active Work toast, whose polling stopped when idle.
+      queryClient.invalidateQueries({ queryKey: ["research", "runs"] });
+      navigate(`/research/${accepted.run_id}`);
+    },
   });
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!projectId || !query.trim()) return;
+    if (!projectId || !query.trim() || submitMutation.isPending) return;
     submitMutation.mutate({
       project_id: projectId,
       query: query.trim(),
@@ -84,6 +90,7 @@ export function ResearchPrompt() {
                 rows={4}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={submitOnEnter}
                 placeholder="What challenges does ABC Poultry face?"
                 className="resize-none text-[15px] leading-relaxed"
               />

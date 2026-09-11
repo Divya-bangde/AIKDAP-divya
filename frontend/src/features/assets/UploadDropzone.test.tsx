@@ -42,7 +42,10 @@ function makeAsset(): AssetRead {
 }
 
 describe("UploadDropzone", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+  });
 
   it("names the exact formats the backend can actually extract", () => {
     renderWithProviders(<UploadDropzone projectId="project-1" />);
@@ -64,7 +67,7 @@ describe("UploadDropzone", () => {
     const file = new File(["ABC Poultry FY2026"], "abc_poultry.txt", { type: "text/plain" });
 
     renderWithProviders(<UploadDropzone projectId="project-1" />);
-    const input = screen.getByLabelText(/Drag & drop, or choose a file/) as HTMLInputElement;
+    const input = screen.getByLabelText(/Drag & drop, or choose files/) as HTMLInputElement;
     await user.upload(input, file);
 
     expect(await screen.findByText("Uploading document…")).toBeInTheDocument();
@@ -76,6 +79,27 @@ describe("UploadDropzone", () => {
     });
   });
 
+  it("uploads every selected file and reports only the ones that failed", async () => {
+    vi.mocked(assetsService.uploadAsset).mockImplementation((_projectId, file) =>
+      file.name === "bad.txt"
+        ? Promise.reject({ status: 422, message: "The file could not be processed." })
+        : Promise.resolve(makeAsset()),
+    );
+    const user = userEvent.setup();
+    const good = new File(["ok"], "good.txt", { type: "text/plain" });
+    const bad = new File(["bad"], "bad.txt", { type: "text/plain" });
+
+    renderWithProviders(<UploadDropzone projectId="project-1" />);
+    const input = screen.getByLabelText(/Drag & drop, or choose files/) as HTMLInputElement;
+    await user.upload(input, [good, bad]);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "bad.txt: The file could not be processed.",
+    );
+    expect(assetsService.uploadAsset).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("alert")).not.toHaveTextContent("good.txt");
+  });
+
   it("shows a human-readable error when the upload fails", async () => {
     vi.mocked(assetsService.uploadAsset).mockRejectedValue({
       status: 422,
@@ -85,7 +109,7 @@ describe("UploadDropzone", () => {
     const file = new File(["bad"], "bad.txt", { type: "text/plain" });
 
     renderWithProviders(<UploadDropzone projectId="project-1" />);
-    const input = screen.getByLabelText(/Drag & drop, or choose a file/) as HTMLInputElement;
+    const input = screen.getByLabelText(/Drag & drop, or choose files/) as HTMLInputElement;
     await user.upload(input, file);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(

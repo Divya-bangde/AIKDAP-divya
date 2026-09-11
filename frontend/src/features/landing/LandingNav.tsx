@@ -2,6 +2,7 @@ import { motion, useScroll, useSpring, useTransform } from "motion/react";
 import { Link } from "react-router-dom";
 
 import { AikdapMark } from "@/components/common/AikdapMark";
+import { useAuthStore } from "@/store/auth-store";
 
 const SECTIONS = [
   { href: "#pipeline", label: "Pipeline" },
@@ -28,6 +29,8 @@ const SECTIONS = [
  */
 export function LandingNav() {
   const { scrollYProgress, scrollY } = useScroll();
+  // Signed-in users reach this page from the workspace logo (`/home`).
+  const signedIn = useAuthStore((state) => Boolean(state.accessToken));
 
   /* Springing the progress value stops the bar from twitching on a
    * trackpad while still reaching exactly 100% at the end. */
@@ -84,10 +87,10 @@ export function LandingNav() {
           </ul>
 
           <Link
-            to="/login"
+            to={signedIn ? "/" : "/login"}
             className="press rounded-md border border-border-strong px-4 py-2 text-sm font-medium text-foreground hover:border-primary hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            Sign in
+            {signedIn ? "Open workspace" : "Sign in"}
           </Link>
         </div>
       </nav>

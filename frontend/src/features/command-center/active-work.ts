@@ -7,6 +7,10 @@ type ResearchRunRead = components["schemas"]["ResearchRunRead"];
 
 const ACTIVE_RUN_STATUSES = new Set(["pending", "running"]);
 
+export function isActiveRun(run: ResearchRunRead): boolean {
+  return ACTIVE_RUN_STATUSES.has(run.status);
+}
+
 /** One thing AIKDAP is genuinely doing right now, not something that
  * happened recently. A research run counts while its own `status` is
  * `pending`/`running` — never inferred from elapsed time. A document
@@ -69,7 +73,7 @@ export function activeWork(
   const projectNames = new Map(projects.map((project) => [project.id, project.name]));
 
   const runItems: ActiveWorkItem[] = runs
-    .filter((run) => ACTIVE_RUN_STATUSES.has(run.status))
+    .filter(isActiveRun)
     .map((run) => ({
       kind: "research",
       id: run.id,

@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { AlertTriangle, Loader2 } from "lucide-react";
 
 import { ErrorState } from "@/components/common/ErrorState";
+import { ExportMenu } from "@/components/common/ExportMenu";
 import { ResearchRunSkeleton } from "@/components/common/Skeletons";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import { researchLayoutId } from "@/features/research/ResearchHistoryList";
 import { ResearchResult } from "@/features/research/ResearchResult";
 import { runOutcome } from "@/features/research/research-presentation";
 import { usePolling } from "@/hooks/usePolling";
+import { fileSlug, researchRunMarkdown } from "@/lib/export";
 import { fadeUp, layoutSpring } from "@/lib/motion";
 import * as researchService from "@/services/research";
 import type { components } from "@/types/api";
@@ -99,6 +101,13 @@ export function ResearchRunView({ runId }: { runId: string }) {
                  * `ResearchHistoryList` render the same outcome for the
                  * same run through the same function. */}
                 <StatusBadge domain={outcome.domain} value={outcome.value} />
+                {run.status === "completed" && (
+                  <ExportMenu
+                    filename={fileSlug(run.query)}
+                    toMarkdown={() => researchRunMarkdown(run)}
+                    toJson={() => run}
+                  />
+                )}
               </div>
             </div>
           </CardHeader>

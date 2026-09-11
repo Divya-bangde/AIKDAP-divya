@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 
 import type { components } from "@/types/api";
 
@@ -13,6 +13,46 @@ interface AuthState {
   setUser: (user: UserRead) => void;
   clear: () => void;
 }
+
+const REMEMBER_KEY = "aikdap-remember";
+
+/** Records the login form's "Remember me" choice. Must be called
+ * before `setSession`, which is what writes the session to storage. */
+export function setRememberMe(remember: boolean) {
+  try {
+    localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0");
+  } catch {
+    // Storage blocked: the session falls back to the default below.
+  }
+}
+
+/** Absent means remembered — the behaviour before the choice existed. */
+function isRemembered(): boolean {
+  try {
+    return localStorage.getItem(REMEMBER_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+/** "Remember me" keeps the session in `localStorage` (survives closing
+ * the browser); unchecked keeps it in `sessionStorage` (ends with the
+ * browser session). Every write removes the copy from the other store,
+ * so a session never lives in both. */
+const sessionAwareStorage: StateStorage = {
+  getItem: (name) => localStorage.getItem(name) ?? sessionStorage.getItem(name),
+  setItem: (name, value) => {
+    const [keep, drop] = isRemembered()
+      ? [localStorage, sessionStorage]
+      : [sessionStorage, localStorage];
+    keep.setItem(name, value);
+    drop.removeItem(name);
+  },
+  removeItem: (name) => {
+    localStorage.removeItem(name);
+    sessionStorage.removeItem(name);
+  },
+};
 
 /** Holds only the frontend's own authentication session: the JWT pair
  * this backend issued, and the profile `GET /auth/me` returned.
@@ -30,7 +70,7 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) => set({ user }),
       clear: () => set({ accessToken: null, refreshToken: null, user: null }),
     }),
-    { name: "aikdap-auth" },
+    { name: "aikdap-auth", storage: createJSONStorage(() => sessionAwareStorage) },
   ),
 );
 

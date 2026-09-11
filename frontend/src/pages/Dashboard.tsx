@@ -16,9 +16,6 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { PageTransition, Stagger, StaggerItem } from "@/components/motion/PageTransition";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ActiveWorkPanel } from "@/features/command-center/ActiveWorkPanel";
-import { activeWork } from "@/features/command-center/active-work";
-import { PipelineOverview } from "@/features/command-center/PipelineOverview";
 import { SummaryCard } from "@/features/command-center/SummaryCard";
 import { isGroundedAnswer, runOutcome } from "@/features/research/research-presentation";
 import { formatDuration, formatRelativeTime } from "@/lib/format";
@@ -46,12 +43,6 @@ export function Dashboard() {
   const projectNameById = new Map(
     (projectsQuery.data ?? []).map((project) => [project.id, project.name]),
   );
-
-  // "What AIKDAP is doing right now", distinct from "what it did
-  // recently" below — the one tier the previous dashboard collapsed
-  // into a single "recent" list (Sprint 9K.5).
-  const active = activeWork(runsQuery.data ?? [], assetsQuery.data ?? [], projectsQuery.data ?? []);
-  const activeLoading = runsQuery.isLoading || assetsQuery.isLoading || projectsQuery.isLoading;
 
   // Counted from the real `grounding_status` the backend stores on each
   // run — not inferred from `status`, which only says the run finished.
@@ -133,10 +124,6 @@ export function Dashboard() {
           />
         </StaggerItem>
       </Stagger>
-
-      <ActiveWorkPanel items={active} isLoading={activeLoading} />
-
-      <PipelineOverview />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>

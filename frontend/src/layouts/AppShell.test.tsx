@@ -39,15 +39,70 @@ describe("AppShell", () => {
     expect(screen.getAllByText("Dashboard")[0]).toBeInTheDocument();
     expect(screen.getAllByText("Projects")[0]).toBeInTheDocument();
     expect(screen.getAllByText("Research")[0]).toBeInTheDocument();
-    expect(screen.getAllByText("System Health")[0]).toBeInTheDocument();
+    expect(screen.queryByText("System Health")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "AIKDAP home" })).toHaveAttribute("href", "/home");
 
     await waitFor(() => {
       expect(screen.getByText("researcher@example.com")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: /log out/i }));
+    // One logout in the sidebar, one in the phone-width top bar.
+    await user.click(screen.getAllByRole("button", { name: /log out/i })[0]);
 
     expect(useAuthStore.getState().accessToken).toBeNull();
+  });
+
+  it("collapses the sidebar to icons and remembers it", async () => {
+    useAuthStore.setState({ accessToken: "tok", refreshToken: "ref", user: null });
+    vi.mocked(authService.currentUser).mockResolvedValue({
+      id: "u1",
+      email: "researcher@example.com",
+      full_name: null,
+      is_active: true,
+      created_at: new Date().toISOString(),
+    });
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route path="/" element={<div>Dashboard content</div>} />
+        </Route>
+      </Routes>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+
+    expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
+    expect(localStorage.getItem("aikdap-sidebar-collapsed")).toBe("1");
+    localStorage.removeItem("aikdap-sidebar-collapsed");
+  });
+
+  it("offers a back button only on inner pages", async () => {
+    useAuthStore.setState({ accessToken: "tok", refreshToken: "ref", user: null });
+    vi.mocked(authService.currentUser).mockResolvedValue({
+      id: "u1",
+      email: "researcher@example.com",
+      full_name: null,
+      is_active: true,
+      created_at: new Date().toISOString(),
+    });
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route path="/projects" element={<div>Projects list</div>} />
+          <Route path="/projects/:id" element={<div>One project</div>} />
+        </Route>
+      </Routes>,
+      { route: "/projects/p1" },
+    );
+
+    await user.click(screen.getByRole("button", { name: "Go back" }));
+
+    expect(await screen.findByText("Projects list")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Go back" })).not.toBeInTheDocument();
   });
 
   it("lets its content column shrink below its content's intrinsic width", async () => {

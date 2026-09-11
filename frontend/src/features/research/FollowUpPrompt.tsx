@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CornerDownRight, Loader2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { messageFor } from "@/lib/api-error";
+import { submitOnEnter } from "@/lib/utils";
 import * as researchService from "@/services/research";
 
 /** Ask a follow-up about a completed run ("explain that briefly").
@@ -19,12 +20,14 @@ import * as researchService from "@/services/research";
  * evidence is insufficient. Nothing is answered client-side. */
 export function FollowUpPrompt({ runId, projectId }: { runId: string; projectId: string }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
   const fieldId = `follow-up-${runId}`;
 
   const mutation = useMutation({
     mutationFn: researchService.startResearchRun,
     onSuccess: (accepted) => {
+      queryClient.invalidateQueries({ queryKey: ["research", "runs"] });
       setQuery("");
       navigate(`/research/${accepted.run_id}`);
     },
@@ -55,6 +58,7 @@ export function FollowUpPrompt({ runId, projectId }: { runId: string; projectId:
             id={fieldId}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={submitOnEnter}
             rows={2}
             placeholder="e.g. Explain that briefly — or ask for a chart or diagram of it"
           />

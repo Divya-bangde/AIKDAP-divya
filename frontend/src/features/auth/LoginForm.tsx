@@ -8,17 +8,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { messageFor } from "@/lib/api-error";
 import * as authService from "@/services/auth";
-import { useAuthStore } from "@/store/auth-store";
+import { setRememberMe, useAuthStore } from "@/store/auth-store";
 
 export function LoginForm() {
   const navigate = useNavigate();
   const setSession = useAuthStore((state) => state.setSession);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
 
   const loginMutation = useMutation({
     mutationFn: authService.login,
     onSuccess: (tokens) => {
+      setRememberMe(remember);
       setSession({ accessToken: tokens.access_token, refreshToken: tokens.refresh_token });
       navigate("/", { replace: true });
     },
@@ -55,6 +57,15 @@ export function LoginForm() {
           placeholder="••••••••"
         />
       </div>
+      <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={remember}
+          onChange={(event) => setRemember(event.target.checked)}
+          className="h-4 w-4 rounded border-input accent-primary"
+        />
+        Remember me
+      </label>
 
       {loginMutation.isError && (
         <p role="alert" className="text-sm text-destructive">

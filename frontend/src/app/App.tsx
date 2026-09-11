@@ -12,10 +12,9 @@ import { useAuthStore } from "@/store/auth-store";
 /* The entry path — landing and login — is imported eagerly, because it
  * is what a first-time visitor actually waits for. Everything behind
  * authentication is split out: a visitor who has not signed in never
- * downloads the dashboard, project workspace, research pipeline or
- * health page. `AppShell` renders the Suspense boundary, so switching
- * pages keeps the sidebar and header on screen rather than blanking
- * the window. */
+ * downloads the dashboard, project workspace or research pipeline.
+ * `AppShell` renders the Suspense boundary, so switching pages keeps
+ * the sidebar and header on screen rather than blanking the window. */
 const Dashboard = lazy(() =>
   import("@/pages/Dashboard").then((m) => ({ default: m.Dashboard })),
 );
@@ -27,9 +26,6 @@ const ProjectDetail = lazy(() =>
 );
 const Research = lazy(() =>
   import("@/pages/Research").then((m) => ({ default: m.Research })),
-);
-const SystemHealth = lazy(() =>
-  import("@/pages/SystemHealth").then((m) => ({ default: m.SystemHealth })),
 );
 
 export function App() {
@@ -52,6 +48,11 @@ export function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
 
+        {/* The landing page for everyone, signed in or not — where the
+         * sidebar's AIKDAP logo leads. A signed-in user cannot reach it
+         * at `/`, which is their Command Center. */}
+        <Route path="/home" element={<Landing />} />
+
         {/* `/` serves two different experiences. Declaring the public
          * landing route only while unauthenticated means an
          * authenticated user falls through to the protected `/` below
@@ -67,7 +68,6 @@ export function App() {
             <Route path="/projects/:id" element={<ProjectDetail />} />
             <Route path="/research" element={<Research />} />
             <Route path="/research/:runId" element={<Research />} />
-            <Route path="/health" element={<SystemHealth />} />
           </Route>
         </Route>
 

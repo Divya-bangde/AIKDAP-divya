@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "@/app/App";
 import * as authService from "@/services/auth";
 import * as assetsService from "@/services/assets";
-import * as healthService from "@/services/health";
 import * as projectsService from "@/services/projects";
 import * as researchService from "@/services/research";
 import { useAuthStore } from "@/store/auth-store";
@@ -14,7 +13,6 @@ import { renderWithProviders } from "@/test/render";
 
 vi.mock("@/services/auth");
 vi.mock("@/services/assets");
-vi.mock("@/services/health");
 vi.mock("@/services/projects");
 vi.mock("@/services/research");
 
@@ -47,13 +45,6 @@ describe("App routing at /", () => {
       full_name: null,
       is_active: true,
       created_at: new Date().toISOString(),
-    });
-    vi.mocked(healthService.getHealth).mockResolvedValue({
-      status: "healthy",
-      app: "AIKDAP",
-      version: "1.0.0",
-      environment: "test",
-      services: {},
     });
   });
 
@@ -88,6 +79,15 @@ describe("App routing at /", () => {
     });
   });
 
+  it("serves the landing page at /home to a signed-in user, with a way back in", async () => {
+    useAuthStore.setState({ accessToken: "tok", refreshToken: "ref", user: null });
+
+    renderWithProviders(<App />, { route: "/home" });
+
+    expect(screen.getByRole("heading", { level: 1, name: "AIKDAP" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open workspace" })).toHaveAttribute("href", "/");
+  });
+
   it("sends an unauthenticated visitor from a protected route to login", async () => {
     renderWithProviders(<App />, { route: "/projects" });
 
@@ -100,8 +100,7 @@ describe("App routing at /", () => {
 
     renderWithProviders(<App />, { route: "/projects" });
 
-    await screen.findByRole("button", { name: /log out/i });
-    await user.click(screen.getByRole("button", { name: /log out/i }));
+    await user.click((await screen.findAllByRole("button", { name: /log out/i }))[0]);
 
     // The public entry experience, not `/login` — signing out is a way
     // back to the front door, not a demand to sign in again.

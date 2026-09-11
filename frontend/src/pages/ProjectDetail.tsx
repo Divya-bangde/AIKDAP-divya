@@ -1,15 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import { Search } from "lucide-react";
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 
 import { ErrorState } from "@/components/common/ErrorState";
 import { ProjectWorkspaceSkeleton, RowListSkeleton } from "@/components/common/Skeletons";
 import { PageTransition } from "@/components/motion/PageTransition";
 import { AnimatedNumber } from "@/components/motion/AnimatedNumber";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DocumentsSection } from "@/features/assets/DocumentsSection";
 import { allSettled, knowledgeState } from "@/features/assets/asset-state";
@@ -40,7 +37,12 @@ function KnowledgeStat({ label, value, detail }: { label: string; value: number;
 
 export function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
-  const [tab, setTab] = useState("overview");
+  const [searchParams] = useSearchParams();
+  // `?tab=documents` is how the Active Work toast deep-links here.
+  const [tab, setTab] = useState(() => {
+    const requested = searchParams.get("tab");
+    return TABS.some((item) => item.value === requested) ? requested! : "overview";
+  });
 
   const projectQuery = useQuery({
     queryKey: ["projects", id],
@@ -81,7 +83,12 @@ export function ProjectDetail() {
 
   return (
     <PageTransition>
-      <ProjectHeader project={project} />
+      <ProjectHeader
+        project={project}
+        assets={assets}
+        runs={runs}
+        onRequestUpload={() => setTab("documents")}
+      />
 
       <Tabs value={tab} onValueChange={setTab} className="flex flex-col gap-6">
         <TabsList>
@@ -93,43 +100,17 @@ export function ProjectDetail() {
         </TabsList>
 
         <TabsContent value="overview">
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={fadeUp}
-            className="flex flex-col gap-6"
-          >
-            <div>
-              <h2 className="mb-3 text-section">Knowledge state</h2>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <KnowledgeStat label="Documents" value={stats.total} detail="Uploaded" />
-                <KnowledgeStat label="Extracted" value={stats.extracted} detail="Pipeline" />
-                <KnowledgeStat label="Understood" value={stats.understood} detail="Qwen 3.5" />
-                <KnowledgeStat label="Embedded" value={stats.embedded} detail="BGE-M3" />
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Counts reflect the backend's reported state for each document.
-              </p>
+          <motion.div initial="hidden" animate="visible" variants={fadeUp}>
+            <h2 className="mb-3 text-section">Knowledge state</h2>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <KnowledgeStat label="Documents" value={stats.total} detail="Uploaded" />
+              <KnowledgeStat label="Extracted" value={stats.extracted} detail="Pipeline" />
+              <KnowledgeStat label="Understood" value={stats.understood} detail="Qwen 3.5" />
+              <KnowledgeStat label="Embedded" value={stats.embedded} detail="BGE-M3" />
             </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Ready to research</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-wrap items-center justify-between gap-4">
-                <p className="max-w-lg text-sm text-muted-foreground">
-                  {stats.embedded > 0
-                    ? "This project has embedded knowledge. Ask a question and AIKDAP will retrieve, rerank and ground an answer in these documents."
-                    : "Upload and process a document first — AIKDAP only answers from evidence it can cite."}
-                </p>
-                <Button asChild>
-                  <Link to={`/research?project=${project.id}`}>
-                    <Search className="h-4 w-4" />
-                    Start Research
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Counts reflect the backend's reported state for each document.
+            </p>
           </motion.div>
         </TabsContent>
 

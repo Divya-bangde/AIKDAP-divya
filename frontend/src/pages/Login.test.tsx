@@ -49,6 +49,27 @@ describe("Login page", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("keeps the session only for this browser session when Remember me is off", async () => {
+    vi.mocked(authService.login).mockResolvedValue({
+      access_token: "access-456",
+      refresh_token: "refresh-456",
+      token_type: "bearer",
+    });
+    const user = userEvent.setup();
+
+    renderWithProviders(<Login />);
+    await user.type(screen.getByLabelText("Email"), "user@example.com");
+    await user.type(screen.getByLabelText("Password"), "password123");
+    await user.click(screen.getByLabelText("Remember me"));
+    await user.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(sessionStorage.getItem("aikdap-auth")).toContain("access-456");
+    });
+    expect(localStorage.getItem("aikdap-auth")).toBeNull();
+    localStorage.removeItem("aikdap-remember");
+  });
+
   it("shows a human-readable error and does not store a session on failed login", async () => {
     vi.mocked(authService.login).mockRejectedValue({
       status: 401,
