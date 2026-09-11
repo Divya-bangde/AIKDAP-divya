@@ -12,13 +12,18 @@ Topology::
     START
       -> planner
       -> router
-           |-- asset_retrieval --+-> web_research --+
-           |                     \\-----------------|--> context_builder
-           |-- web_research ---------------------- |
-           \\--------------------------------------+
+           |-- asset_retrieval ---------------------+
+           |-- web_research (no knowledge base) ----|--> context_builder
+           \\---------------------------------------+
       -> context_builder
       -> synthesis
-      -> END
+           |-- evidence insufficient, live web search configured, web not
+           |   yet tried --> web_research -> context_builder -> synthesis
+           \\-- otherwise --> END
+
+External search is a fallback, not a peer source: the project's own
+evidence is always tried first, and the web is consulted (at most once)
+only when synthesis reports that evidence insufficient.
 
 Retrieval agents are chained conditionally rather than fanned out in
 parallel. Both are valid LangGraph, but they share a single database
@@ -40,8 +45,9 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from app.agents.planner.nodes import (
-    route_after_asset_retrieval,
+    SYNTHESIS_DONE,
     route_after_router,
+    route_after_synthesis,
 )
 from app.agents.planner.registry import AGENT_REGISTRY, get_node_spec
 from app.agents.planner.state import ResearchNode, ResearchState
@@ -77,18 +83,20 @@ def build_research_graph() -> StateGraph:
             ResearchNode.CONTEXT_BUILDER.value: ResearchNode.CONTEXT_BUILDER.value,
         },
     )
-    builder.add_conditional_edges(
-        ResearchNode.ASSET_RETRIEVAL.value,
-        route_after_asset_retrieval,
-        {
-            ResearchNode.WEB_RESEARCH.value: ResearchNode.WEB_RESEARCH.value,
-            ResearchNode.CONTEXT_BUILDER.value: ResearchNode.CONTEXT_BUILDER.value,
-        },
-    )
-
+    builder.add_edge(ResearchNode.ASSET_RETRIEVAL.value, ResearchNode.CONTEXT_BUILDER.value)
     builder.add_edge(ResearchNode.WEB_RESEARCH.value, ResearchNode.CONTEXT_BUILDER.value)
     builder.add_edge(ResearchNode.CONTEXT_BUILDER.value, ResearchNode.SYNTHESIS.value)
-    builder.add_edge(ResearchNode.SYNTHESIS.value, END)
+
+    # The web-fallback loop. `route_after_synthesis` returns to web
+    # research only once (`web_research_attempted`), so it is bounded.
+    builder.add_conditional_edges(
+        ResearchNode.SYNTHESIS.value,
+        route_after_synthesis,
+        {
+            ResearchNode.WEB_RESEARCH.value: ResearchNode.WEB_RESEARCH.value,
+            SYNTHESIS_DONE: END,
+        },
+    )
 
     return builder
 

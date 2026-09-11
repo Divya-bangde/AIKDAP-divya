@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { activeWork } from "@/features/command-center/active-work";
+import { aiProfile } from "@/test/fixtures";
 import type { components } from "@/types/api";
 
 type AssetRead = components["schemas"]["AssetRead"];
@@ -102,7 +103,7 @@ describe("activeWork", () => {
         [
           asset({
             processing_status: "completed",
-            ai_profile: { status: "pending", embedding_status: "pending" },
+            ai_profile: aiProfile({ status: "pending", embedding_status: "pending" }),
           }),
         ],
         projects,
@@ -116,7 +117,7 @@ describe("activeWork", () => {
         [
           asset({
             processing_status: "completed",
-            ai_profile: { status: "completed", embedding_status: "completed" },
+            ai_profile: aiProfile({ status: "completed", embedding_status: "completed" }),
           }),
         ],
         projects,
@@ -144,7 +145,7 @@ describe("activeWork", () => {
       [
         asset({
           processing_status: "completed",
-          ai_profile: { status: "pending", embedding_status: "pending" },
+          ai_profile: aiProfile({ status: "pending", embedding_status: "pending" }),
         }),
       ],
       projects,
@@ -157,7 +158,7 @@ describe("activeWork", () => {
       [
         asset({
           processing_status: "completed",
-          ai_profile: { status: "completed", embedding_status: "processing" },
+          ai_profile: aiProfile({ status: "completed", embedding_status: "processing" }),
         }),
       ],
       projects,
@@ -189,7 +190,7 @@ describe("activeWork", () => {
     expect(
       activeWork(
         [run({ status: "completed" })],
-        [asset({ processing_status: "completed", ai_profile: { status: "completed", embedding_status: "completed" } })],
+        [asset({ processing_status: "completed", ai_profile: aiProfile({ status: "completed", embedding_status: "completed" }) })],
         projects,
       ),
     ).toEqual([]);

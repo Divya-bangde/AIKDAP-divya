@@ -80,7 +80,7 @@ class _UnusedAssetRetriever:
 
     name = "unused"
 
-    async def retrieve(self, *, owner_id, project_id, query, limit):
+    async def retrieve(self, *, owner_id, project_id, query, limit, asset_id=None):
         raise AssertionError("asset_retrieval must not run when include_assets=False")
 
 

@@ -747,7 +747,7 @@ async def test_asset_retrieval_scopes_the_search_to_the_run_owner():
     class RecordingRetriever:
         name = "recording"
 
-        async def retrieve(self, *, owner_id, project_id, query, limit):
+        async def retrieve(self, *, owner_id, project_id, query, limit, asset_id=None):
             seen.update(owner_id=owner_id, project_id=project_id, limit=limit)
             return []
 

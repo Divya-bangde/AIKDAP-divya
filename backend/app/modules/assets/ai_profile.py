@@ -73,5 +73,10 @@ class AIProfile(BaseModel):
     #: number — the existing safe default.
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     status: AIProfileStatus = AIProfileStatus.PENDING
+    #: Completeness of the successful document-understanding pass. Defaults
+    #: preserve validation for JSON profiles written before these fields existed.
+    truncated: bool = False
+    processed_sections: int = Field(default=0, ge=0)
+    total_sections: int = Field(default=0, ge=0)
     #: Human-readable reason when `status` is `FAILED`/`UNAVAILABLE`.
     error: str | None = None

@@ -124,6 +124,14 @@ class QwenDocumentMetadata(BaseModel):
         return value
 
 
+class DocumentUnderstandingResult(QwenDocumentMetadata):
+    """Document metadata plus how much of the source was analyzed."""
+
+    truncated: bool = False
+    processed_sections: int = Field(default=1, gt=0)
+    total_sections: int = Field(default=1, gt=0)
+
+
 def _render_prompt(text: str) -> str:
     """Build the user prompt for one section of document text."""
     return _USER_PROMPT_TEMPLATE.format(text=text)
@@ -177,7 +185,7 @@ class QwenDocumentUnderstandingService:
     def __init__(self, gateway: LLMGateway | None = None) -> None:
         self._gateway = gateway or get_llm_gateway()
 
-    async def analyze(self, text: str) -> QwenDocumentMetadata:
+    async def analyze(self, text: str) -> DocumentUnderstandingResult:
         """Analyze extracted document text and return structured metadata.
 
         Raises `DocumentUnderstandingError` for empty text or an
@@ -193,7 +201,8 @@ class QwenDocumentUnderstandingService:
             )
 
         if len(stripped) <= settings.qwen_max_input_characters:
-            return await self._analyze_section(stripped)
+            metadata = await self._analyze_section(stripped)
+            return DocumentUnderstandingResult.model_validate(metadata.model_dump())
 
         sections = chunk_text(
             stripped, chunk_size=settings.qwen_max_input_characters, chunk_overlap=0
@@ -216,7 +225,13 @@ class QwenDocumentUnderstandingService:
                 section_count=len(sections),
             )
         analyzed = [await self._analyze_section(section) for section in sections]
-        return _merge_sections(analyzed)
+        merged = _merge_sections(analyzed)
+        return DocumentUnderstandingResult(
+            **merged.model_dump(),
+            truncated=len(sections) < total_sections,
+            processed_sections=len(sections),
+            total_sections=total_sections,
+        )
 
     async def _analyze_section(self, text: str) -> QwenDocumentMetadata:
         """Run one Qwen call and validate its output. `LLMError` propagates."""
@@ -229,6 +244,7 @@ class QwenDocumentUnderstandingService:
             timeout=settings.qwen_timeout,
             temperature=0.1,
             response_format={"type": "json_object"},
+            num_ctx=settings.qwen_num_ctx,
         )
         return self._parse(response.content)
 

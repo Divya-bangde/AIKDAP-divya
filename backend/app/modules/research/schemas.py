@@ -8,11 +8,11 @@ look.
 
 import uuid
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.modules.research.enums import (
     AgentMessageRole,
@@ -55,11 +55,21 @@ class ResearchRunCreate(BaseModel):
     # Optional association with an existing task, validated for
     # ownership like the project is.
     task_id: uuid.UUID | None = None
+    parent_run_id: uuid.UUID | None = Field(
+        default=None,
+        description=(
+            "Ask a follow-up on this completed run (same project). Its question "
+            "and answer frame the new one; evidence is still retrieved fresh."
+        ),
+    )
     include_assets: bool = Field(
         default=True, description="Search the project's own knowledge base."
     )
     include_web: bool = Field(
-        default=True, description="Gather external references (simulated in this release)."
+        default=True, description=(
+            "Search the web (Tavily) only when the project's own evidence is "
+            "insufficient. Simulated when TAVILY_API_KEY is not configured."
+        )
     )
     max_results: int = Field(default=5, ge=1, le=20)
     
@@ -142,6 +152,47 @@ class SynthesisClaim(BaseModel):
     attributed_to_primary: bool = True
 
 
+class VisualizationKind(str, Enum):
+    """What kind of visual a synthesis answer carries."""
+
+    CHART2D = "chart2d"
+    CHART3D = "chart3d"
+    DIAGRAM = "diagram"
+
+
+class Visualization(BaseModel):
+    """A chart or diagram the synthesis model produced because the
+    question asked for one.
+
+    Charts carry Plotly traces (`data`) and `layout`, rendered by the
+    frontend as-is; diagrams carry Mermaid source. Validated so a stored
+    spec always has something to draw -- a spec that doesn't is dropped by
+    `synthesis._parse_response`, never stored half-formed.
+    """
+
+    kind: VisualizationKind
+    title: str = ""
+    data: list[dict[str, Any]] = Field(default_factory=list)
+    layout: dict[str, Any] = Field(default_factory=dict)
+    mermaid: str | None = None
+
+    @model_validator(mode="after")
+    def _has_content_for_kind(self) -> Self:
+        if self.kind is VisualizationKind.DIAGRAM:
+            if not (self.mermaid and self.mermaid.strip()):
+                raise ValueError("a diagram needs Mermaid source")
+        elif not self.data:
+            raise ValueError("a chart needs at least one Plotly trace")
+        return self
+
+
+#: How a question relates to the subject of the evidence it was asked
+#: against -- not whether that evidence answers it (`grounding_status`).
+#: Routes an insufficient answer: an off-topic question is never sent to
+#: web search, and is answered briefly from general knowledge instead.
+TopicRelation = Literal["on_topic", "related", "off_topic"]
+
+
 class GroundedSynthesisResponse(BaseModel):
     """The full JSON-schema-enforced envelope `GroundedSynthesizer` requests.
 
@@ -153,7 +204,9 @@ class GroundedSynthesisResponse(BaseModel):
     answer: str
     citation_ids: list[str] = Field(default_factory=list)
     grounding_status: str | None = None
+    topic_relation: TopicRelation | None = None
     claims: list[SynthesisClaim] = Field(default_factory=list)
+    visualization: Visualization | None = None
 
 
 class UnsourcedSynthesisResponse(BaseModel):
@@ -213,6 +266,7 @@ class ResearchRunRead(BaseModel):
     project_id: uuid.UUID
     owner_id: uuid.UUID
     task_id: uuid.UUID | None
+    parent_run_id: uuid.UUID | None = None
     query: str
     status: ResearchRunStatus
     include_assets: bool
@@ -228,6 +282,8 @@ class ResearchRunRead(BaseModel):
     #: `insufficient_evidence` at the same time, which is the honest
     #: answer to an unanswerable question.
     grounding_status: ResearchGroundingStatus | None
+    #: A validated `Visualization` spec, when the question asked for one.
+    visualization: dict[str, Any] | None = None
     error_message: str | None
     celery_task_id: str | None
     started_at: datetime | None

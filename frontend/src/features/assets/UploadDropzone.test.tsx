@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { UploadDropzone } from "@/features/assets/UploadDropzone";
 import * as assetsService from "@/services/assets";
+import { aiProfile } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import type { components } from "@/types/api";
 
@@ -29,10 +30,7 @@ function makeAsset(): AssetRead {
     version: 1,
     tags: [],
     metadata: {},
-    ai_profile: {
-      embedding_status: "pending",
-      status: "pending",
-    },
+    ai_profile: aiProfile({ embedding_status: "pending", status: "pending" }),
     created_by: null,
     processing_status: "queued",
     processing_error: null,

@@ -272,12 +272,12 @@ export default function LandingStory() {
               className="rounded-xl border border-border bg-card p-7"
             >
               <h3 className="font-display text-xl tracking-tight text-foreground">
-                Missing evidence is an answer
+                Every answer says where it came from
               </h3>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                When nothing clears the relevance gate, the run reports insufficient evidence
-                and stops. Answering anyway from a model&rsquo;s general knowledge would produce
-                the one thing this platform exists to avoid.
+                AIKDAP grounds answers in your documents first, searches the web when they fall
+                short, and clearly labels anything answered from general knowledge &mdash; that
+                answer never carries a citation it does not have.
               </p>
             </motion.div>
           </motion.div>

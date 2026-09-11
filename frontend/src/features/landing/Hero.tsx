@@ -90,7 +90,7 @@ export function Hero() {
         <motion.div variants={landingItem} className="mt-12 flex flex-wrap items-center gap-4">
           <Link
             to="/login"
-            className="group inline-flex items-center gap-3 rounded-xl bg-foreground px-7 py-4 font-display text-base font-medium tracking-tight text-background shadow-float transition-colors duration-200 hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="press group inline-flex items-center gap-3 rounded-xl bg-foreground px-7 py-4 font-display text-base font-medium tracking-tight text-background shadow-float duration-200 hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Enter AIKDAP
             <ArrowRight
@@ -100,7 +100,7 @@ export function Hero() {
           </Link>
           <a
             href="#pipeline"
-            className="group inline-flex items-center gap-2 rounded-xl border border-border-strong px-6 py-4 font-display text-base font-medium tracking-tight text-foreground transition-colors duration-200 hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="press group inline-flex items-center gap-2 rounded-xl border border-border-strong px-6 py-4 font-display text-base font-medium tracking-tight text-foreground duration-200 hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Explore how it works
             <ArrowRight

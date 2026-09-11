@@ -28,6 +28,8 @@ from app.agents.planner.nodes import (
     build_dependencies,
 )
 from app.agents.planner.planner import get_planner
+from app.agents.planner.synthesis import SynthesisResult, UnsourcedSynthesizer
+from app.core.config.settings import settings
 from app.core.llm.gateway import LLMGateway
 from app.agents.planner.registry import (
     AGENT_REGISTRY,
@@ -48,6 +50,7 @@ from app.agents.planner.tracking import (
     instrument,
 )
 from app.modules.research.enums import (
+    ResearchGroundingStatus,
     ResearchRunStatus,
     ResearchStepStatus,
 )
@@ -80,7 +83,7 @@ class FakeAssetRetriever:
     def __init__(self, count: int = 2) -> None:
         self._count = count
 
-    async def retrieve(self, *, owner_id, project_id, query, limit):
+    async def retrieve(self, *, owner_id, project_id, query, limit, asset_id=None):
         return [
             {
                 "source": "asset",
@@ -100,7 +103,7 @@ class BrokenAssetRetriever:
 
     name = "broken_asset_retriever"
 
-    async def retrieve(self, *, owner_id, project_id, query, limit):
+    async def retrieve(self, *, owner_id, project_id, query, limit, asset_id=None):
         raise RuntimeError("knowledge base unavailable")
 
 
@@ -161,15 +164,87 @@ class RecordingTracker(NodeExecutionTracker):
         self.started: list[str] = []
         self.succeeded: list[tuple[str, int]] = []
         self.failed: list[tuple[str, str, bool]] = []
+        self.updates: list[tuple[str, dict[str, Any]]] = []
 
     async def on_node_start(self, node: str) -> None:
         self.started.append(node)
 
     async def on_node_success(self, node, update, duration_ms) -> None:
         self.succeeded.append((node, duration_ms))
+        self.updates.append((node, update))
 
     async def on_node_failure(self, node, error, duration_ms, critical) -> None:
         self.failed.append((node, type(error).__name__, critical))
+
+    def synthesis_outputs(self) -> list[dict[str, Any]]:
+        """Every synthesis pass's step output, in execution order."""
+        return [update["step"]["output"] for node, update in self.updates if node == "synthesis"]
+
+
+class ScriptedSynthesizer:
+    """Plays the grounded synthesis model: reports `topic_relation`, and
+    grounds its answer only in evidence from the `grounds_on` sources."""
+
+    name = "scripted_synthesizer"
+
+    def __init__(self, *, topic_relation: str | None, grounds_on: tuple[str, ...] = ()) -> None:
+        self._topic_relation = topic_relation
+        self._grounds_on = grounds_on
+
+    async def synthesize(
+        self,
+        *,
+        query,
+        objective,
+        context,
+        documents,
+        citations,
+        warnings,
+        full_evidence_text=None,
+        conversation=None,
+    ):
+        cited = [item for item in citations if item["source"] in self._grounds_on]
+        return SynthesisResult(
+            # The real failure this replaces: a small model "explaining what
+            # is missing" with a summary of the paper instead.
+            answer="Grounded answer [c1]." if cited else "A summary of the paper.",
+            citations=cited,
+            grounding_status=(
+                ResearchGroundingStatus.GROUNDED
+                if cited
+                else ResearchGroundingStatus.INSUFFICIENT_EVIDENCE
+            ),
+            topic_relation=self._topic_relation,
+            model="scripted-model",
+            provider="scripted",
+        )
+
+
+class FakeUnsourcedSynthesizer:
+    """Stands in for the general-knowledge model and records every call."""
+
+    name = "fake_unsourced"
+
+    def __init__(self, *, fail: bool = False) -> None:
+        self.calls: list[dict[str, Any]] = []
+        self._fail = fail
+
+    async def synthesize(self, *, query, brief=False):
+        self.calls.append({"query": query, "brief": brief})
+        if self._fail:
+            raise RuntimeError("general-knowledge model unavailable")
+        return SynthesisResult(
+            answer="Deep learning is a subset of machine learning.",
+            citations=[],
+            grounding_status=ResearchGroundingStatus.UNSOURCED,
+            model="fake-general-model",
+            provider="fake",
+            latency_ms=7,
+        )
+
+
+OFF_TOPIC_NOTICE = "**This question is outside the topic of your project's documents."
+UNGROUNDED_NOTICE = "**This could not be grounded in your project's documents or web search."
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +342,11 @@ def test_graph_nodes_come_from_the_registry():
 
 @pytest.mark.asyncio
 async def test_graph_executes_basic_workflow_in_order():
-    """A both-sources run must execute all six agents, spine last."""
+    """A both-sources run whose knowledge base answers never enters the web.
+
+    Web research is a fallback (see `graph.py`), so with sufficient
+    project evidence the spine runs straight through without it.
+    """
     tracker = RecordingTracker()
     await get_research_graph().ainvoke(
         initial_state(), config=make_config(make_dependencies(), tracker)
@@ -277,7 +356,6 @@ async def test_graph_executes_basic_workflow_in_order():
         ResearchNode.PLANNER.value,
         ResearchNode.ROUTER.value,
         ResearchNode.ASSET_RETRIEVAL.value,
-        ResearchNode.WEB_RESEARCH.value,
         ResearchNode.CONTEXT_BUILDER.value,
         ResearchNode.SYNTHESIS.value,
     ]
@@ -292,16 +370,18 @@ async def test_graph_executes_basic_workflow_in_order():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("include_assets", "include_web", "expected_retrieval"),
+    ("include_assets", "include_web", "expected_selected", "expected_executed"),
     [
-        (True, False, ["asset_retrieval"]),
-        (False, True, ["web_research"]),
-        (True, True, ["asset_retrieval", "web_research"]),
-        (False, False, []),
+        (True, False, ["asset_retrieval"], ["asset_retrieval"]),
+        (False, True, ["web_research"], ["web_research"]),
+        # Web is selected but is only a fallback: the fake knowledge base
+        # answers the question, so web research is never entered.
+        (True, True, ["asset_retrieval", "web_research"], ["asset_retrieval"]),
+        (False, False, [], []),
     ],
 )
 async def test_routing_executes_only_selected_agents(
-    include_assets, include_web, expected_retrieval
+    include_assets, include_web, expected_selected, expected_executed
 ):
     """Unselected retrieval agents must never be entered."""
     tracker = RecordingTracker()
@@ -311,8 +391,8 @@ async def test_routing_executes_only_selected_agents(
     )
 
     executed_retrieval = [n for n in tracker.started if n in set(retrieval_agents())]
-    assert executed_retrieval == expected_retrieval
-    assert final["selected_agents"] == expected_retrieval
+    assert executed_retrieval == expected_executed
+    assert final["selected_agents"] == expected_selected
 
     # The spine always runs, whatever the routing decision.
     for spine in ("planner", "router", "context_builder", "synthesis"):
@@ -335,6 +415,198 @@ async def test_skipped_agent_never_executes_its_handler():
     assert "asset_retrieval" not in final["selected_agents"]
 
 
+class FakeLiveWebProvider:
+    """A live (non-simulated) web source, so the fallback is eligible."""
+
+    name = "fake_live_web"
+    live = True
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def search(self, *, query, limit):
+        self.calls += 1
+        return [
+            {
+                "source": "web",
+                "provider": self.name,
+                "reference": "https://example.org/poultry-outlook",
+                "title": "Poultry outlook",
+                "snippet": "Poultry production grew steadily over the period.",
+                "score": 0.8,
+                "simulated": False,
+                "rank": 1,
+            }
+        ]
+
+
+async def _run_graph(tracker: RecordingTracker | None = None, **overrides: Any) -> dict[str, Any]:
+    """Run the full graph offline, with both sources enabled."""
+    return await get_research_graph().ainvoke(
+        initial_state(include_assets=True, include_web=True),
+        config=make_config(make_dependencies(**overrides), tracker or RecordingTracker()),
+    )
+
+
+@pytest.mark.asyncio
+async def test_related_question_the_documents_lack_is_grounded_by_the_web_fallback():
+    """Related but not answered by the documents: the web runs once and grounds it.
+
+    Previously exercised with an empty knowledge base; an empty result now
+    counts as off topic (see the guard test below), so the fallback is
+    driven by documents that are related but do not answer.
+    """
+    web = FakeLiveWebProvider()
+    unsourced = FakeUnsourcedSynthesizer()
+    tracker = RecordingTracker()
+    final = await _run_graph(
+        tracker,
+        synthesizer=ScriptedSynthesizer(topic_relation="related", grounds_on=("web",)),
+        web_provider=web,
+        unsourced_synthesizer=unsourced,
+    )
+
+    assert web.calls == 1
+    assert tracker.started == [
+        "planner",
+        "router",
+        "asset_retrieval",
+        "context_builder",
+        "synthesis",
+        "web_research",
+        "context_builder",
+        "synthesis",
+    ]
+    assert final["grounding_status"] == "grounded"
+    assert [c["reference"] for c in final["citations"]] == ["https://example.org/poultry-outlook"]
+    assert unsourced.calls == []
+
+
+@pytest.mark.asyncio
+async def test_off_topic_question_is_answered_briefly_from_general_knowledge_without_the_web():
+    """Off topic: no web search; one brief, labelled, uncited general answer."""
+    web = FakeLiveWebProvider()
+    unsourced = FakeUnsourcedSynthesizer()
+    tracker = RecordingTracker()
+    final = await _run_graph(
+        tracker,
+        synthesizer=ScriptedSynthesizer(topic_relation="off_topic"),
+        web_provider=web,
+        unsourced_synthesizer=unsourced,
+    )
+
+    assert web.calls == 0
+    assert "web_research" not in tracker.started
+    assert unsourced.calls == [{"query": QUERY, "brief": True}]
+    assert final["status"] == ResearchRunStatus.COMPLETED.value
+    assert final["grounding_status"] == "unsourced"
+    assert final["final_answer"].startswith(OFF_TOPIC_NOTICE)
+    assert "Deep learning is a subset of machine learning." in final["final_answer"]
+    assert final["citations"] == []
+
+    [output] = tracker.synthesis_outputs()
+    assert output["topic_relation"] == "off_topic"
+    assert output["general_knowledge_used"] is True
+    assert output["citation_count"] == 0
+    assert output["grounding_status"] == "unsourced"
+    assert output["unsourced_model"] == "fake-general-model"
+    assert output["unsourced_provider"] == "fake"
+    assert output["unsourced_latency_ms"] == 7
+
+
+@pytest.mark.asyncio
+async def test_related_question_still_insufficient_after_the_web_is_answered_from_general_knowledge():
+    """Related, and the web could not ground it either: labelled general answer
+    on the final pass, saying it could not be grounded (not "off topic")."""
+    web = FakeLiveWebProvider()
+    unsourced = FakeUnsourcedSynthesizer()
+    tracker = RecordingTracker()
+    final = await _run_graph(
+        tracker,
+        synthesizer=ScriptedSynthesizer(topic_relation="related"),
+        web_provider=web,
+        unsourced_synthesizer=unsourced,
+    )
+
+    assert web.calls == 1
+    assert len(unsourced.calls) == 1
+    # Called on the final pass only -- after the web pass, never before it.
+    outputs = tracker.synthesis_outputs()
+    assert [o["general_knowledge_used"] for o in outputs] == [False, True]
+    assert [o["web_fallback"] for o in outputs] == [True, False]
+    assert final["grounding_status"] == "unsourced"
+    assert final["final_answer"].startswith(UNGROUNDED_NOTICE)
+    assert final["citations"] == []
+
+
+@pytest.mark.asyncio
+async def test_empty_knowledge_base_result_forces_off_topic_whatever_the_model_says():
+    """A searched knowledge base that let nothing through is off topic -- the
+    model's own `on_topic` is not trusted without evidence to judge by."""
+    web = FakeLiveWebProvider()
+    tracker = RecordingTracker()
+    final = await _run_graph(
+        tracker,
+        asset_retriever=FakeAssetRetriever(count=0),
+        synthesizer=ScriptedSynthesizer(topic_relation="on_topic"),
+        web_provider=web,
+        unsourced_synthesizer=FakeUnsourcedSynthesizer(),
+    )
+
+    assert web.calls == 0
+    [output] = tracker.synthesis_outputs()
+    assert output["topic_relation"] == "off_topic"
+    assert final["grounding_status"] == "unsourced"
+    assert final["final_answer"].startswith(OFF_TOPIC_NOTICE)
+
+
+@pytest.mark.asyncio
+async def test_failed_general_knowledge_call_completes_insufficient_with_deterministic_text():
+    """The general-knowledge call failing never fails the run: it completes
+    `insufficient_evidence`, stated by the backend rather than the model."""
+    unsourced = FakeUnsourcedSynthesizer(fail=True)
+    final = await _run_graph(
+        synthesizer=ScriptedSynthesizer(topic_relation="off_topic"),
+        web_provider=FakeLiveWebProvider(),
+        unsourced_synthesizer=unsourced,
+    )
+
+    assert len(unsourced.calls) == 1
+    assert final["status"] == ResearchRunStatus.COMPLETED.value
+    assert final["grounding_status"] == "insufficient_evidence"
+    assert "The available evidence is insufficient to answer this question" in final["final_answer"]
+    assert "A summary of the paper." not in final["final_answer"]
+
+
+@pytest.mark.asyncio
+async def test_on_topic_grounded_answer_is_unchanged():
+    """On topic and answered by the documents: grounded, no web, no general answer."""
+    web = FakeLiveWebProvider()
+    unsourced = FakeUnsourcedSynthesizer()
+    final = await _run_graph(
+        synthesizer=ScriptedSynthesizer(topic_relation="on_topic", grounds_on=("asset",)),
+        web_provider=web,
+        unsourced_synthesizer=unsourced,
+    )
+
+    assert final["grounding_status"] == "grounded"
+    assert final["final_answer"] == "Grounded answer [c1]."
+    assert final["citations"] and all(c["source"] == "asset" for c in final["citations"])
+    assert web.calls == 0
+    assert unsourced.calls == []
+
+
+@pytest.mark.asyncio
+async def test_web_fallback_is_skipped_when_project_evidence_suffices():
+    """Sufficient knowledge-base evidence never reaches the web."""
+    web = FakeLiveWebProvider()
+    await get_research_graph().ainvoke(
+        initial_state(include_assets=True, include_web=True),
+        config=make_config(make_dependencies(web_provider=web)),
+    )
+    assert web.calls == 0
+
+
 # ---------------------------------------------------------------------------
 # TEST 6 — failure handling, critical and non-critical
 # ---------------------------------------------------------------------------
@@ -342,12 +614,19 @@ async def test_skipped_agent_never_executes_its_handler():
 
 @pytest.mark.asyncio
 async def test_non_critical_failure_continues_and_warns_synthesis():
-    """A failed retrieval agent must degrade the run, not abort it."""
+    """A failed retrieval agent must degrade the run, not abort it.
+
+    With the knowledge base down the evidence is insufficient, so the live
+    web source is consulted as the fallback and supplies it.
+    """
     tracker = RecordingTracker()
     final = await get_research_graph().ainvoke(
         initial_state(),
         config=make_config(
-            make_dependencies(asset_retriever=BrokenAssetRetriever()), tracker
+            make_dependencies(
+                asset_retriever=BrokenAssetRetriever(), web_provider=FakeLiveWebProvider()
+            ),
+            tracker,
         ),
     )
 
@@ -443,25 +722,29 @@ async def test_successful_run_persists_answer_citations_and_steps(session, proje
     # TEST 8 — citations survive the complete graph, still structured.
     assert run.citations
     assert all(isinstance(c, dict) and "reference" in c for c in run.citations)
-    assert any(c["simulated"] is False for c in run.citations), "asset evidence grounded"
-    assert any(c["simulated"] is True for c in run.citations), "web evidence simulated"
+    assert all(c["simulated"] is False for c in run.citations), "asset evidence grounded"
 
-    # TEST 9 — research_steps hold the correct node sequence.
+    # TEST 9 — research_steps hold the correct node sequence. Web research
+    # is only a fallback and the knowledge base answered, so it is recorded
+    # as skipped, with its reason, after the executed spine.
     steps = await ResearchStepRepository(session).list_by_run(run.id)
     assert [s.step_index for s in steps] == list(range(len(steps)))
     assert [s.node_name for s in steps] == [
         "planner",
         "router",
         "asset_retrieval",
-        "web_research",
         "context_builder",
         "synthesis",
+        "web_research",
     ]
-    for step in steps:
+    *executed, web = steps
+    for step in executed:
         assert step.status is ResearchStepStatus.COMPLETED
         assert step.duration_ms is not None
         assert step.started_at and step.completed_at
         assert step.title and step.summary
+    assert web.status is ResearchStepStatus.SKIPPED
+    assert web.summary.startswith("Not needed")
 
     # No registered node silently disappears from the trace.
     assert {s.node_name for s in steps} == EXPECTED_AGENTS
@@ -584,13 +867,19 @@ def test_celery_task_is_registered_and_calls_the_orchestrator(monkeypatch):
     assert result == {"status": "ok", "run_id": str(run_id)}
 
 
-def test_build_dependencies_supplies_every_strategy():
-    """The default dependency set must populate all four strategies."""
+def test_build_dependencies_supplies_every_strategy(monkeypatch):
+    """The default dependency set must populate every strategy."""
+    monkeypatch.setattr(settings, "synthesis_grounded", True)
     dependencies = build_dependencies(session=None)
     assert dependencies.planner is not None
     assert dependencies.asset_retriever is not None
     assert dependencies.web_provider is not None
     assert dependencies.synthesizer is not None
+    assert isinstance(dependencies.unsourced_synthesizer, UnsourcedSynthesizer)
+
+    # Offline synthesis never calls a model, so it gets no general-knowledge path.
+    monkeypatch.setattr(settings, "synthesis_grounded", False)
+    assert build_dependencies(session=None).unsourced_synthesizer is None
 
 
 class QueryingBrokenAssetRetriever:
@@ -609,7 +898,7 @@ class QueryingBrokenAssetRetriever:
     def __init__(self, session) -> None:
         self._session = session
 
-    async def retrieve(self, *, owner_id, project_id, query, limit):
+    async def retrieve(self, *, owner_id, project_id, query, limit, asset_id=None):
         from sqlalchemy import select
 
         from app.modules.projects.models import Project

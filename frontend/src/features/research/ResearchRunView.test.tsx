@@ -99,6 +99,45 @@ describe("ResearchRunView polling (Phase 19)", () => {
     expect(screen.getAllByText("Grounded").length).toBe(2);
   });
 
+  it("collapses the pipeline once the run completes, keeping the answer primary", async () => {
+    vi.mocked(researchService.getResearchRun).mockResolvedValue(
+      makeRun({
+        status: "completed",
+        grounding_status: "grounded",
+        final_answer: "ABC Poultry faces feed cost inflation.",
+        citations: [{ id: "c1", title: "ABC Poultry FY2026" }],
+        steps: [
+          {
+            id: "s1",
+            run_id: "run-1",
+            step_index: 0,
+            node_name: "planner",
+            title: "Plan the research run",
+            status: "completed",
+            summary: null,
+            output_payload: null,
+            error_message: null,
+            started_at: null,
+            completed_at: null,
+            duration_ms: null,
+            created_at: new Date().toISOString(),
+          },
+        ],
+      }),
+    );
+
+    renderWithProviders(<ResearchRunView runId="run-1" />);
+
+    expect(await screen.findByText("ABC Poultry faces feed cost inflation.")).toBeInTheDocument();
+    const disclosure = screen.getByText("AI research pipeline · 1 step").closest("details");
+    // Asserted on `open` rather than visibility: the cards fade in via
+    // motion, so opacity in jsdom says nothing about the collapse itself.
+    expect(disclosure).not.toBeNull();
+    expect(disclosure).not.toHaveAttribute("open");
+    // Still in the DOM, one click away, inside that closed disclosure.
+    expect(screen.getByText("Understanding your question").closest("details")).toBe(disclosure);
+  });
+
   it("shows the run's real outcome in the header, not just that the job finished (Sprint 9K.7)", async () => {
     vi.mocked(researchService.getResearchRun).mockResolvedValue(
       makeRun({

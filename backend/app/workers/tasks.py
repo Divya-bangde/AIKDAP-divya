@@ -263,6 +263,9 @@ async def _generate_ai_metadata(asset_id: uuid.UUID) -> dict[str, str]:
             profile.language = metadata.language
             profile.generated_by = settings.qwen_model
             profile.status = AIProfileStatus.COMPLETED
+            profile.truncated = metadata.truncated
+            profile.processed_sections = metadata.processed_sections
+            profile.total_sections = metadata.total_sections
             profile.error = None
             status = "completed"
 

@@ -254,6 +254,10 @@ class ResearchState(TypedDict, total=False):
     include_assets: bool
     include_web: bool
     max_results: int
+    # The completed run this one follows up on, when it is a follow-up:
+    # `{"query", "answer", "asset_id"}`. Conversation context for
+    # retrieval and synthesis only -- never evidence, never cited.
+    parent: dict[str, Any] | None
 
     # --- Planner node output ---
     plan: dict[str, Any]
@@ -279,6 +283,18 @@ class ResearchState(TypedDict, total=False):
     # `status` below: a run can complete successfully and still report
     # that the evidence was insufficient to answer.
     grounding_status: str
+    # A validated chart/diagram spec, only when the question asked for
+    # one (see `schemas.Visualization`).
+    visualization: dict[str, Any] | None
+
+    # --- Web fallback control: external search runs only when the
+    # --- project's own evidence was insufficient, and at most once.
+    web_research_attempted: bool
+    web_fallback: bool
+    # How the question relates to the topic of the project's documents (a
+    # `schemas.TopicRelation` value). Decided on the first synthesis pass,
+    # against the project's own evidence, and kept through the fallback.
+    topic_relation: str
 
     # --- Per-node side output that is not part of the main flow:
     # --- degraded-mode notices, non-critical node failures, and

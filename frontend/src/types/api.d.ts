@@ -851,6 +851,21 @@ export interface components {
             confidence?: number | null;
             /** @default pending */
             status: components["schemas"]["AIProfileStatus"];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+            /**
+             * Processed Sections
+             * @default 0
+             */
+            processed_sections: number;
+            /**
+             * Total Sections
+             * @default 0
+             */
+            total_sections: number;
             /** Error */
             error?: string | null;
         };
@@ -2147,6 +2162,11 @@ export interface components {
             /** Task Id */
             task_id?: string | null;
             /**
+             * Parent Run Id
+             * @description Ask a follow-up on this completed run (same project). Its question and answer frame the new one; evidence is still retrieved fresh.
+             */
+            parent_run_id?: string | null;
+            /**
              * Include Assets
              * @description Search the project's own knowledge base.
              * @default true
@@ -2154,7 +2174,7 @@ export interface components {
             include_assets: boolean;
             /**
              * Include Web
-             * @description Gather external references (simulated in this release).
+             * @description Search the web (Tavily) only when the project's own evidence is insufficient. Simulated when TAVILY_API_KEY is not configured.
              * @default true
              */
             include_web: boolean;
@@ -2188,6 +2208,8 @@ export interface components {
             owner_id: string;
             /** Task Id */
             task_id: string | null;
+            /** Parent Run Id */
+            parent_run_id?: string | null;
             /** Query */
             query: string;
             status: components["schemas"]["ResearchRunStatus"];
@@ -2210,6 +2232,10 @@ export interface components {
                 [key: string]: unknown;
             }[] | null;
             grounding_status: components["schemas"]["ResearchGroundingStatus"] | null;
+            /** Visualization */
+            visualization?: {
+                [key: string]: unknown;
+            } | null;
             /** Error Message */
             error_message: string | null;
             /** Celery Task Id */
@@ -2259,6 +2285,8 @@ export interface components {
             owner_id: string;
             /** Task Id */
             task_id: string | null;
+            /** Parent Run Id */
+            parent_run_id?: string | null;
             /** Query */
             query: string;
             status: components["schemas"]["ResearchRunStatus"];
@@ -2281,6 +2309,10 @@ export interface components {
                 [key: string]: unknown;
             }[] | null;
             grounding_status: components["schemas"]["ResearchGroundingStatus"] | null;
+            /** Visualization */
+            visualization?: {
+                [key: string]: unknown;
+            } | null;
             /** Error Message */
             error_message: string | null;
             /** Celery Task Id */

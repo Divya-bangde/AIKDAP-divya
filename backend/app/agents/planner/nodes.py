@@ -29,7 +29,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
+import httpx
 from langchain_core.runnables import RunnableConfig
+from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.planner.planner import (
@@ -46,6 +48,7 @@ from app.agents.planner.prompts import (
     render_synthesis_prompt,
 )
 from app.agents.planner.state import (
+    FAILURE_KEY_SUFFIX,
     PROVENANCE_KEYS,
     RETRIEVAL_NODES,
     AgentMessagePayload,
@@ -65,6 +68,8 @@ from app.agents.planner.synthesis import (  # noqa: F401 - re-exported for calle
     GroundedSynthesizer,
     SynthesisResult,
     Synthesizer,
+    UnsourcedSynthesizer,
+    _insufficient_answer,
     get_synthesizer,
 )
 from app.core.logging.logger import get_logger
@@ -79,7 +84,8 @@ from app.modules.knowledge_base.service import KnowledgeBaseService
 # vocabulary is taken from the existing enum rather than duplicated
 # here. `enums` is a dependency-free leaf module, so importing it
 # introduces no cycle.
-from app.modules.research.enums import ResearchRunStatus
+from app.modules.research.enums import ResearchGroundingStatus, ResearchRunStatus
+from app.modules.research.schemas import TopicRelation
 
 logger = get_logger(__name__)
 
@@ -126,9 +132,19 @@ class AssetRetriever(ABC):
 
     @abstractmethod
     async def retrieve(
-        self, *, owner_id: uuid.UUID, project_id: uuid.UUID, query: str, limit: int
+        self,
+        *,
+        owner_id: uuid.UUID,
+        project_id: uuid.UUID,
+        query: str,
+        limit: int,
+        asset_id: uuid.UUID | None = None,
     ) -> list[RetrievedDocument]:
-        """Return the most relevant evidence items the owner may see."""
+        """Return the most relevant evidence items the owner may see.
+
+        `asset_id` narrows the search to one document -- set for a
+        follow-up whose parent answer rests on a single paper.
+        """
 
 
 class WebResearchProvider(ABC):
@@ -139,6 +155,10 @@ class WebResearchProvider(ABC):
     """
 
     name: str = "abstract"
+    #: Whether results are real. The web fallback only loops back through a
+    #: live provider: re-running synthesis over simulated placeholders could
+    #: never turn an insufficient answer into a grounded one.
+    live: bool = True
 
     @abstractmethod
     async def search(self, *, query: str, limit: int) -> list[RetrievedDocument]:
@@ -213,13 +233,20 @@ class SemanticAssetRetriever(AssetRetriever):
         self._assets = AssetRepository(session)
 
     async def retrieve(
-        self, *, owner_id: uuid.UUID, project_id: uuid.UUID, query: str, limit: int
+        self,
+        *,
+        owner_id: uuid.UUID,
+        project_id: uuid.UUID,
+        query: str,
+        limit: int,
+        asset_id: uuid.UUID | None = None,
     ) -> list[RetrievedDocument]:
         """Return the owner's most relevant chunks, best first."""
         outcome = await self._service.two_stage_search(
             owner_id,
             query=query,
             project_id=project_id,
+            asset_id=asset_id,
             # Over-retrieve so stage 2 has a pool to reorder. `limit` is
             # what the caller wants to see, not what retrieval should
             # consider.
@@ -308,6 +335,7 @@ class MockWebResearchProvider(WebResearchProvider):
     """
 
     name = "mock_web_v1"
+    live = False
 
     async def search(self, *, query: str, limit: int) -> list[RetrievedDocument]:
         """Return `limit` clearly-labelled placeholder results."""
@@ -344,6 +372,76 @@ class MockWebResearchProvider(WebResearchProvider):
         return documents
 
 
+class TavilyWebResearchProvider(WebResearchProvider):
+    """Live web search through Tavily's search API.
+
+    Posts to Tavily's REST endpoint with httpx (already a dependency, used
+    the same way by the reranker) rather than adding Tavily's SDK for one
+    request. Results are real evidence: `reference` is the page URL, so a
+    citation links to its source. Raises on any failure; `web_research` is
+    non-critical in the registry, so the run records the failure and
+    completes on the project's own evidence.
+    """
+
+    name = "tavily_web_v1"
+    endpoint = "https://api.tavily.com/search"
+
+    def __init__(
+        self,
+        *,
+        api_key: SecretStr,
+        timeout: float,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self._api_key = api_key
+        self._timeout = timeout
+        # Injected only by tests, so request building and parsing run
+        # against a `MockTransport` rather than being stubbed out.
+        self._transport = transport
+
+    async def search(self, *, query: str, limit: int) -> list[RetrievedDocument]:
+        """Return up to `limit` real web results, best first."""
+        async with httpx.AsyncClient(timeout=self._timeout, transport=self._transport) as client:
+            response = await client.post(
+                self.endpoint,
+                # A header, never the URL or body: nothing that is logged or
+                # echoed in an error message carries the key.
+                headers={"Authorization": f"Bearer {self._api_key.get_secret_value()}"},
+                json={"query": query, "max_results": limit, "search_depth": "basic"},
+            )
+        response.raise_for_status()
+
+        documents: list[RetrievedDocument] = []
+        for item in response.json().get("results") or []:
+            url, content = item.get("url"), item.get("content")
+            # A result with no page or no text is nothing a citation can
+            # point at or a model can ground on.
+            if not url or not content:
+                continue
+            documents.append(
+                RetrievedDocument(
+                    source=WEB_SOURCE,
+                    provider=self.name,
+                    reference=url,
+                    title=item.get("title") or url,
+                    snippet=content,
+                    score=float(item.get("score") or 0.0),
+                    simulated=False,
+                    rank=len(documents) + 1,
+                )
+            )
+        return documents[:limit]
+
+
+def get_web_provider() -> WebResearchProvider:
+    """Live Tavily search when a key is configured, else the labelled simulation."""
+    if settings.tavily_api_key is not None:
+        return TavilyWebResearchProvider(
+            api_key=settings.tavily_api_key, timeout=settings.tavily_timeout
+        )
+    return MockWebResearchProvider()
+
+
 @dataclass(frozen=True)
 class GraphDependencies:
     """The strategies a single graph run executes against.
@@ -370,6 +468,11 @@ class GraphDependencies:
     #: all need updating; every real, database-backed run gets one from
     #: `build_dependencies`.
     chunk_repository: KnowledgeChunkRepository | None = None
+    #: The general-knowledge path `synthesis_node` takes when a run's final
+    #: pass is still insufficient. `None` in the offline extractive
+    #: configuration, which never calls a model, and in test fakes that do
+    #: not exercise it -- such a run ends `insufficient_evidence`.
+    unsourced_synthesizer: UnsourcedSynthesizer | None = None
 
 
 def build_dependencies(session: AsyncSession) -> GraphDependencies:
@@ -377,10 +480,13 @@ def build_dependencies(session: AsyncSession) -> GraphDependencies:
     return GraphDependencies(
         planner=get_planner(),
         asset_retriever=SemanticAssetRetriever(session),
-        web_provider=MockWebResearchProvider(),
+        web_provider=get_web_provider(),
         synthesizer=get_synthesizer(),
         llm_gateway=get_llm_gateway(),
         chunk_repository=KnowledgeChunkRepository(session),
+        # The same gateway/model configuration the manual `/unsourced`
+        # path uses -- and none at all when synthesis is configured offline.
+        unsourced_synthesizer=UnsourcedSynthesizer() if settings.synthesis_grounded else None,
     )
 
 
@@ -503,6 +609,12 @@ async def asset_retrieval_node(
     dependencies = _dependencies(config)
     original_query = state["query"]
     workspace_context = state.get("workspace_context")
+    parent = state.get("parent") or {}
+    if parent.get("query"):
+        # A follow-up ("explain that briefly") rarely names its subject;
+        # retrieving against the question it follows up on as well keeps
+        # the evidence on the same paper.
+        original_query = f"{parent['query']}\n{original_query}"
     
     if settings.query_reformulation_enabled:
         retrieval_query, reformulation_meta = await reformulate_query(
@@ -521,6 +633,7 @@ async def asset_retrieval_node(
         project_id=uuid.UUID(state["project_id"]),
         query=retrieval_query,
         limit=state.get("max_results", 5),
+        asset_id=uuid.UUID(parent["asset_id"]) if parent.get("asset_id") else None,
     )
     # Every document from one search shares the same status, so the
     # first one is representative; absent when nothing was retrieved.
@@ -573,7 +686,12 @@ async def asset_retrieval_node(
 async def web_research_node(
     state: ResearchState, config: RunnableConfig
 ) -> dict[str, Any]:
-    """Retrieve external evidence (simulated in this sprint)."""
+    """Retrieve external evidence.
+
+    The first source only when no knowledge base was selected; otherwise
+    the fallback `synthesis_node` requests when the project's own
+    evidence was insufficient (see `graph.py`).
+    """
     dependencies = _dependencies(config)
     documents = await dependencies.web_provider.search(
         query=state["query"], limit=state.get("max_results", 5)
@@ -592,6 +710,7 @@ async def web_research_node(
 
     return {
         "retrieved_documents": documents,
+        "web_research_attempted": True,
         "messages": [
             _message(
                 role="agent",
@@ -599,7 +718,7 @@ async def web_research_node(
                 content=summary,
                 metadata={
                     "references": [doc["reference"] for doc in documents],
-                    "simulated": True,
+                    "simulated": not dependencies.web_provider.live,
                 },
             )
         ],
@@ -726,6 +845,10 @@ async def synthesis_node(state: ResearchState, config: RunnableConfig) -> dict[s
     full_evidence_text = await _resolve_full_evidence_text(
         dependencies.chunk_repository, incoming
     )
+    parent = state.get("parent") or {}
+    conversation = (
+        {"query": parent["query"], "answer": parent["answer"]} if parent.get("answer") else None
+    )
 
     result = await dependencies.synthesizer.synthesize(
         query=state["query"],
@@ -735,9 +858,63 @@ async def synthesis_node(state: ResearchState, config: RunnableConfig) -> dict[s
         citations=incoming,
         warnings=warnings,
         full_evidence_text=full_evidence_text,
+        conversation=conversation,
     )
+    # Decided once, on the first pass, against the project's own evidence:
+    # the web evidence the fallback adds says nothing about whether the
+    # question is on the topic of the project's documents.
+    topic_relation = (
+        state.get("topic_relation", "related")
+        if state.get("web_fallback")
+        else _topic_relation(state, incoming, result.topic_relation)
+    )
+    insufficient = result.grounding_status is ResearchGroundingStatus.INSUFFICIENT_EVIDENCE
+    # The web fallback (see `graph.py`): taken once, only when this answer
+    # was insufficient, the question is not off topic, web research was
+    # allowed but has not run yet, and a live provider could actually add
+    # evidence.
+    web_fallback = (
+        insufficient
+        and topic_relation != "off_topic"
+        and ResearchNode.WEB_RESEARCH.value in state.get("selected_agents", [])
+        and not state.get("web_research_attempted", False)
+        and dependencies.web_provider.live
+    )
+    # No further pass follows an insufficient answer: answer briefly from
+    # general knowledge, clearly labelled, rather than declining.
+    general = (
+        await _general_knowledge_answer(dependencies, state)
+        if insufficient and not web_fallback
+        else None
+    )
+
     answer = result.answer
     citations = result.citations
+    grounding_status = result.grounding_status
+    visualization = result.visualization
+    if general is not None:
+        # Never presented as grounded: no citations, no claims, no chart,
+        # and the disclosure is written into the text itself so it
+        # survives a copy-paste (see `_compose_unsourced_answer`).
+        answer = (
+            f"{_general_knowledge_notice(state, dependencies, topic_relation)}\n\n"
+            f"{general.answer}{_warning_section(warnings)}"
+        )
+        citations = []
+        grounding_status = ResearchGroundingStatus.UNSOURCED
+        visualization = None
+    elif insufficient and not web_fallback and result.model is not None:
+        # The run ends declining to answer. A model's prose there is not
+        # reliably an explanation of what is missing (a small model has
+        # returned a summary of the paper instead), so the decline is
+        # stated deterministically.
+        answer = _insufficient_answer(
+            objective=objective,
+            query=state["query"],
+            withheld_simulated=sum(1 for item in incoming if item.get("simulated", True)),
+            warnings=warnings,
+        )
+
     # The prompt a model-backed synthesizer actually sent, when there
     # was one; otherwise the rendered prompt this run would have used.
     # Recording the real thing is what makes the model call auditable.
@@ -749,8 +926,14 @@ async def synthesis_node(state: ResearchState, config: RunnableConfig) -> dict[s
     summary = (
         f"Synthesized the deliverable from {len(citations)} citation(s) "
         f"({grounded_count} grounded, {simulated_count} simulated); "
-        f"grounding status '{result.grounding_status.value}'."
+        f"grounding status '{grounding_status.value}'."
     )
+    if web_fallback:
+        summary += " Evidence insufficient; falling back to external web research."
+    if general is not None:
+        summary += (
+            f" Answered briefly from general knowledge (topic relation '{topic_relation}')."
+        )
 
     logger.info(
         "research_node_synthesis",
@@ -761,7 +944,9 @@ async def synthesis_node(state: ResearchState, config: RunnableConfig) -> dict[s
         simulated_citations=simulated_count,
         degraded_warnings=len(warnings),
         answer_characters=len(answer),
-        grounding_status=result.grounding_status.value,
+        grounding_status=grounding_status.value,
+        topic_relation=topic_relation,
+        general_knowledge_used=general is not None,
         evidence_supplied=result.evidence_supplied,
         rejected_citations=len(result.rejected_citation_ids),
         # Model metadata, not model output: safe to log, and the proof
@@ -802,12 +987,21 @@ async def synthesis_node(state: ResearchState, config: RunnableConfig) -> dict[s
     # simulated counts, the step/message payloads below) must keep
     # iterating the real citation shape only, which a claim dict does
     # not have (e.g. no `simulated` key).
-    citations_for_storage = [*citations, *additional_evidence, *result.verified_claims]
+    # A general-knowledge answer stores nothing here: no citation, claim or
+    # claim evidence from the declined grounded pass may appear to back it.
+    citations_for_storage = (
+        []
+        if general is not None
+        else [*citations, *additional_evidence, *result.verified_claims]
+    )
 
     return {
         "final_answer": answer,
         "citations": citations_for_storage,
-        "grounding_status": result.grounding_status.value,
+        "grounding_status": grounding_status.value,
+        "visualization": visualization,
+        "web_fallback": web_fallback,
+        "topic_relation": topic_relation,
         # The graph's terminal node, so this is where the shared state
         # records the run reaching a successful end. The database row
         # remains authoritative; this mirrors it for any node or test
@@ -821,10 +1015,14 @@ async def synthesis_node(state: ResearchState, config: RunnableConfig) -> dict[s
                 metadata={
                     "prompt": prompt,
                     "citations": citations,
-                    "grounding_status": result.grounding_status.value,
+                    "grounding_status": grounding_status.value,
                     "model": result.model,
                     "provider": result.provider,
                     "latency_ms": result.latency_ms,
+                    # The general-knowledge call's own prompt, so that model
+                    # call is as auditable as the grounded one.
+                    "general_knowledge_used": general is not None,
+                    "unsourced_prompt": general.prompt if general else None,
                 },
             )
         ],
@@ -838,7 +1036,7 @@ async def synthesis_node(state: ResearchState, config: RunnableConfig) -> dict[s
                 "grounded_citations": grounded_count,
                 "simulated_citations": simulated_count,
                 "answer_characters": len(answer),
-                "grounding_status": result.grounding_status.value,
+                "grounding_status": grounding_status.value,
                 # How many evidence items the model was actually given.
                 # With `rejected_citation_ids`, this is the auditable
                 # record of the FINAL_CITATIONS ⊆ EVIDENCE_SENT
@@ -863,6 +1061,17 @@ async def synthesis_node(state: ResearchState, config: RunnableConfig) -> dict[s
                 # in the final answer -- an auditable record even when
                 # nothing about verification appears in the prose itself.
                 "claims": result.verified_claims,
+                "visualization_kind": (visualization or {}).get("kind"),
+                "web_fallback": web_fallback,
+                # How the question relates to the project's documents, and
+                # whether the final answer came from general knowledge --
+                # with the model that produced it, recorded separately so
+                # `model`/`provider` above keep describing the grounded call.
+                "topic_relation": topic_relation,
+                "general_knowledge_used": general is not None,
+                "unsourced_model": general.model if general else None,
+                "unsourced_provider": general.provider if general else None,
+                "unsourced_latency_ms": general.latency_ms if general else None,
             },
         },
     }
@@ -890,11 +1099,20 @@ def route_after_router(state: ResearchState) -> str:
     return ResearchNode.CONTEXT_BUILDER.value
 
 
-def route_after_asset_retrieval(state: ResearchState) -> str:
-    """Continue to web research if it was selected, else merge context."""
-    if ResearchNode.WEB_RESEARCH.value in state.get("selected_agents", []):
+#: `route_after_synthesis`'s "finished" branch, mapped to `END` in `graph.py`.
+SYNTHESIS_DONE = "done"
+
+
+def route_after_synthesis(state: ResearchState) -> str:
+    """Loop back through web research once, when synthesis asked for it.
+
+    The decision is made in `synthesis_node`, which alone knows the
+    grounding outcome and whether the web provider is live; this only
+    reads it, so routing stays a pure function of state.
+    """
+    if state.get("web_fallback"):
         return ResearchNode.WEB_RESEARCH.value
-    return ResearchNode.CONTEXT_BUILDER.value
+    return SYNTHESIS_DONE
 
 
 # ---------------------------------------------------------------------------
@@ -949,6 +1167,80 @@ async def _resolve_full_evidence_text(
         if chunk is not None:
             full_text[chunk_id] = chunk.content
     return full_text
+
+
+def _knowledge_base_searched(state: ResearchState) -> bool:
+    """Whether the project's knowledge base was actually searched this run.
+
+    Selected by the router and not failed: a knowledge base that was never
+    consulted, or was down, says nothing about the question's topic.
+    """
+    node = ResearchNode.ASSET_RETRIEVAL.value
+    failed = f"{node}{FAILURE_KEY_SUFFIX}" in (state.get("intermediate_results") or {})
+    return node in state.get("selected_agents", []) and not failed
+
+
+def _topic_relation(
+    state: ResearchState, citations: list[Citation], claimed: TopicRelation | None
+) -> TopicRelation:
+    """How the question relates to the topic of the project's documents.
+
+    The model's judgement counts only when it saw knowledge-base evidence.
+    A knowledge base that was searched and let nothing through the
+    relevance gate makes the question off topic, whatever the model said.
+    Otherwise -- no judgement, or a knowledge base that was not searched --
+    it is `related`, so the safer path (searching the web) is taken.
+    """
+    if any(item.get("source") == ASSET_SOURCE for item in citations):
+        return claimed or "related"
+    return "off_topic" if _knowledge_base_searched(state) else "related"
+
+
+def _general_knowledge_notice(
+    state: ResearchState, dependencies: GraphDependencies, topic_relation: str
+) -> str:
+    """The disclosure line a general-knowledge answer opens with.
+
+    Written here rather than by the model, so it is always present and
+    says truthfully why the answer is not grounded -- naming only the
+    sources this run actually consulted.
+    """
+    if topic_relation == "off_topic":
+        reason = "This question is outside the topic of your project's documents"
+    else:
+        consulted = []
+        if _knowledge_base_searched(state):
+            consulted.append("your project's documents")
+        if state.get("web_research_attempted") and dependencies.web_provider.live:
+            consulted.append("web search")
+        reason = f"This could not be grounded in {' or '.join(consulted) or 'any source'}"
+    return f"**{reason}. Answered briefly from general knowledge — not from your documents.**"
+
+
+async def _general_knowledge_answer(
+    dependencies: GraphDependencies, state: ResearchState
+) -> SynthesisResult | None:
+    """A brief answer from general knowledge, or `None` when there is none.
+
+    `None` when no general-knowledge path is configured, or its call
+    failed: the run then completes with the insufficient-evidence result
+    it already has. The failure is logged, never raised -- a decline is a
+    complete outcome, so this extra attempt can never fail the run.
+    """
+    if dependencies.unsourced_synthesizer is None:
+        return None
+    try:
+        return await dependencies.unsourced_synthesizer.synthesize(
+            query=state["query"], brief=True
+        )
+    except Exception as exc:  # noqa: BLE001 - logged; the insufficient result stands
+        logger.warning(
+            "research_general_knowledge_failed",
+            run_id=state.get("run_id"),
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+        )
+        return None
 
 
 def _warning_section(warnings: list[str]) -> str:

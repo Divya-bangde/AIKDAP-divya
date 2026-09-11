@@ -64,6 +64,8 @@ services:
     env_file:
       - .env
 
+    extra_hosts: ["host.docker.internal:host-gateway"]
+
     # Sprint 16 Phase 8.12: `environment:` overrides `env_file` in
     # Compose, and is re-read on every `up`/`recreate` -- unlike
     # `env_file`, which is only read at container CREATION (the exact
@@ -112,6 +114,8 @@ services:
 
     env_file:
       - .env
+
+    extra_hosts: ["host.docker.internal:host-gateway"]
 
     # See the backend service's identical block above for why this is
     # needed (Compose `environment:` overrides `env_file` and is

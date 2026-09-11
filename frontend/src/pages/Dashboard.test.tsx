@@ -5,6 +5,7 @@ import { Dashboard } from "@/pages/Dashboard";
 import * as assetsService from "@/services/assets";
 import * as projectsService from "@/services/projects";
 import * as researchService from "@/services/research";
+import { aiProfile } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import type { components } from "@/types/api";
 
@@ -77,7 +78,7 @@ function makeAsset(overrides: Partial<AssetRead> = {}): AssetRead {
     version: 1,
     tags: [],
     metadata: {},
-    ai_profile: { status: "completed", embedding_status: "completed" },
+    ai_profile: aiProfile({ status: "completed", embedding_status: "completed" }),
     created_by: null,
     processing_status: "completed",
     processing_error: null,
@@ -132,7 +133,7 @@ describe("Dashboard — Active Work", () => {
       makeAsset({
         title: "still-embedding.pdf",
         processing_status: "completed",
-        ai_profile: { status: "completed", embedding_status: "processing" },
+        ai_profile: aiProfile({ status: "completed", embedding_status: "processing" }),
       }),
       makeAsset({ id: "a2", title: "already-done.pdf" }),
     ]);

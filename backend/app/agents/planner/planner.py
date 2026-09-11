@@ -189,9 +189,9 @@ class RuleBasedPlanner(PlannerStrategy):
                     node=ResearchNode.WEB_RESEARCH,
                     title="Gather external references",
                     description=(
-                        "Retrieve up to "
-                        f"{request.max_results} external references to supplement "
-                        "the project's own material."
+                        "Only if the project's own evidence is insufficient, "
+                        f"retrieve up to {request.max_results} external web "
+                        "references to fill the gap."
                     ),
                 )
             )

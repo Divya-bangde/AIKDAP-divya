@@ -65,6 +65,14 @@ class ResearchRun(BaseModel):
     task_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # The completed run this one follows up on ("explain that briefly").
+    # Its question and answer reach this run's synthesis prompt as
+    # conversation context -- never as citable evidence. SET NULL for the
+    # same reason as `task_id`: deleting a parent must not erase a
+    # follow-up's own audit trail.
+    parent_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("research_runs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     query: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[ResearchRunStatus] = mapped_column(
@@ -111,6 +119,13 @@ class ResearchRun(BaseModel):
         nullable=True,
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # A chart or diagram synthesis produced because the question asked
+    # for one: `{"kind": "chart2d" | "chart3d" | "diagram", "title", ...}`
+    # with Plotly `data`/`layout` for charts or `mermaid` source for
+    # diagrams. Validated by `schemas.Visualization` before storage; null
+    # when none was requested or the model's spec failed validation.
+    visualization: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     # The Celery task actually carrying out this run, so a run can be
     # correlated with the worker logs that executed it.

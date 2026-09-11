@@ -106,11 +106,19 @@ class ResearchService:
         await self._ensure_project_owned(owner_id, data.project_id)
         if data.task_id is not None:
             await self._ensure_task_owned(owner_id, data.task_id)
+        if data.parent_run_id is not None:
+            parent = await self.get_owned_run(owner_id, data.parent_run_id)
+            # A follow-up continues a conversation inside one project. A
+            # parent from another project is reported as not found rather
+            # than confirming that it exists.
+            if parent.project_id != data.project_id:
+                raise ResearchRunNotFoundError(data.parent_run_id)
 
         run = ResearchRun(
             project_id=data.project_id,
             owner_id=owner_id,
             task_id=data.task_id,
+            parent_run_id=data.parent_run_id,
             query=data.query,
             status=ResearchRunStatus.PENDING,
             include_assets=data.include_assets,
@@ -128,6 +136,7 @@ class ResearchService:
             include_assets=created.include_assets,
             include_web=created.include_web,
             max_results=created.max_results,
+            parent_run_id=str(created.parent_run_id) if created.parent_run_id else None,
         )
 
         # Imported here, not at module scope: `app.workers.tasks`
@@ -379,7 +388,7 @@ class ResearchExecutionService:
             logger.error("research_run_vanished_mid_execution", run_id=str(run_id))
             return
 
-        await self._record_skipped(run, tracker)
+        await self._record_skipped(run, tracker, final_state)
         await self._complete(run, monotonic_start, final_state)
 
     async def _invoke_graph(
@@ -398,6 +407,7 @@ class ResearchExecutionService:
             "task_id": str(run.task_id) if run.task_id else None,
             "query": run.query,
             "workspace_context": workspace_context,
+            "parent": await self._parent_context(run),
             "include_assets": run.include_assets,
             "include_web": run.include_web,
             "max_results": run.max_results,
@@ -411,8 +421,32 @@ class ResearchExecutionService:
         }
         return await get_research_graph().ainvoke(initial_state, config=config)
 
+    async def _parent_context(self, run: ResearchRun) -> dict[str, Any] | None:
+        """The parent run's question, answer, and cited document, for a follow-up.
+
+        `asset_id` is set only when every document the parent answer
+        cites is one and the same asset -- "the paper" -- so retrieval can
+        be scoped to it. Across several documents the whole project stays
+        in scope, rather than guessing which one the follow-up means.
+        """
+        if run.parent_run_id is None:
+            return None
+        parent = await self._runs.get_by_id(run.parent_run_id)
+        if parent is None or not parent.final_answer:
+            return None
+        asset_ids = {
+            item["asset_id"]
+            for item in parent.citations or []
+            if item.get("kind") != "claim" and item.get("asset_id")
+        }
+        return {
+            "query": parent.query,
+            "answer": parent.final_answer,
+            "asset_id": next(iter(asset_ids)) if len(asset_ids) == 1 else None,
+        }
+
     async def _record_skipped(
-        self, run: ResearchRun, tracker: "ResearchStepTracker"
+        self, run: ResearchRun, tracker: "ResearchStepTracker", final_state: dict[str, Any]
     ) -> None:
         """Record the agents that never ran, and why.
 
@@ -432,7 +466,7 @@ class ResearchExecutionService:
                     node_name=name,
                     title=f"Skipped: {name}",
                     status=ResearchStepStatus.SKIPPED,
-                    summary=_skip_reason(ResearchNode(name), run),
+                    summary=_skip_reason(ResearchNode(name), run, final_state),
                     started_at=None,
                     completed_at=None,
                     duration_ms=None,
@@ -453,6 +487,7 @@ class ResearchExecutionService:
         run.plan = final_state.get("plan")
         run.final_answer = final_state.get("final_answer")
         run.citations = final_state.get("citations") or []
+        run.visualization = final_state.get("visualization")
         # Read back as an enum so an unexpected value fails here rather
         # than being written to the column verbatim.
         grounding = final_state.get("grounding_status")
@@ -653,7 +688,7 @@ def _elapsed_ms(monotonic_start: float) -> int:
     return int((time.monotonic() - monotonic_start) * 1000)
 
 
-def _skip_reason(node: ResearchNode, run: ResearchRun) -> str:
+def _skip_reason(node: ResearchNode, run: ResearchRun, final_state: dict[str, Any]) -> str:
     """Explain, per node, why it did not execute in this run.
 
     Distinguishes "the caller turned this source off" from "the planner
@@ -665,4 +700,14 @@ def _skip_reason(node: ResearchNode, run: ResearchRun) -> str:
         return "Knowledge base retrieval was not enabled for this run."
     if node is ResearchNode.WEB_RESEARCH and not run.include_web:
         return "External research was not enabled for this run."
+    if node is ResearchNode.WEB_RESEARCH:
+        # Web research is a fallback (see `graph.py`): it is skipped both
+        # when it was not needed and when it was needed but nothing live
+        # could serve it -- two situations the trace must not conflate.
+        if final_state.get("grounding_status") != ResearchGroundingStatus.INSUFFICIENT_EVIDENCE.value:
+            return "Not needed: the project's own evidence answered the question."
+        return (
+            "The project's evidence was insufficient, but no live web search "
+            "provider is configured (set TAVILY_API_KEY)."
+        )
     return "Not dispatched by the router for this run."

@@ -51,22 +51,9 @@ export function EvidenceGapPanel({
   query: string;
   runId: string;
 }) {
-  const [copied, setCopied] = useState(false);
   const unsourcedMutation = useMutation({
     mutationFn: () => createUnsourcedAnswer(runId),
   });
-
-  const handleCopy = async () => {
-    const text = unsourcedMutation.data?.final_answer ?? "";
-    // The disclaimer is not added here -- it is already part of `text`
-    // (the backend writes it into the answer itself), so copying the
-    // text verbatim is what keeps the warning attached once this
-    // leaves the visually distinct container below and lands in, say,
-    // a draft document.
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
-  };
 
   const assetsQuery = useQuery({
     queryKey: ["assets", projectId],
@@ -151,39 +138,55 @@ export function EvidenceGapPanel({
             </p>
           )}
 
-          {/* Deliberately NOT a badge on a normal answer card -- a badge
-           * does not survive copy-paste, and this container's whole
-           * purpose is to stay unmistakable even after someone copies
-           * the text out of it (Sprint 16 Phase 8.13 Part C). */}
           {unsourcedMutation.data && (
-            <div className="flex flex-col gap-3 rounded-lg border-2 border-dashed border-warning/50 bg-warning/5 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-warning">
-                  <Lightbulb className="h-4 w-4" aria-hidden="true" />
-                  <span className="text-label uppercase">
-                    From general knowledge — not your uploaded papers
-                  </span>
-                </div>
-                <Button type="button" variant="ghost" size="sm" onClick={handleCopy}>
-                  {copied ? (
-                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                  )}
-                  {copied ? "Copied" : "Copy"}
-                </Button>
-              </div>
-              <AnswerBody
-                answer={unsourcedMutation.data.final_answer ?? ""}
-                citations={[]}
-                onSelect={() => {}}
-              />
-            </div>
+            <GeneralKnowledgeAnswer answer={unsourcedMutation.data.final_answer ?? ""} />
           )}
         </div>
 
         <UploadDropzone projectId={projectId} />
       </CardContent>
     </Card>
+  );
+}
+
+/** A general-knowledge answer, in the one container that marks it as
+ * such -- shared by this panel's opt-in answer and `ResearchResult`'s
+ * automatic one, so the two can never drift apart in how clearly they
+ * are labelled. Deliberately NOT a badge on a normal answer card -- a
+ * badge does not survive copy-paste, and this container's whole purpose
+ * is to stay unmistakable even after someone copies the text out of it
+ * (Sprint 16 Phase 8.13 Part C). */
+export function GeneralKnowledgeAnswer({ answer }: { answer: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    // The disclaimer is not added here -- it is already part of `answer`
+    // (the backend writes it into the answer itself), so copying the
+    // text verbatim is what keeps the warning attached once this leaves
+    // the visually distinct container below and lands in, say, a draft
+    // document.
+    await navigator.clipboard.writeText(answer);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border-2 border-dashed border-warning/50 bg-warning/5 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-warning">
+          <Lightbulb className="h-4 w-4" aria-hidden="true" />
+          <span className="text-label uppercase">From general knowledge — not your documents</span>
+        </div>
+        <Button type="button" variant="ghost" size="sm" onClick={handleCopy}>
+          {copied ? (
+            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
+      <AnswerBody answer={answer} citations={[]} onSelect={() => {}} />
+    </div>
   );
 }

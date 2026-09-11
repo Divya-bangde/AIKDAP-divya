@@ -393,6 +393,7 @@ class LLMGateway:
         timeout: float | None = None,
         response_format: dict[str, Any] | None = None,
         think: bool | None = None,
+        num_ctx: int | None = None,
         allow_fallback: bool = True,
         max_retries: int | None = None,
         respect_provider_health: bool = True,
@@ -402,11 +403,10 @@ class LLMGateway:
         The common case. `response_format` is passed through for
         providers that support structured output (for example
         `{"type": "json_object"}`); LiteLLM drops it for providers that
-        do not, rather than failing the call. `think` is likewise a
-        pass-through generation setting (not a transport detail): local
-        hybrid-reasoning models (Qwen 3.5 through Ollama) accept it to
-        skip their internal reasoning pass; cloud providers that don't
-        support it simply ignore it (`litellm.drop_params=True`).
+        do not, rather than failing the call. `think` and `num_ctx` are
+        likewise pass-through generation settings for Ollama models;
+        the gateway scopes them to Ollama so a local-model option cannot
+        leak into a cloud fallback request.
 
         The three resilience arguments exist for the health probe,
         which must measure one specific model with one attempt and no
@@ -425,6 +425,7 @@ class LLMGateway:
             timeout=timeout,
             response_format=response_format,
             think=think,
+            num_ctx=num_ctx,
             allow_fallback=allow_fallback,
             max_retries=max_retries,
             respect_provider_health=respect_provider_health,
@@ -440,6 +441,7 @@ class LLMGateway:
         timeout: float | None = None,
         response_format: dict[str, Any] | None = None,
         think: bool | None = None,
+        num_ctx: int | None = None,
         allow_fallback: bool = True,
         max_retries: int | None = None,
         respect_provider_health: bool = True,
@@ -521,6 +523,7 @@ class LLMGateway:
                     timeout=timeout,
                     response_format=response_format,
                     think=think,
+                    num_ctx=num_ctx,
                     max_retries=(
                         self._max_retries if max_retries is None else max_retries
                     ),
@@ -607,6 +610,7 @@ class LLMGateway:
         timeout: float | None,
         response_format: dict[str, Any] | None,
         think: bool | None,
+        num_ctx: int | None,
         max_retries: int,
         trace: list[LLMAttempt],
     ) -> LLMResponse:
@@ -633,6 +637,7 @@ class LLMGateway:
                     timeout=timeout,
                     response_format=response_format,
                     think=think,
+                    num_ctx=num_ctx,
                     attempt=attempt,
                 )
             except LLMError as error:
@@ -824,6 +829,7 @@ class LLMGateway:
         timeout: float | None,
         response_format: dict[str, Any] | None,
         think: bool | None = None,
+        num_ctx: int | None = None,
         attempt: int = 1,
     ) -> LLMResponse:
         """Perform one LiteLLM call and normalize its result.
@@ -894,6 +900,10 @@ class LLMGateway:
             # only Ollama to skip its reasoning pass must not also ask
             # every fallback provider to do the same.
             request["think"] = think
+        if num_ctx is not None and provider in _OLLAMA_PROVIDERS:
+            # Ollama's context window is request-specific. Like `think`,
+            # it must stay off cloud-provider fallback requests.
+            request["num_ctx"] = num_ctx
 
         # Logged without the request payload or the key: prompts can
         # carry user data and `request` carries the credential.

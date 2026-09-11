@@ -14,6 +14,10 @@ export interface SynthesisOutput {
   grounding_status?: string | null;
   citation_count?: number;
   evidence_supplied?: number;
+  /** `on_topic` | `related` | `off_topic`: how the question relates to
+   * the topic of the project's documents. */
+  topic_relation?: string | null;
+  general_knowledge_used?: boolean;
 }
 
 export function asSynthesisOutput(

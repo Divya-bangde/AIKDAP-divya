@@ -89,7 +89,7 @@ function NavItems({ compact = false }: { compact?: boolean }) {
             to={to}
             end={end}
             className={cn(
-              "group relative flex shrink-0 items-center gap-3 rounded-md font-medium transition-colors",
+              "press group relative flex shrink-0 items-center gap-3 rounded-md font-medium",
               compact ? "px-3 py-1.5 text-xs" : "px-3 py-2 text-sm",
               isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground",
             )}
@@ -178,7 +178,11 @@ export function AppShell() {
        * that are actually built for it — the mobile nav scrolls, the page
        * content wraps. */}
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card/85 px-4 backdrop-blur-sm md:px-8">
+        {/* Floating chrome, not a fixed strip: content scrolls beneath
+            it and fades out under a short gradient rather than being
+            cut off by a 1px rule. `scroll-edge-chrome` supplies the
+            translucency, the blur and that gradient — see index.css. */}
+        <header className="scroll-edge-chrome top-0 z-30 flex h-16 items-center justify-between px-4 md:px-8">
           <span className="font-display text-sm font-semibold tracking-tight md:hidden">AIKDAP</span>
           <div className="hidden md:block" />
           <div className="flex items-center gap-2">
@@ -187,7 +191,7 @@ export function AppShell() {
             <button
               type="button"
               onClick={handleLogout}
-              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              className="press flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
               aria-label="Log out"
             >
               <LogOut className="h-4 w-4" />

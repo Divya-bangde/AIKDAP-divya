@@ -23,6 +23,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.469.0",
+    "mermaid": "^11.17.2",
     "motion": "^13.1.0",
     "plotly.js-dist-min": "^4.0.0",
     "react": "^18.3.1",

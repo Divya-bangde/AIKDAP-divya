@@ -37,6 +37,19 @@
     --elevated: 0 0% 100%;
     --sunken: 220 24% 96%;
 
+    /* Translucent material (Sprint 16, Phase 8.14). Floating chrome —
+     * the app header, the evidence drawer — is a layer above content
+     * rather than an opaque strip that consumes it, so what is behind
+     * stays legible as context while scrolling underneath.
+     *
+     * Both values are tokens rather than literals because the two
+     * accessibility queries at the end of this file need to flatten
+     * every translucent surface at once. A surface built from these
+     * inherits that behaviour; one built from a hard-coded rgba()
+     * would silently opt out. */
+    --surface-blur: 20px;
+    --surface-alpha: 0.72;
+
     --primary: 243 75% 59%;
     --primary-foreground: 0 0% 100%;
 
@@ -185,6 +198,93 @@
 }
 
 @layer components {
+  /* Press feedback for hand-rolled interactive elements (Sprint 16,
+   * Phase 8.14).
+   *
+   * `Button` carries its own `active:` state, but a good deal of this
+   * product's interactive surface is not a `Button`: the landing nav's
+   * call to action, the footer and section links, the app shell's nav
+   * items. Those were built with `transition-colors`, whose property
+   * list is exactly `color, background-color, border-color,
+   * text-decoration-color, fill, stroke` — no `transform`. So even an
+   * `active:scale-*` added beside it would have snapped between the
+   * two scales instead of settling, because the property being changed
+   * was never in the transition list.
+   *
+   * This exists as one class rather than the same three utilities
+   * repeated across twenty files: press feedback is a property of the
+   * design system, and a system that has to be reapplied by hand is
+   * one that will be forgotten on the next component.
+   *
+   * IMPORTANT: apply this *instead of* `transition-colors`, not
+   * alongside it. Tailwind 3 flattens its layers, so a utility class
+   * and this component class have equal specificity and source order
+   * decides — utilities are emitted last and would win, restoring the
+   * transform-less property list this class exists to fix. */
+  .press {
+    @apply transition-[color,background-color,border-color,box-shadow,opacity,transform] duration-150 ease-out;
+  }
+
+  .press:active:not(:disabled):not([aria-disabled="true"]) {
+    @apply scale-[0.97] duration-100;
+  }
+
+  /* The press is a pointer affordance. Under reduced motion the colour
+   * and shadow response still fires; only the travel is dropped. */
+  @media (prefers-reduced-motion: reduce) {
+    .press:active:not(:disabled):not([aria-disabled="true"]) {
+      @apply scale-100;
+    }
+  }
+
+  /* Translucent floating layer (Sprint 16, Phase 8.14).
+   *
+   * The blur is what makes this read as a material rather than as a
+   * panel with a low opacity: without it, content behind stays sharp
+   * and legible and the surface looks broken instead of layered. The
+   * saturate() compensates for the desaturation blurring causes, so
+   * colour behind the surface still reads as itself.
+   *
+   * Never stack two of these. A translucent surface over a translucent
+   * surface compounds both blurs and neither reads as a layer; the
+   * inner one gets a solid background. */
+  .material-surface {
+    background-color: hsl(var(--card) / var(--surface-alpha));
+    backdrop-filter: blur(var(--surface-blur)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--surface-blur)) saturate(180%);
+  }
+
+  /* Floating chrome that content scrolls beneath.
+   *
+   * Replaces a 1px `border-b`. A hard divider says "this strip is not
+   * part of the page"; a short gradient says "the page continues under
+   * here", which is what is actually true of a sticky header. The
+   * gradient sits below the element and fades the incoming content
+   * rather than cutting it.
+   *
+   * `pointer-events: none` on the pseudo-element so the fade never
+   * intercepts a click meant for the content it overlaps. */
+  .scroll-edge-chrome {
+    position: sticky;
+    background-color: hsl(var(--background) / var(--surface-alpha));
+    backdrop-filter: blur(var(--surface-blur)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--surface-blur)) saturate(180%);
+  }
+
+  .scroll-edge-chrome::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 100%;
+    height: 1.5rem;
+    pointer-events: none;
+    background: linear-gradient(
+      to bottom,
+      hsl(var(--background) / 0.85),
+      hsl(var(--background) / 0)
+    );
+  }
+
   /* The shell's background texture: a very low-contrast grid that
    * gives large empty areas some structure without becoming a visible
    * pattern. Pure CSS — no image, no canvas, no runtime cost.
@@ -438,5 +538,71 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Reduced transparency (Sprint 16, Phase 8.14).
+ *
+ * Translucency is a hierarchy signal here, not decoration: floating
+ * chrome and the evidence drawer read as layers above the content they
+ * cover. For a reader who has asked for less of it, the hierarchy has
+ * to survive without the blur — so the surfaces go opaque and take a
+ * border instead, rather than simply losing the blur and leaving
+ * semi-transparent text over moving content.
+ *
+ * Targets the same custom properties the translucent surfaces below
+ * are built from, so a new surface inherits this by construction
+ * rather than needing its own override. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --surface-blur: 0px;
+    --surface-alpha: 1;
+  }
+
+  .material-surface,
+  .scroll-edge-chrome {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background-color: hsl(var(--card));
+    border-color: hsl(var(--border-strong));
+  }
+
+  .scroll-edge-chrome::after {
+    display: none;
+  }
+}
+
+/* Increased contrast (Sprint 16, Phase 8.14).
+ *
+ * Near-solid backgrounds plus a defined border. The translucent
+ * surfaces are the ones that suffer most at low contrast, because
+ * whatever is scrolling underneath sets their effective background —
+ * so they lose the transparency entirely and gain a hard edge.
+ *
+ * Muted foreground is promoted to the full foreground colour: the
+ * secondary-text tint is a deliberate de-emphasis that stops being
+ * legible before it stops being subtle. */
+@media (prefers-contrast: more) {
+  :root {
+    --surface-blur: 0px;
+    --surface-alpha: 1;
+    --muted-foreground: var(--foreground);
+  }
+
+  .material-surface,
+  .scroll-edge-chrome {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--foreground));
+  }
+
+  .scroll-edge-chrome::after {
+    display: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--foreground));
+    outline-offset: 2px;
   }
 }

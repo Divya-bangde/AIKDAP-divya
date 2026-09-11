@@ -59,6 +59,7 @@ from app.modules.research.schemas import (
 )
 from app.modules.research.service import (
     ProjectAccessDeniedError,
+    ResearchRunNotFoundError,
     ResearchService,
     TaskAccessDeniedError,
     UnsourcedSynthesisFailedError,
@@ -91,6 +92,11 @@ async def start_research_run(
         raise _PROJECT_NOT_FOUND from exc
     except TaskAccessDeniedError as exc:
         raise _TASK_NOT_FOUND from exc
+    except ResearchRunNotFoundError as exc:
+        # Only `parent_run_id` can raise this when starting a run.
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Parent research run not found."
+        ) from exc
     return ResearchRunAccepted.from_model(run)
 
 

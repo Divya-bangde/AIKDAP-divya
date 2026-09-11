@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { EvidenceGapPanel } from "@/features/research/EvidenceGapPanel";
 import * as assetsService from "@/services/assets";
 import * as researchService from "@/services/research";
+import { aiProfile } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import type { components } from "@/types/api";
 
@@ -32,7 +33,7 @@ function makeAsset(): AssetRead {
     version: 1,
     tags: [],
     metadata: {},
-    ai_profile: { embedding_status: "completed", status: "completed" },
+    ai_profile: aiProfile({ embedding_status: "completed", status: "completed" }),
     created_by: null,
     processing_status: "completed",
     processing_error: null,

@@ -95,6 +95,8 @@ Rules:
 - Only cite ids that appear in the supplied evidence. Never invent an id.
 - If the evidence does not contain enough information to answer, say so plainly and do not answer anyway.
 - Do not pad the answer with background the evidence does not contain.
+- Match the answer's length to what the question asks for. When it asks for a brief, short, or simple explanation, answer in 2-4 plain sentences.
+- A section headed "Earlier in this conversation" may precede the question. Use it only to understand what the question refers to; it is not evidence and must never be cited.
 
 Respond with a single JSON object and nothing else:
 
@@ -102,6 +104,7 @@ Respond with a single JSON object and nothing else:
   "answer": "the answer in markdown, with inline [c1]-style citations",
   "citation_ids": ["the ids you actually relied on"],
   "grounding_status": "grounded" | "insufficient_evidence",
+  "topic_relation": "on_topic" | "related" | "off_topic",
   "claims": [
     {
       "claim_text": "the exact factual assertion, in your own words",
@@ -111,11 +114,20 @@ Respond with a single JSON object and nothing else:
       "source_reference_ids": ["the evidence ids this specific claim relies on"],
       "attributed_to_primary": true
     }
-  ]
+  ],
+  "visualization": null
 }
 
 Use "insufficient_evidence" when the evidence cannot answer the question.
 In that case, "answer" must explain what is missing and "citation_ids" must be empty.
+
+Set "topic_relation" by comparing the question with the subject the supplied
+evidence is about. It is NOT about whether the evidence answers the question
+(that is "grounding_status"):
+- "on_topic": the question is about the subject the evidence covers.
+- "related": the question is in the same field, or uses concepts the evidence
+  mentions, but asks about something the evidence does not cover.
+- "off_topic": the question has nothing to do with the evidence's subject.
 
 List every distinct factual claim your answer makes as its own entry in
 "claims", each bound to the exact evidence id(s) that support THAT claim
@@ -125,7 +137,17 @@ across everything the evidence describes; use scope="component" when it
 states a figure for one named part (a specific strategy, tier, category,
 or item). Leave "claimed_value" and "scope" null for claims that are not
 about a specific number. "claims" may be empty if the answer makes no
-distinct factual assertions beyond citing evidence."""
+distinct factual assertions beyond citing evidence.
+
+Set "visualization" ONLY when the question explicitly asks for a chart,
+graph, plot, diagram, flowchart, or other visual; otherwise it must be
+null. When set, it is exactly one object:
+- 2D chart: {"kind": "chart2d", "title": "...", "data": [Plotly traces], "layout": {}}
+- 3D chart: {"kind": "chart3d", "title": "...", "data": [Plotly scatter3d or surface traces], "layout": {}}
+- diagram: {"kind": "diagram", "title": "...", "mermaid": "Mermaid source, e.g. flowchart TD ..."}
+Every number plotted in a chart must appear in the evidence; never plot
+estimated, invented, or illustrative values. If the evidence contains no
+numbers to plot, use a diagram of what the evidence describes, or null."""
 
 GROUNDED_SYNTHESIS_USER_TEMPLATE = """Question:
 {query}
@@ -165,15 +187,31 @@ def render_grounded_evidence(citations: list[dict]) -> str:
     )
 
 
+#: Prepended for a follow-up question. Headed as context rather than
+#: evidence and carrying no ids, so nothing in it can be cited.
+GROUNDED_CONVERSATION_TEMPLATE = """Earlier in this conversation (context only -- NOT evidence, never cite it):
+Question: {query}
+Answer: {answer}
+
+"""
+
+
 def render_grounded_synthesis_prompt(
-    *, objective: str, query: str, evidence: str
+    *,
+    objective: str,
+    query: str,
+    evidence: str,
+    conversation: dict[str, str] | None = None,
 ) -> str:
     """Render the user half of the grounded synthesis request.
 
     The system half is `GROUNDED_SYNTHESIS_SYSTEM_PROMPT`; they are kept
     separate because the gateway sends them as distinct messages.
+    `conversation` is the parent run's `{"query", "answer"}` when this is
+    a follow-up.
     """
-    return GROUNDED_SYNTHESIS_USER_TEMPLATE.format(
+    prefix = GROUNDED_CONVERSATION_TEMPLATE.format(**conversation) if conversation else ""
+    return prefix + GROUNDED_SYNTHESIS_USER_TEMPLATE.format(
         objective=objective, query=query, evidence=evidence
     )
 
@@ -182,15 +220,16 @@ def render_grounded_synthesis_prompt(
 # Unsourced synthesis (Sprint 16 Phase 8.13)
 # ---------------------------------------------------------------------------
 #
-# Reached only after `insufficient_evidence` was already shown and the
-# user explicitly asked to leave the evidence boundary. No evidence
-# block exists in this prompt at all -- there is nothing to cite
-# against, which is what makes fabricated sourcing structurally
-# impossible here rather than merely checked for.
+# Reached only once an answer could not be grounded: automatically, by
+# the graph's final synthesis pass (a brief answer), or when the user
+# asks from an insufficient-evidence result. No evidence block exists in
+# this prompt at all -- there is nothing to cite against, which is what
+# makes fabricated sourcing structurally impossible here rather than
+# merely checked for.
 
 UNSOURCED_SYNTHESIS_SYSTEM_PROMPT = """You are the AIKDAP research synthesis engine, now answering WITHOUT any retrieved evidence.
 
-The user's uploaded documents were already determined not to contain enough information to answer this question, and the user has been told so. They are now explicitly asking you to answer anyway, from your own general knowledge, understanding this is not verified against their material.
+The user's uploaded documents were already determined not to contain enough information to answer this question. You are answering anyway, from your own general knowledge, and the answer will be clearly labelled as not verified against their material.
 
 Rules:
 - You have not been supplied any evidence and there are no citation ids. Never invent one, and never write an inline citation marker like [c1].
@@ -211,14 +250,16 @@ UNSOURCED_SYNTHESIS_USER_TEMPLATE = """Question:
 Answer from general knowledge. No evidence has been supplied."""
 
 
-def render_unsourced_synthesis_prompt(*, query: str) -> str:
+def render_unsourced_synthesis_prompt(*, query: str, brief: bool = False) -> str:
     """Render the user half of the unsourced synthesis request.
 
     The system half is `UNSOURCED_SYNTHESIS_SYSTEM_PROMPT`; kept
     separate for the same reason `render_grounded_synthesis_prompt` is
-    -- the gateway sends them as distinct messages.
+    -- the gateway sends them as distinct messages. `brief` (the graph's
+    automatic path) asks for a 2-4 sentence answer.
     """
-    return UNSOURCED_SYNTHESIS_USER_TEMPLATE.format(query=query)
+    prompt = UNSOURCED_SYNTHESIS_USER_TEMPLATE.format(query=query)
+    return f"{prompt}\nAnswer in 2-4 plain sentences." if brief else prompt
 
 
 def render_planner_prompt(*, query: str, sources: list[str], max_results: int) -> str:

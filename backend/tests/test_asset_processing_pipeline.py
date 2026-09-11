@@ -15,10 +15,12 @@ from typing import Any
 
 import pytest
 
+from app.core.config import settings
 from app.modules.assets.ai_profile import AIProfile
 from app.modules.assets.enums import AssetProcessingStatus, AssetSource, AssetStatus, AssetType
 from app.modules.assets.models import Asset
 from app.modules.assets.processing.document_understanding import (
+    QwenDocumentMetadata,
     QwenDocumentUnderstandingService,
 )
 from app.modules.assets.processing.pipeline import AssetProcessingService
@@ -62,6 +64,34 @@ class _NoOpUnderstanding(QwenDocumentUnderstandingService):
         )
 
         raise DocumentUnderstandingError("skipped in this test")
+
+
+class _SuccessfulUnderstanding(QwenDocumentUnderstandingService):
+    def __init__(self) -> None:
+        self.analyzed_sections: list[str] = []
+
+    async def _analyze_section(self, text: str) -> QwenDocumentMetadata:
+        self.analyzed_sections.append(text)
+        return QwenDocumentMetadata(
+            summary="Section summary.",
+            keywords=[],
+            entities=[],
+            topics=[],
+            language="en",
+        )
+
+
+async def test_document_understanding_reports_truncated_section_counts(monkeypatch):
+    service = _SuccessfulUnderstanding()
+    monkeypatch.setattr(settings, "qwen_max_input_characters", 10)
+    monkeypatch.setattr(settings, "qwen_max_sections", 2)
+
+    result = await service.analyze("x" * 25)
+
+    assert result.truncated is True
+    assert result.processed_sections == 2
+    assert result.total_sections == 3
+    assert len(service.analyzed_sections) == 2
 
 
 def _make_asset(**overrides: Any) -> Asset:

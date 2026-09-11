@@ -5,6 +5,7 @@ import { ErrorState } from "@/components/common/ErrorState";
 import { ResearchRunSkeleton } from "@/components/common/Skeletons";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { FollowUpPrompt } from "@/features/research/FollowUpPrompt";
 import { ResearchPipeline } from "@/features/research/ResearchPipeline";
 import { researchLayoutId } from "@/features/research/ResearchHistoryList";
 import { ResearchResult } from "@/features/research/ResearchResult";
@@ -45,6 +46,7 @@ export function ResearchRunView({ runId }: { runId: string }) {
 
   const isRunning = !isTerminal(run);
   const outcome = runOutcome(run);
+  const stepCount = run.steps?.length ?? 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -102,10 +104,28 @@ export function ResearchRunView({ runId }: { runId: string }) {
           </CardHeader>
 
           <CardContent className="pt-6">
-            <p className="mb-4 text-label uppercase text-muted-foreground">
-              AI research pipeline
-            </p>
-            <ResearchPipeline steps={run.steps ?? []} />
+            {/* Once the run completes, the answer below is the page's
+             * subject and the step trace is supporting detail, so it
+             * collapses behind a native disclosure. It stays expanded
+             * while running (it is the progress indicator) and on
+             * failure (the failed step's error is the explanation). */}
+            {run.status === "completed" ? (
+              <details>
+                <summary className="cursor-pointer text-label uppercase text-muted-foreground hover:text-foreground">
+                  AI research pipeline · {stepCount} {stepCount === 1 ? "step" : "steps"}
+                </summary>
+                <div className="mt-4">
+                  <ResearchPipeline steps={run.steps ?? []} />
+                </div>
+              </details>
+            ) : (
+              <>
+                <p className="mb-4 text-label uppercase text-muted-foreground">
+                  AI research pipeline
+                </p>
+                <ResearchPipeline steps={run.steps ?? []} />
+              </>
+            )}
           </CardContent>
         </Card>
       </motion.div>
@@ -140,7 +160,12 @@ export function ResearchRunView({ runId }: { runId: string }) {
         </motion.div>
       )}
 
-      {run.status === "completed" && <ResearchResult run={run} />}
+      {run.status === "completed" && (
+        <>
+          <ResearchResult run={run} />
+          <FollowUpPrompt runId={run.id} projectId={run.project_id} />
+        </>
+      )}
     </div>
   );
 }

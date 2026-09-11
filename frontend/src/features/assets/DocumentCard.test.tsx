@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DocumentCard } from "@/features/assets/DocumentCard";
 import * as assetsService from "@/services/assets";
+import { aiProfile } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import type { components } from "@/types/api";
 
@@ -29,10 +30,7 @@ function makeAsset(overrides: Partial<AssetRead> = {}): AssetRead {
     version: 1,
     tags: [],
     metadata: {},
-    ai_profile: {
-      embedding_status: "completed",
-      status: "completed",
-    },
+    ai_profile: aiProfile({ embedding_status: "completed", status: "completed" }),
     created_by: null,
     processing_status: "completed",
     processing_error: null,
@@ -94,7 +92,12 @@ describe("DocumentCard", () => {
     await user.click(screen.getByRole("button", { name: /cancel/i }));
 
     expect(deleteAsset).not.toHaveBeenCalled();
-    expect(screen.queryByText('Delete "abc_poultry.txt"?')).not.toBeInTheDocument();
+    // Awaited rather than asserted synchronously: the dialog animates
+    // out, so it outlives the click by the length of its exit spring.
+    // Same treatment the delete-path test above already uses.
+    await waitFor(() =>
+      expect(screen.queryByText('Delete "abc_poultry.txt"?')).not.toBeInTheDocument(),
+    );
   });
 
   it("selecting the card still works independently of the delete control", async () => {

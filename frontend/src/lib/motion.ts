@@ -40,15 +40,47 @@ export const easeInOut = [0.4, 0, 0.2, 1] as const;
 export const transition: Transition = { duration: duration.base, ease };
 export const fastTransition: Transition = { duration: duration.fast, ease };
 
+/* ---- Springs (Sprint 16, Phase 8.14) -------------------------------
+ *
+ * Anything the user can interrupt is a spring, not a fixed duration.
+ * A duration-based tween always plays to its end: grab a closing
+ * drawer and it finishes closing, then reopens — a visible jump,
+ * because the second animation starts from the *target* value rather
+ * than from where the element actually is. A spring re-targets from
+ * the current presentation value and carries its velocity through, so
+ * a reversal is continuous.
+ *
+ * Expressed as `bounce` + `duration` rather than stiffness/damping/mass:
+ * `bounce` is the damping ratio inverted into designer terms (0 =
+ * critically damped, no overshoot) and `duration` is the settle time.
+ * Three numbers describing a physics model are not readable; two
+ * describing the felt result are.
+ *
+ * `bounce: 0` everywhere is deliberate. Overshoot is only honest when
+ * a gesture carried momentum into the animation — a flick or a throw.
+ * This product has no drag interactions at all, so nothing here ever
+ * arrives with momentum, and bounce would be decoration pretending to
+ * be physics. */
+
+/** The default: critically damped, no overshoot. */
+export const spring: Transition = { type: "spring", bounce: 0, duration: 0.35 };
+
+/** Same shape, for small or frequently repeated state changes. */
+export const springFast: Transition = { type: "spring", bounce: 0, duration: 0.25 };
+
 /** Shared-layout spring, used for the project card → workspace
  * transition and the active-nav indicator. Spring rather than duration
  * because these follow a real element between two positions and should
- * feel physical, not timed. */
+ * feel physical, not timed.
+ *
+ * Previously `stiffness: 400, damping: 38, mass: 0.8`. That computes to
+ * a damping ratio of 38 / (2 * sqrt(400 * 0.8)) ≈ 1.06 — correctly
+ * critically damped, but nobody can read that off the numbers. Restated
+ * as the equivalent `bounce: 0` with the settle time it already had. */
 export const layoutSpring: Transition = {
   type: "spring",
-  stiffness: 400,
-  damping: 38,
-  mass: 0.8,
+  bounce: 0,
+  duration: 0.3,
 };
 
 export const pageEnter: Variants = {
@@ -138,11 +170,36 @@ export const staggerItem: Variants = {
   exit: { opacity: 0, y: -6, transition: fastTransition },
 };
 
-/** Side panel (evidence drawer). Enters from the right on desktop. */
+/** Side panel (evidence drawer). Enters from the right on desktop.
+ *
+ * Spring on both directions, not just enter: the drawer is the one
+ * surface in the product a user is likely to dismiss while it is still
+ * arriving. With a tween, closing mid-open played the open to
+ * completion and then reversed; the spring re-targets from wherever
+ * the panel currently is. Enter and exit share the same offset, so the
+ * path in and the path out are the same line travelled twice. */
 export const drawerVariants: Variants = {
   hidden: { opacity: 0, x: 24 },
-  visible: { opacity: 1, x: 0, transition: { duration: duration.base, ease } },
-  exit: { opacity: 0, x: 24, transition: fastTransition },
+  visible: { opacity: 1, x: 0, transition: spring },
+  exit: { opacity: 0, x: 24, transition: springFast },
+};
+
+/** Modal dialog surface.
+ *
+ * Previously the dialog had no animation of any kind — Radix mounted
+ * it and it was simply there, which is the one case worse than a
+ * fixed-duration tween: nothing establishes where the surface came
+ * from. It now arrives on a spring from 96%, so dismissing it while it
+ * is still opening reverses from the current scale instead of
+ * finishing the entrance first.
+ *
+ * `bounce: 0` for the same reason as everywhere else here: a dialog
+ * opened by a click carried no momentum into the animation, and
+ * overshoot on a surface that just appeared reads as a bug. */
+export const dialogVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.96 },
+  visible: { opacity: 1, scale: 1, transition: spring },
+  exit: { opacity: 0, scale: 0.96, transition: springFast },
 };
 
 export const overlayVariants: Variants = {
@@ -161,10 +218,17 @@ export const expandVariants: Variants = {
 };
 
 /** A status badge changing value: the new value scales in rather than
- * swapping instantly, so a state change is noticed without a flash. */
+ * swapping instantly, so a state change is noticed without a flash.
+ *
+ * A spring because status is the one thing here that changes without
+ * the user asking — a backend transition can land while the previous
+ * one is still animating (queued → running → complete in quick
+ * succession). Each new value re-targets from the current scale
+ * instead of restarting from 0.85, so a fast sequence reads as one
+ * continuous settle rather than a stutter. */
 export const statusChange: Variants = {
   hidden: { opacity: 0, scale: 0.85 },
-  visible: { opacity: 1, scale: 1, transition: fastTransition },
+  visible: { opacity: 1, scale: 1, transition: springFast },
   exit: { opacity: 0, scale: 0.85, transition: { duration: 0.1 } },
 };
 
@@ -172,7 +236,13 @@ export const statusChange: Variants = {
  * `whileHover`/`whileTap` so it never affects layout. */
 export const hoverLift = {
   whileHover: { y: -2, transition: fastTransition },
-  whileTap: { y: 0, scale: 0.995, transition: { duration: 0.1 } },
+  /* Press reads at 0.97, not 0.995. Half a percent is arithmetic, not
+   * feedback — it was below the threshold where anyone could see it,
+   * which made every card in the product feel dead on touch. Motion
+   * applies `whileTap` on pointer-DOWN, so the response lands with the
+   * press rather than waiting for the release to be classified as a
+   * click. 100ms out, matching the buttons. */
+  whileTap: { y: 0, scale: 0.97, transition: { duration: 0.1, ease: "easeOut" } },
   /* Motion gives any element carrying `whileTap` a `tabIndex` of 0, on
    * the reasonable assumption that a thing with press feedback is a
    * custom button. Everywhere `hoverLift` is used that assumption is

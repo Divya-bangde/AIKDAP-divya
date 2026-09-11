@@ -65,7 +65,7 @@ export function EvidenceDrawer({
                 initial="hidden"
                 animate="visible"
                 exit="exit"
-                className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border bg-elevated shadow-float focus:outline-none"
+                className="material-surface fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border shadow-float focus:outline-none"
               >
                 <div className="flex items-start justify-between gap-4 border-b border-border p-5">
                   <div className="min-w-0">

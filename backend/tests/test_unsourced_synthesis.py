@@ -199,14 +199,30 @@ async def test_empty_model_answer_is_rejected(synthesizer, litellm_call):
         await synthesizer.synthesize(query="Anything")
 
 
+@pytest.mark.asyncio
+async def test_brief_mode_asks_for_a_short_answer_and_returns_it_bare(synthesizer, litellm_call):
+    """The graph's automatic path: 2-4 sentences, no "To make this citable"
+    section -- the synthesis node writes that answer's disclosure line."""
+    litellm_call.return_value = model_reply(answer="Deep learning is a subset of ML.")
+
+    result = await synthesizer.synthesize(query="How do ML and DL differ?", brief=True)
+
+    assert "2-4" in sent_messages(litellm_call)[1]["content"]
+    assert result.answer == "Deep learning is a subset of ML."
+    assert result.citations == []
+    assert result.grounding_status is ResearchGroundingStatus.UNSOURCED
+
+
 # ---------------------------------------------------------------------------
-# Never wired into the automatic path
+# Never a grounded synthesis strategy
 # ---------------------------------------------------------------------------
 
 
 def test_get_synthesizer_never_returns_the_unsourced_path(monkeypatch):
-    """`UnsourcedSynthesizer` must never be reachable through the graph's
-    normal configuration switch -- only through the dedicated endpoint."""
+    """`UnsourcedSynthesizer` must never be the graph's synthesis strategy
+    -- it is reached only as the separately injected general-knowledge
+    path (`GraphDependencies.unsourced_synthesizer`) and the dedicated
+    endpoint."""
     from app.core.config import settings
 
     monkeypatch.setattr(settings, "synthesis_grounded", True)

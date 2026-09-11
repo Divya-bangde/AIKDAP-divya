@@ -403,4 +403,70 @@ describe("ResearchResult", () => {
     // The threshold is shown because a citation actually carried one.
     expect(screen.getByText("Relevance threshold")).toBeInTheDocument();
   });
+
+  describe("general-knowledge (unsourced) answers", () => {
+    const synthesisStep = (outputPayload: Record<string, unknown>) => ({
+      id: "step-s",
+      run_id: "run-1",
+      step_index: 5,
+      node_name: "synthesis",
+      title: "Synthesize the deliverable",
+      status: "completed" as const,
+      summary: null,
+      output_payload: outputPayload,
+      error_message: null,
+      started_at: null,
+      completed_at: null,
+      duration_ms: null,
+      created_at: new Date().toISOString(),
+    });
+
+    it("labels the answer as general knowledge and never claims evidence support", () => {
+      const run = makeRun({
+        grounding_status: "unsourced",
+        final_answer:
+          "**This could not be grounded in your project's documents or web search. Answered briefly from general knowledge — not from your documents.**\n\nDeep learning is a subset of machine learning.",
+        citations: [],
+        steps: [
+          synthesisStep({
+            grounding_status: "unsourced",
+            topic_relation: "related",
+            general_knowledge_used: true,
+          }),
+        ],
+      });
+
+      render(<ResearchResult run={run} />);
+
+      expect(screen.getByText("From general knowledge — not your documents")).toBeInTheDocument();
+      expect(screen.getByText(/Deep learning is a subset of machine learning/)).toBeInTheDocument();
+      expect(screen.getByText("Unsourced")).toBeInTheDocument();
+      expect(screen.queryByText("Grounded Intelligence")).not.toBeInTheDocument();
+      expect(screen.queryByText(/Supported by/)).not.toBeInTheDocument();
+      expect(screen.queryByText("Evidence funnel")).not.toBeInTheDocument();
+      expect(screen.queryByText("No relevant evidence was found.")).not.toBeInTheDocument();
+      expect(screen.queryByText("Off topic")).not.toBeInTheDocument();
+    });
+
+    it("adds an Off topic badge when the synthesis step says the question was off topic", () => {
+      const run = makeRun({
+        grounding_status: "unsourced",
+        final_answer:
+          "**This question is outside the topic of your project's documents. Answered briefly from general knowledge — not from your documents.**\n\nParis is the capital of France.",
+        citations: [],
+        steps: [
+          synthesisStep({
+            grounding_status: "unsourced",
+            topic_relation: "off_topic",
+            general_knowledge_used: true,
+          }),
+        ],
+      });
+
+      render(<ResearchResult run={run} />);
+
+      expect(screen.getByText("Off topic")).toBeInTheDocument();
+      expect(screen.getByText("From general knowledge — not your documents")).toBeInTheDocument();
+    });
+  });
 });

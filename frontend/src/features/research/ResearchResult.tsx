@@ -1,15 +1,20 @@
 import { motion } from "motion/react";
-import { SearchX, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
+import { Lightbulb, SearchX, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { TechnicalDetails } from "@/components/common/TechnicalDetails";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnswerBody } from "@/features/research/AnswerBody";
+import {
+  AnswerVisualization,
+  type VisualizationSpec,
+} from "@/features/research/AnswerVisualization";
 import { CitationList } from "@/features/research/CitationList";
 import { EvidenceDrawer } from "@/features/research/EvidenceDrawer";
 import { EvidenceFunnel } from "@/features/research/EvidenceFunnel";
-import { EvidenceGapPanel } from "@/features/research/EvidenceGapPanel";
+import { EvidenceGapPanel, GeneralKnowledgeAnswer } from "@/features/research/EvidenceGapPanel";
 import { EvidenceWorkspace } from "@/features/research/EvidenceWorkspace";
 import { fadeUp } from "@/lib/motion";
 import { asSynthesisOutput } from "@/types/research-meta";
@@ -61,8 +66,8 @@ export function ResearchResult({ run }: { run: ResearchRunDetail }) {
             <CardContent className="flex flex-col gap-4">
               <p className="max-w-2xl text-sm leading-relaxed text-foreground">
                 The available knowledge base did not contain enough relevant evidence to answer
-                this question. AIKDAP does not generate an answer when it cannot ground one in
-                your documents.
+                this question. AIKDAP grounds answers in your documents first, searches the web
+                when they fall short, and clearly labels anything answered from general knowledge.
               </p>
               <div className="flex flex-wrap gap-6 rounded-lg border border-border bg-sunken px-4 py-3 text-sm">
                 <span className="text-muted-foreground">
@@ -107,6 +112,38 @@ export function ResearchResult({ run }: { run: ResearchRunDetail }) {
     );
   }
 
+  if (run.grounding_status === "unsourced") {
+    return (
+      <motion.div initial="hidden" animate="visible" variants={fadeUp} className="flex flex-col gap-4">
+        <h2 className="sr-only">Research result</h2>
+        {/* Answered from general knowledge because nothing could ground
+         * it. No evidence funnel, citation list or "supported by" line:
+         * each would imply support this answer does not have. */}
+        <Card className="overflow-hidden border-warning/30">
+          <div className="h-1 w-full bg-gradient-to-r from-warning/60 to-warning/20" />
+          <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-warning/10 text-warning">
+                <Lightbulb className="h-4.5 w-4.5" />
+              </div>
+              <div>
+                <p className="text-label uppercase text-muted-foreground">Research Result</p>
+                <CardTitle className="mt-0.5">General Knowledge Answer</CardTitle>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {synthesis?.topic_relation === "off_topic" && <Badge variant="warning">Off topic</Badge>}
+              <StatusBadge domain="grounding" value={run.grounding_status} />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <GeneralKnowledgeAnswer answer={run.final_answer ?? ""} />
+          </CardContent>
+        </Card>
+      </motion.div>
+    );
+  }
+
   return (
     <>
       <motion.div initial="hidden" animate="visible" variants={fadeUp} className="flex flex-col gap-4">
@@ -141,6 +178,12 @@ export function ResearchResult({ run }: { run: ResearchRunDetail }) {
               />
             ) : (
               <p className="text-sm text-muted-foreground">No answer was generated.</p>
+            )}
+
+            {/* Present only when the question asked for a chart or diagram
+             * and the answer is grounded -- the backend enforces both. */}
+            {run.visualization && (
+              <AnswerVisualization spec={run.visualization as unknown as VisualizationSpec} />
             )}
 
             {/* A real, counted statement of what backs this answer —

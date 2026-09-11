@@ -1,10 +1,55 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
+import { dialogVariants, overlayVariants } from "@/lib/motion";
 
-export const Dialog = DialogPrimitive.Root;
+/** Whether the dialog is currently open.
+ *
+ * Radix keeps its open state private, but `AnimatePresence` has to see
+ * the surface leave in order to animate the exit — an unmount Radix
+ * performs itself is invisible to it. So `Dialog` mirrors the state it
+ * passes to Radix into this context, and `DialogContent` mounts with
+ * `forceMount` and lets `AnimatePresence` own the removal instead.
+ *
+ * Mirroring rather than replacing: Radix still drives focus trapping,
+ * scroll locking, `aria-*` wiring and Escape handling. The only thing
+ * taken from it is *when the node disappears*. */
+const DialogOpenContext = React.createContext(false);
+
+type DialogProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.Root>;
+
+/** Supports both controlled (`open`) and uncontrolled (`defaultOpen`)
+ * use, because both are in the codebase — `CreateProjectDialog` holds
+ * its own state, `DocumentCard` does not. */
+export function Dialog({
+  open,
+  defaultOpen,
+  onOpenChange,
+  children,
+  ...props
+}: DialogProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen ?? false);
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : uncontrolledOpen;
+
+  const handleOpenChange = React.useCallback(
+    (next: boolean) => {
+      if (!isControlled) setUncontrolledOpen(next);
+      onOpenChange?.(next);
+    },
+    [isControlled, onOpenChange],
+  );
+
+  return (
+    <DialogPrimitive.Root open={isOpen} onOpenChange={handleOpenChange} {...props}>
+      <DialogOpenContext.Provider value={isOpen}>{children}</DialogOpenContext.Provider>
+    </DialogPrimitive.Root>
+  );
+}
+
 export const DialogTrigger = DialogPrimitive.Trigger;
 export const DialogClose = DialogPrimitive.Close;
 
@@ -12,36 +57,59 @@ export const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
-  <DialogPrimitive.Overlay
-    ref={ref}
-    className={cn("fixed inset-0 z-50 bg-black/60", className)}
-    {...props}
-  />
+  <DialogPrimitive.Overlay ref={ref} asChild forceMount {...props}>
+    <motion.div
+      variants={overlayVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      className={cn("fixed inset-0 z-50 bg-black/60", className)}
+    />
+  </DialogPrimitive.Overlay>
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 export const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <DialogPrimitive.Portal>
-    <DialogOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-card p-6 shadow-lg",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
-      </DialogPrimitive.Close>
-    </DialogPrimitive.Content>
-  </DialogPrimitive.Portal>
-));
+>(({ className, children, ...props }, ref) => {
+  const isOpen = React.useContext(DialogOpenContext);
+
+  return (
+    <AnimatePresence>
+      {isOpen ? (
+        <DialogPrimitive.Portal forceMount>
+          <DialogOverlay />
+          <DialogPrimitive.Content ref={ref} asChild forceMount {...props}>
+            <motion.div
+              variants={dialogVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              /* Centred with `inset-0` and auto margins rather than
+               * `left-1/2 top-1/2 -translate-1/2`. The translate
+               * version owns the element's `transform`, which is the
+               * property the scale animation needs — the two would
+               * overwrite each other and the dialog would jump to the
+               * top-left corner as it animated. Auto margins centre
+               * without touching transform at all. */
+              className={cn(
+                "fixed inset-0 z-50 m-auto grid h-fit max-h-[85vh] w-[calc(100%-2rem)] max-w-lg gap-4 overflow-y-auto rounded-lg border border-border bg-card p-6 shadow-lg",
+                className,
+              )}
+            >
+              {children}
+              <DialogPrimitive.Close className="press absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </DialogPrimitive.Close>
+            </motion.div>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      ) : null}
+    </AnimatePresence>
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

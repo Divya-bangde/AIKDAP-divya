@@ -40,6 +40,7 @@ import re
 from abc import ABC, abstractmethod
 from collections import Counter
 from dataclasses import dataclass, field
+from typing import get_args
 
 from pydantic import ValidationError
 
@@ -65,7 +66,9 @@ from app.modules.research.schemas import (
     SynthesisClaim,
     SynthesisClaimScope,
     SynthesisClaimType,
+    TopicRelation,
     UnsourcedSynthesisResponse,
+    Visualization,
 )
 
 logger = get_logger(__name__)
@@ -147,6 +150,13 @@ class SynthesisResult:
     #: The exact prompt sent, for the audit trail. `None` when no model
     #: was called.
     prompt: str | None = None
+    #: A validated chart/diagram spec (`schemas.Visualization`, dumped),
+    #: only when the question asked for one and the answer is grounded.
+    visualization: dict | None = None
+    #: How the question relates to the subject of the supplied evidence,
+    #: as the model judged it. `None` when no model judged it: the
+    #: extractive path, a skipped call, or a missing/invalid value.
+    topic_relation: TopicRelation | None = None
 
 
 class Synthesizer(ABC):
@@ -179,6 +189,7 @@ class Synthesizer(ABC):
         citations: list[Citation],
         warnings: list[str],
         full_evidence_text: dict[str, str] | None = None,
+        conversation: dict[str, str] | None = None,
     ) -> SynthesisResult:
         """Return the answer, the citations it relies on, and how grounded it is.
 
@@ -190,6 +201,10 @@ class Synthesizer(ABC):
         against. Optional and defaulted so callers with nothing to
         verify (`ExtractiveSynthesizer`, the evaluation harness's direct
         dict-based calls) are unaffected.
+
+        `conversation` is the parent run's `{"query", "answer"}` when this
+        run is a follow-up: context for reading the question, never
+        evidence. Implementations without a model ignore it.
         """
 
 
@@ -221,6 +236,7 @@ class ExtractiveSynthesizer(Synthesizer):
         citations: list[Citation],
         warnings: list[str],
         full_evidence_text: dict[str, str] | None = None,
+        conversation: dict[str, str] | None = None,
     ) -> SynthesisResult:
         """Assemble a cited answer from the supplied citations.
 
@@ -355,6 +371,7 @@ class GroundedSynthesizer(Synthesizer):
         citations: list[Citation],
         warnings: list[str],
         full_evidence_text: dict[str, str] | None = None,
+        conversation: dict[str, str] | None = None,
     ) -> SynthesisResult:
         """Answer `query` from `citations`, then verify what came back."""
         supplied, withheld_simulated, withheld_budget = self._select_evidence(citations)
@@ -386,6 +403,7 @@ class GroundedSynthesizer(Synthesizer):
             objective=objective or query,
             query=query,
             evidence=render_grounded_evidence(list(supplied)),
+            conversation=conversation,
         )
 
         logger.info(
@@ -418,7 +436,14 @@ class GroundedSynthesizer(Synthesizer):
             },
         )
 
-        answer, claimed_ids, claimed_status, claimed_claims = _parse_response(response.content)
+        (
+            answer,
+            claimed_ids,
+            claimed_status,
+            claimed_claims,
+            topic_relation,
+            visualization,
+        ) = _parse_response(response.content)
         accepted, rejected = _validate_citation_ids(claimed_ids, supplied)
         status = _grounding_status(
             claimed_status=claimed_status, accepted=accepted, rejected=rejected
@@ -477,6 +502,10 @@ class GroundedSynthesizer(Synthesizer):
             verified_claims=verified_claims,
             claim_referenced_citations=claim_referenced_citations,
             grounding_status=status,
+            # A chart drawn from evidence judged insufficient would present
+            # exactly the unsupported figures grounding exists to withhold.
+            visualization=visualization if status is ResearchGroundingStatus.GROUNDED else None,
+            topic_relation=topic_relation,
             rejected_citation_ids=rejected,
             evidence_supplied=len(supplied),
             model=response.model,
@@ -521,11 +550,12 @@ class UnsourcedSynthesizer:
     `context`, `full_evidence_text`) describes grounding in retrieved
     evidence, and this class has none of that to receive. It exists
     beside `ExtractiveSynthesizer`/`GroundedSynthesizer` in this module
-    (Sprint 16 Phase 8.13), reached only through a dedicated service
-    call after a run already returned `insufficient_evidence` and the
-    user explicitly chose to leave the evidence boundary -- never a
-    branch inside `GroundedSynthesizer`, and never invoked by
-    `get_synthesizer()` or the graph.
+    (Sprint 16 Phase 8.13), reached only once an answer could not be
+    grounded: by `nodes.synthesis_node` (with `brief=True`) when a run's
+    final pass is still `insufficient_evidence`, and by a dedicated
+    service call when the user asks from an insufficient-evidence
+    result. Never a branch inside `GroundedSynthesizer`, and never
+    returned by `get_synthesizer()`.
 
     The no-fabricated-citations guarantee is structural, not a checked
     rule: `UnsourcedSynthesisResponse` has no `citation_ids` field for
@@ -545,9 +575,14 @@ class UnsourcedSynthesizer:
         """The model this synthesizer asks the gateway for."""
         return self._model
 
-    async def synthesize(self, *, query: str) -> SynthesisResult:
-        """Answer `query` from the model's own knowledge alone."""
-        prompt = render_unsourced_synthesis_prompt(query=query)
+    async def synthesize(self, *, query: str, brief: bool = False) -> SynthesisResult:
+        """Answer `query` from the model's own knowledge alone.
+
+        `brief` is the graph's automatic path: a 2-4 sentence answer,
+        returned bare because the caller writes its disclosure line --
+        which there depends on why the evidence fell short.
+        """
+        prompt = render_unsourced_synthesis_prompt(query=query, brief=brief)
 
         logger.info("unsourced_synthesis_started", model=self._model)
 
@@ -578,7 +613,9 @@ class UnsourcedSynthesizer:
         )
 
         return SynthesisResult(
-            answer=_compose_unsourced_answer(answer=answer, would_need=would_need),
+            answer=(
+                answer if brief else _compose_unsourced_answer(answer=answer, would_need=would_need)
+            ),
             # Never derived from the model's response -- there is no
             # `citation_ids` field in `UnsourcedSynthesisResponse` for it
             # to populate, so this is the only value this line could
@@ -604,8 +641,10 @@ class UnsourcedSynthesizer:
 
 def _parse_response(
     content: str,
-) -> tuple[str, list[str], str | None, list[SynthesisClaim]]:
-    """Pull the answer, claimed citation ids, claimed status, and claims out of JSON.
+) -> tuple[
+    str, list[str], str | None, list[SynthesisClaim], TopicRelation | None, dict | None
+]:
+    """Pull the answer, citation ids, status, claims, topic relation and visual out of JSON.
 
     Strict about the envelope and lenient about nothing important: a
     response that is not a JSON object with a non-empty `answer` is an
@@ -667,11 +706,32 @@ def _parse_response(
             except ValidationError as exc:
                 logger.warning("grounded_synthesis_claim_dropped", reason=str(exc))
 
+    # Lenient like `claims`: a malformed spec is dropped, never allowed to
+    # fail an answer that otherwise parsed.
+    visualization: dict | None = None
+    raw_visualization = payload.get("visualization")
+    if isinstance(raw_visualization, dict):
+        try:
+            visualization = Visualization.model_validate(raw_visualization).model_dump(mode="json")
+        except ValidationError as exc:
+            logger.warning("grounded_synthesis_visualization_dropped", reason=str(exc))
+
+    # Lenient too: anything but an exact known value is "not judged", which
+    # the synthesis node treats as `related` -- the path that still searches.
+    raw_relation = payload.get("topic_relation")
+    topic_relation: TopicRelation | None = (
+        raw_relation if raw_relation in get_args(TopicRelation) else None
+    )
+    if raw_relation is not None and topic_relation is None:
+        logger.warning("grounded_synthesis_topic_relation_dropped", value=repr(raw_relation)[:80])
+
     return (
         answer.strip(),
         claimed_ids,
         claimed_status if isinstance(claimed_status, str) else None,
         claims,
+        topic_relation,
+        visualization,
     )
 
 
@@ -922,13 +982,16 @@ def _decorate(
 def _insufficient_answer(
     *, objective: str, query: str, withheld_simulated: int, warnings: list[str]
 ) -> str:
-    """The answer used when there is no grounded evidence to reason from."""
+    """The answer used when there is no grounded evidence to reason from.
+
+    Also what `nodes.synthesis_node` states when a run ends declining to
+    answer: deterministic, so it never carries a model's off-target prose.
+    """
     body = (
         f"## Objective\n{objective or query}\n\n"
         "## Result\nThe available evidence is insufficient to answer this "
-        "question. The project's knowledge base returned no material that "
-        "supports an answer, so no answer was generated — synthesis was not "
-        "attempted rather than answered from general knowledge.\n\n"
+        "question. No evidence retrieved for this run supports an answer, "
+        "and no general-knowledge answer was generated in its place.\n\n"
         "Upload and process assets containing the relevant information, then "
         "re-run this research.\n"
     )

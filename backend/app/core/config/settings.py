@@ -8,10 +8,14 @@ alongside their respective milestones.
 
 import json
 from functools import lru_cache
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+
+_QWEN_ESTIMATED_CHARACTERS_PER_TOKEN = 4
+_QWEN_PROMPT_TOKEN_RESERVE = 512
 
 
 class Settings(BaseSettings):
@@ -112,6 +116,27 @@ class Settings(BaseSettings):
     #: generation fallback chain — Jina serves neither completions nor
     #: any model this codebase generates text with.
     jina_api_key: SecretStr | None = None
+    #: Tavily web search: the research workflow's external source, used
+    #: only as a fallback when the project's own evidence is insufficient.
+    #: Unset keeps external research on the clearly-labelled simulated
+    #: provider, so no deployment starts sending queries to a third party
+    #: without an explicit key.
+    tavily_api_key: SecretStr | None = None
+    tavily_timeout: float = Field(default=20.0, gt=0)
+
+    @field_validator("tavily_api_key", mode="before")
+    @classmethod
+    def blank_tavily_key_is_unset(cls, value: object) -> object:
+        """A bare `TAVILY_API_KEY=` in .env means "not configured".
+
+        Without this it parses as `SecretStr("")` rather than `None`
+        (the same trap `HttpRerankerProvider._headers` guards against),
+        and an empty key would switch on a live provider that can only
+        ever fail authentication.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     #: Model used when a caller does not name one — the primary in the
     #: fallback chain.
@@ -334,11 +359,9 @@ class Settings(BaseSettings):
     # `ollama_base_url` defaults to `host.docker.internal`, which is
     # what actually resolves from inside the backend/worker containers
     # on this Docker Desktop (Windows) setup — verified live, not
-    # assumed, before picking this default. On native Linux Docker
-    # Engine this hostname does not resolve by default and the compose
-    # file would need `extra_hosts: ["host.docker.internal:host-gateway"]`;
-    # left as an operator note rather than added speculatively, since
-    # this deployment doesn't need it.
+    # assumed, before picking this default. Compose pins this hostname
+    # to `host-gateway` for both backend and worker so it cannot drift
+    # onto the machine's roaming LAN address.
     #
     # `qwen_model` is the literal Ollama model tag — verified present
     # via `ollama list` (`qwen3.5:4b`, 3.4 GB). No other model is ever
@@ -364,8 +387,19 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://host.docker.internal:11434"
     qwen_model: str = "qwen3.5:4b"
     qwen_think: bool = False
-    qwen_max_tokens: int = Field(default=1024, gt=0)
+    #: Raised after a live response hit the old 1024-token limit in the
+    #: middle of a JSON string (`Unterminated string` at char 2436).
+    qwen_max_tokens: int = Field(default=4096, gt=0)
     qwen_timeout: float = Field(default=180.0, gt=0)
+
+    #: Ollama's context window for Qwen document-understanding calls.
+    #: The live `qwen3.5:4b` model reports a 262144-token context; 16384
+    #: is deliberately smaller to bound local memory while comfortably
+    #: fitting this service's request. Budgeting assumes typical English
+    #: paper text averages 4 characters per token, plus 512 tokens for the
+    #: fixed system/user prompt. The validator below also reserves the full
+    #: `qwen_max_tokens` output so Ollama cannot silently truncate input.
+    qwen_num_ctx: int = Field(default=16_384, gt=0)
 
     #: Timeout for `/health`'s Ollama liveness probe (Sprint 11.2) — a
     #: plain GET on the root route, not a model call. Short on purpose,
@@ -377,7 +411,7 @@ class Settings(BaseSettings):
     #: split with the existing `chunk_text()` utility and processed as
     #: multiple calls, then merged deterministically — see
     #: `app.modules.assets.processing.document_understanding`.
-    qwen_max_input_characters: int = Field(default=6000, gt=0)
+    qwen_max_input_characters: int = Field(default=24_000, gt=0)
 
     #: Sprint 12.3: fraction of a PDF's pages that must be empty of
     #: machine-readable text before the WHOLE document is treated as
@@ -455,6 +489,25 @@ class Settings(BaseSettings):
     #: cap: retrieval chunking (`chunk_document`) is a separate,
     #: uncapped path over the complete extracted text.
     qwen_max_sections: int = Field(default=20, gt=0)
+
+    @model_validator(mode="after")
+    def validate_qwen_context_budget(self) -> Self:
+        """Keep Qwen input, prompt, and output within Ollama's context."""
+        estimated_input_tokens = (
+            self.qwen_max_input_characters + _QWEN_ESTIMATED_CHARACTERS_PER_TOKEN - 1
+        ) // _QWEN_ESTIMATED_CHARACTERS_PER_TOKEN
+        required_context = (
+            estimated_input_tokens
+            + _QWEN_PROMPT_TOKEN_RESERVE
+            + self.qwen_max_tokens
+        )
+        if self.qwen_num_ctx < required_context:
+            raise ValueError(
+                "qwen_num_ctx is too small for qwen_max_input_characters, "
+                "the prompt reserve, and qwen_max_tokens: "
+                f"requires at least {required_context} tokens"
+            )
+        return self
 
     # ------------------------------------------------------------------
     # Embeddings — pgvector, model selected by provider prefix (Sprint 9C)

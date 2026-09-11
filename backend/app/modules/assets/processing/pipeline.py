@@ -242,6 +242,9 @@ class AssetProcessingService:
             profile.language = metadata.language
             profile.generated_by = settings.qwen_model
             profile.status = AIProfileStatus.COMPLETED
+            profile.truncated = metadata.truncated
+            profile.processed_sections = metadata.processed_sections
+            profile.total_sections = metadata.total_sections
             profile.error = None
             logger.info(
                 "asset_ai_understanding_completed",
@@ -249,6 +252,9 @@ class AssetProcessingService:
                 generated_by=settings.qwen_model,
                 keyword_count=len(metadata.keywords),
                 entity_count=len(metadata.entities),
+                truncated=metadata.truncated,
+                processed_sections=metadata.processed_sections,
+                total_sections=metadata.total_sections,
             )
 
         asset.ai_profile = profile.model_dump(mode="json")
