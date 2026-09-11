@@ -74,8 +74,8 @@ describe("ResearchResult", () => {
     expect(screen.getByText(/did not contain enough relevant evidence/i)).toBeInTheDocument();
     expect(screen.getAllByText(wholeText("Evidence found: 0")).length).toBeGreaterThan(0);
     expect(screen.getAllByText(wholeText("Providers used: None")).length).toBeGreaterThan(0);
-    // Never renders a "Research Result" success card for this state.
-    expect(screen.queryByText("Research Result")).not.toBeInTheDocument();
+    // Never renders the grounded success card for this state.
+    expect(screen.queryByText("Grounded Intelligence")).not.toBeInTheDocument();
   });
 
   it("renders a grounded answer with the exact grounding badge and citations", () => {
@@ -98,6 +98,8 @@ describe("ResearchResult", () => {
     render(<ResearchResult run={run} />);
 
     expect(screen.getByText("Grounded")).toBeInTheDocument();
+    // Anchors the negative checks elsewhere: this title must actually render.
+    expect(screen.getByText("Grounded Intelligence")).toBeInTheDocument();
     expect(
       screen.getByText("ABC Poultry faces feed cost inflation and biosecurity risk."),
     ).toBeInTheDocument();

@@ -61,7 +61,7 @@ export function EvidenceChip({
         type="button"
         onClick={onOpen}
         title={`Open evidence ${id}`}
-        className="tabular flex h-6 min-w-6 items-center justify-center rounded-md bg-accent px-1.5 font-mono text-[11px] font-semibold text-accent-foreground transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="tabular flex h-6 min-w-6 items-center justify-center rounded-md bg-accent px-1.5 font-mono text-xs font-semibold text-accent-foreground transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {id}
       </button>
@@ -72,7 +72,7 @@ export function EvidenceChip({
     return (
       <span
         title={`${id} was supplied to the model as evidence for this claim, but its content is not available from this run's record`}
-        className="tabular flex items-center gap-1 rounded-md border border-dashed border-muted-foreground/40 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+        className="tabular flex items-center gap-1 rounded-md border border-dashed border-muted-foreground/40 px-1.5 py-0.5 font-mono text-xs text-muted-foreground"
       >
         <EyeOff className="h-3 w-3 shrink-0" aria-hidden="true" />
         {id}
@@ -84,7 +84,7 @@ export function EvidenceChip({
   return (
     <span
       title={`${id} was cited by the model for this claim, but was never supplied as evidence for this run`}
-      className="tabular flex items-center gap-1 rounded-md border border-dashed border-destructive/40 px-1.5 py-0.5 font-mono text-[11px] text-destructive line-through decoration-destructive/60"
+      className="tabular flex items-center gap-1 rounded-md border border-dashed border-destructive/40 px-1.5 py-0.5 font-mono text-xs text-destructive line-through decoration-destructive/60"
     >
       <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
       {id}
@@ -167,7 +167,7 @@ export function ClaimEvidencePanel({
                    * among the verdict/evidence badges below, precisely so
                    * it never reads as a third state on the same axis. */}
                   <span
-                    className="flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-medium text-muted-foreground"
+                    className="flex shrink-0 items-center gap-1 whitespace-nowrap text-xs font-medium text-muted-foreground"
                     title={
                       claim.attributed_to_primary
                         ? "Attributed to the primary source"

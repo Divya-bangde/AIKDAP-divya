@@ -66,15 +66,8 @@ export function ProjectCard({
   return (
     <motion.div {...hoverLift} className="h-full">
       <Link to={`/projects/${project.id}`} className="block h-full">
-        <Card className="group relative h-full overflow-hidden transition-all duration-200 hover:border-border-strong hover:shadow-raised">
-          {/* A hairline that lights up on hover — enough to register as
-           * interactive without moving or recolouring the card. */}
-          <span
-            aria-hidden="true"
-            className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-          />
-
-          <CardContent className="flex h-full flex-col gap-4 p-5">
+        <Card className="group relative h-full overflow-hidden transition-shadow duration-200 hover:shadow-raised">
+          <CardContent className="flex h-full flex-col gap-4 p-6">
             <div className="flex items-start justify-between gap-3">
               <motion.div
                 layoutId={ids.icon}
@@ -122,7 +115,7 @@ export function ProjectCard({
               </div>
             )}
 
-            <div className="flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
+            <div className="flex items-center justify-between pt-1 text-xs text-muted-foreground">
               <span className="capitalize">{project.project_type.replace(/_/g, " ")}</span>
               <span>Updated {formatRelativeTime(project.updated_at)}</span>
             </div>

@@ -54,7 +54,7 @@ export function Login() {
         initial="hidden"
         animate="visible"
         variants={loginBrandReveal}
-        className="relative z-10 hidden w-[46%] flex-col justify-between overflow-hidden border-r border-border/70 p-12 lg:flex"
+        className="relative z-10 hidden w-[46%] flex-col justify-between overflow-hidden p-12 lg:flex"
       >
         <div className="relative">
           <Link
@@ -136,7 +136,7 @@ export function Login() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-6 shadow-raised">
+          <div className="rounded-card bg-card p-7 shadow-raised contrast-more:border contrast-more:border-border-strong">
             <div className="mb-6">
               <h2 className="text-section">
                 {mode === "login" ? "Sign in" : "Create your account"}

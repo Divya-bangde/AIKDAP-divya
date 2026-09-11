@@ -19,7 +19,7 @@ export const TabsList = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.List
     ref={ref}
-    className={cn("flex items-center gap-1 border-b border-border", className)}
+    className={cn("inline-flex w-fit items-center gap-1 rounded-full bg-secondary p-1 print:hidden", className)}
     {...props}
   />
 ));
@@ -32,20 +32,22 @@ export const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "relative px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      "relative rounded-full px-4 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
       isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground",
       className,
     )}
     {...props}
   >
-    {children}
+    {/* A segmented control: the active pill slides between segments
+     * instead of an underline on a divider rule. */}
     {isActive && (
       <motion.span
         layoutId="workspace-tab-indicator"
         transition={layoutSpring}
-        className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary"
+        className="absolute inset-0 rounded-full bg-card shadow-subtle"
       />
     )}
+    <span className="relative z-10">{children}</span>
   </TabsPrimitive.Trigger>
 ));
 TabsTrigger.displayName = "TabsTrigger";

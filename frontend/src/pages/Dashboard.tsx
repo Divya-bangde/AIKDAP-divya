@@ -54,8 +54,7 @@ export function Dashboard() {
     <PageTransition>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-label uppercase text-muted-foreground">Command Center</p>
-          <h1 className="mt-1 font-display text-display">Your intelligence workspace</h1>
+          <h1 className="font-display text-display">Command Center</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
             Every project, document and grounded research run in AIKDAP, in one place.
           </p>

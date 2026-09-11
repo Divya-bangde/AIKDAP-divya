@@ -94,7 +94,7 @@ export const DialogContent = React.forwardRef<
                * top-left corner as it animated. Auto margins centre
                * without touching transform at all. */
               className={cn(
-                "fixed inset-0 z-50 m-auto grid h-fit max-h-[85vh] w-[calc(100%-2rem)] max-w-lg gap-4 overflow-y-auto rounded-lg border border-border bg-card p-6 shadow-lg",
+                "fixed inset-0 z-50 m-auto grid h-fit max-h-[85vh] w-[calc(100%-2rem)] max-w-lg gap-4 overflow-y-auto rounded-card bg-card p-7 shadow-float contrast-more:border contrast-more:border-border-strong",
                 className,
               )}
             >

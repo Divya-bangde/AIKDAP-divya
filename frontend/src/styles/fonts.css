@@ -1,42 +1,29 @@
-/* AIKDAP typography (Sprint 9K.4).
+/* AIKDAP typography.
  *
- * Two typefaces, each a *variable* font, each subset to latin only:
+ * One family, two cuts, each a *variable* font subset to latin only:
  *
- *   Space Grotesk Variable — display. A geometric grotesk with squared
- *     terminals and a tight, technical rhythm. It is the reason the
- *     product now looks like something rather than like a default; at
- *     the sizes the landing page uses it, its character is the brand.
+ *   Geist Variable — every interface, prose and display role. A single
+ *     face carries the whole hierarchy; the tiers are separated by size,
+ *     weight and tracking (see `tailwind.config.ts`), not by switching
+ *     typefaces. Bundled rather than relying on a system face, so
+ *     Windows, macOS and Linux all render the same letterforms.
  *
- *   Inter Variable — interface and prose. Chosen for the opposite
- *     reason: it disappears. It has the largest tested legibility
- *     record of any open UI face at small sizes, which is what the
- *     working surfaces (scores, ranks, chunk ids) actually need.
+ *   Geist Mono Variable — machine values only (model ids, chunk
+ *     references, scores), so they read as data rather than prose.
  *
- * Why self-hosted rather than a font CDN: a Google Fonts <link> makes
- * the browser contact a third party on first paint of every page,
- * which is both a privacy leak and a second connection on the critical
- * path. These files ship from our own origin.
+ * Self-hosted, never a font CDN: a third-party <link> is a privacy leak
+ * and a second connection on the critical path. Only the latin subset is
+ * declared, so exactly two font files reach `dist/`.
  *
- * Why variable rather than static weights: one file per family covers
- * weights 100–900. The alternative — the four static weights this
- * design uses — would be four requests per family. Total cost here is
- * 22.3 kB (Space Grotesk) + 48.3 kB (Inter) = 70.5 kB, measured.
- *
- * Only the latin subset is declared. The upstream packages also ship
- * cyrillic, greek, vietnamese and latin-ext; importing their index.css
- * would emit every one of those files into `dist/` as a build asset
- * even though this product's UI is English-only. Declaring the faces
- * by hand keeps exactly two font files in the output.
- *
- * `font-display: swap` means text is readable in the fallback face
- * immediately and reflows once — never invisible while a font loads. */
+ * `font-display: swap` keeps text readable in the fallback face while
+ * the font loads — never invisible. */
 
 @font-face {
-  font-family: "Space Grotesk Variable";
+  font-family: "Geist Variable";
   font-style: normal;
   font-display: swap;
-  font-weight: 300 700;
-  src: url("@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2")
+  font-weight: 100 900;
+  src: url("@fontsource-variable/geist/files/geist-latin-wght-normal.woff2")
     format("woff2-variations");
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
     U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
@@ -44,11 +31,11 @@
 }
 
 @font-face {
-  font-family: "Inter Variable";
+  font-family: "Geist Mono Variable";
   font-style: normal;
   font-display: swap;
   font-weight: 100 900;
-  src: url("@fontsource-variable/inter/files/inter-latin-wght-normal.woff2")
+  src: url("@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2")
     format("woff2-variations");
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
     U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,

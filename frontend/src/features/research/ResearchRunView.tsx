@@ -54,7 +54,7 @@ export function ResearchRunView({ runId }: { runId: string }) {
     <div className="flex flex-col gap-6">
       <motion.div initial="hidden" animate="visible" variants={fadeUp}>
         <Card className="overflow-hidden">
-          <CardHeader className="gap-3 border-b border-border bg-sunken/50">
+          <CardHeader className="gap-3">
             {/* role="status" (implicit aria-live="polite") announces only
              * when the badge's own text actually changes -- i.e. when the
              * backend reports a new run status -- not on every poll tick
@@ -65,7 +65,6 @@ export function ResearchRunView({ runId }: { runId: string }) {
              * for. */}
             <div className="flex flex-wrap items-start justify-between gap-3" role="status">
               <div className="min-w-0">
-                <p className="text-label uppercase text-muted-foreground">Research query</p>
                 {/* The query is this page's subject, so it is the page's
                  * single `h1` — axe flagged the run view as having no
                  * level-one heading when this was an `h2`.
@@ -78,7 +77,7 @@ export function ResearchRunView({ runId }: { runId: string }) {
                 <motion.h1
                   layoutId={researchLayoutId(run.id)}
                   transition={layoutSpring}
-                  className="mt-1 text-title"
+                  className="text-title"
                 >
                   {run.query}
                 </motion.h1>
@@ -112,7 +111,7 @@ export function ResearchRunView({ runId }: { runId: string }) {
             </div>
           </CardHeader>
 
-          <CardContent className="pt-6">
+          <CardContent>
             {/* Once the run completes, the answer below is the page's
              * subject and the step trace is supporting detail, so it
              * collapses behind a native disclosure. It stays expanded
@@ -146,9 +145,8 @@ export function ResearchRunView({ runId }: { runId: string }) {
            * scrubbed message. `LLMError` runs `scrub_secrets` in its
            * constructor, so no credential can reach this text, and the
            * frontend adds no stack trace of its own. */}
-          <Card role="alert" className="overflow-hidden border-destructive/30">
-            <div className="h-1 w-full bg-destructive/60" />
-            <CardContent className="flex items-start gap-3 p-5">
+          <Card role="alert" className="overflow-hidden">
+            <CardContent className="flex items-start gap-3 p-6">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
                 <AlertTriangle className="h-4.5 w-4.5" />
               </div>
@@ -159,7 +157,7 @@ export function ResearchRunView({ runId }: { runId: string }) {
                   and nothing was invented in its place.
                 </p>
                 {run.error_message && (
-                  <p className="mt-3 rounded-lg border border-border bg-sunken p-3 font-mono text-xs leading-relaxed text-foreground">
+                  <p className="mt-3 rounded-lg bg-sunken p-3 font-mono text-xs leading-relaxed text-foreground">
                     {run.error_message}
                   </p>
                 )}

@@ -54,7 +54,7 @@ export function ResearchHistoryList({ runs }: { runs: ResearchRunRead[] }) {
   return (
     <div className="flex flex-col gap-3">
       {(statuses.length > 1 || runs.length > 3) && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
           <div className="relative flex-1 sm:max-w-xs">
             <Search
               aria-hidden="true"
@@ -179,7 +179,7 @@ function StatusChip({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active
           ? "border-primary bg-primary text-primary-foreground"
           : "border-border bg-background text-muted-foreground hover:border-border-strong hover:text-foreground",

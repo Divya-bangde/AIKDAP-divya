@@ -63,7 +63,7 @@ export const CrossPaperAnalysisPanel: React.FC<{
       ) : (
         <div className="flex flex-col gap-6">
           <section>
-            <h3 className="font-semibold text-lg border-b pb-2">Comparison Matrix</h3>
+            <h3 className="font-semibold text-lg">Comparison Matrix</h3>
             <ul className="mt-2 space-y-2">
               {result.comparison_items.map((item, idx) => (
                 <li key={idx} className="p-3 border rounded bg-gray-50">
@@ -81,7 +81,7 @@ export const CrossPaperAnalysisPanel: React.FC<{
           </section>
 
           <section>
-            <h3 className="font-semibold text-lg border-b pb-2">Gap Resolutions</h3>
+            <h3 className="font-semibold text-lg">Gap Resolutions</h3>
             <ul className="mt-2 space-y-2">
               {result.gap_resolutions.map((gap, idx) => (
                 <li key={idx} className="p-3 border rounded bg-gray-50">
@@ -96,7 +96,7 @@ export const CrossPaperAnalysisPanel: React.FC<{
           </section>
 
           <section>
-            <h3 className="font-semibold text-lg border-b pb-2">Research Hypotheses</h3>
+            <h3 className="font-semibold text-lg">Research Hypotheses</h3>
             <ul className="mt-2 space-y-2">
               {result.hypotheses.map((hypo, idx) => (
                 <li key={idx} className="p-3 border rounded bg-yellow-50">

@@ -65,9 +65,9 @@ export function EvidenceDrawer({
                 initial="hidden"
                 animate="visible"
                 exit="exit"
-                className="material-surface fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border shadow-float focus:outline-none"
+                className="material-surface fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col shadow-float focus:outline-none"
               >
-                <div className="flex items-start justify-between gap-4 border-b border-border p-5">
+                <div className="flex items-start justify-between gap-4 p-6 pb-2">
                   <div className="min-w-0">
                     <p className="text-label uppercase text-muted-foreground">
                       Evidence {index !== null ? `· ${index + 1}` : ""}
@@ -114,7 +114,7 @@ export function EvidenceDrawer({
                   {citation.snippet && (
                     <div className="mb-5">
                       <p className="text-label uppercase text-muted-foreground">Snippet</p>
-                      <p className="mt-2 rounded-lg border border-border bg-sunken p-3 text-sm leading-relaxed text-foreground">
+                      <p className="mt-2 rounded-lg bg-sunken p-3 text-sm leading-relaxed text-foreground">
                         {citation.snippet}
                       </p>
                     </div>
@@ -135,7 +135,7 @@ export function EvidenceDrawer({
                   </dl>
 
                   {(citation.chunk_id || citation.asset_id || citation.reference) && (
-                    <dl className="mt-5 grid grid-cols-1 gap-3 border-t border-border pt-4">
+                    <dl className="mt-8 grid grid-cols-1 gap-3">
                       <Detail label="Chunk ID" value={citation.chunk_id} />
                       <Detail label="Asset ID" value={citation.asset_id} />
                       <Detail label="Reference" value={citation.reference} />

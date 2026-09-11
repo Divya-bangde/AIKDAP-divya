@@ -18,7 +18,7 @@ const MermaidDiagram = lazy(() => import("@/features/research/MermaidDiagram"));
 
 export function AnswerVisualization({ spec }: { spec: VisualizationSpec }) {
   return (
-    <figure className="flex flex-col gap-3 rounded-lg border border-border bg-sunken/40 p-4">
+    <figure className="flex flex-col gap-3 rounded-lg bg-sunken/40 p-4">
       {spec.title && (
         <figcaption className="text-sm font-medium text-foreground">{spec.title}</figcaption>
       )}

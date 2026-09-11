@@ -4,19 +4,14 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-/* `active:scale-[0.97]` is the one motion effect here: a press should
- * be felt, and a CSS transform costs nothing and needs no JS.
+/* Press feedback comes from the shared `press` class (see `index.css`):
+ * 0.97 on pointer-down in 100ms, then a spring back on release. Past
+ * about 3% it stops reading as a press and starts reading as a toy.
  *
- * The press settles in 100ms while the colour change keeps 150ms.
- * Response is the thing being communicated, so it resolves faster than
- * the decoration around it — at 150ms the scale visibly trails the
- * finger. Past about 3% it stops reading as a press and starts reading
- * as a toy.
- *
- * `:active` fires on pointer-DOWN, which is the whole point: feedback
- * that waits for the release to be classified as a click feels dead. */
+ * `print:hidden`: an action means nothing on paper (Export → PDF prints
+ * the page). Citation markers are plain `<button>`s and still print. */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-150 active:scale-[0.97] active:duration-100 motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
+  "press print:hidden inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {

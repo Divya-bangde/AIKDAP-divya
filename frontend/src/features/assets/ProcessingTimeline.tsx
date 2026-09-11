@@ -127,7 +127,7 @@ export function ProcessingTimeline({ asset }: { asset: AssetRead }) {
           <div className={cn("flex min-w-0 flex-1 items-center justify-between gap-3", index < stages.length - 1 && "pb-4")}>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium leading-tight">{stage.label}</p>
-              <p className="truncate font-mono text-[10px] leading-tight text-muted-foreground">
+              <p className="truncate font-mono text-xs leading-tight text-muted-foreground">
                 {stage.model}
               </p>
             </div>

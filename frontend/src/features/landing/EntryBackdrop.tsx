@@ -1,6 +1,6 @@
 /**
- * The structural backdrop shared by the public entry experience and
- * the sign-in screen (Sprint 9K.4).
+ * The structural backdrop shared by the public entry experience, the
+ * sign-in screen (Sprint 9K.4) and the application shell.
  *
  * Three stacked layers, all decorative and all `aria-hidden`: two very
  * wide colour washes, a fine structural grid, and a vignette that
@@ -29,7 +29,7 @@
  */
 export function EntryBackdrop({ vignette = true }: { vignette?: boolean }) {
   return (
-    <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+    <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden print:hidden">
       <div className="landing-aurora absolute inset-0" />
       <div className="landing-grid absolute inset-0" />
       {vignette && <div className="landing-vignette absolute inset-0" />}

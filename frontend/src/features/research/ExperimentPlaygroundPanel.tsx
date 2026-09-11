@@ -210,7 +210,7 @@ export function ExperimentPlaygroundPanel({ plan: initialPlan }: { plan: Experim
             </Badge>
           </div>
           {plan.hypothesis && (
-            <div className="rounded-md border border-border bg-sunken p-3">
+            <div className="rounded-md bg-sunken p-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Hypothesis

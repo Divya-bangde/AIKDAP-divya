@@ -27,10 +27,10 @@ const TABS = [
 /** One real, backend-counted figure about this project's knowledge base. */
 function KnowledgeStat({ label, value, detail }: { label: string; value: number; detail: string }) {
   return (
-    <div className="rounded-lg border border-border bg-sunken p-4">
+    <div className="rounded-card bg-card p-6 shadow-subtle">
       <p className="text-label uppercase text-muted-foreground">{label}</p>
-      <AnimatedNumber value={value} className="tabular mt-1 block text-2xl font-semibold" />
-      <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{detail}</p>
+      <AnimatedNumber value={value} className="tabular mt-1.5 block text-3xl font-semibold tracking-tight" />
+      <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
     </div>
   );
 }

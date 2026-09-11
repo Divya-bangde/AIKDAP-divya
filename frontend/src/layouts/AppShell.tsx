@@ -14,6 +14,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { AikdapMark } from "@/components/common/AikdapMark";
 import { ThemeToggle } from "@/components/common/ThemeToggle";
 import { ActiveWorkToast } from "@/features/command-center/ActiveWorkToast";
+import { EntryBackdrop } from "@/features/landing/EntryBackdrop";
 import { RoutedPage } from "@/layouts/RoutedPage";
 import { cn } from "@/lib/utils";
 import { layoutSpring } from "@/lib/motion";
@@ -147,15 +148,20 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen bg-background">
+      {/* The entry experience's backdrop (colour washes and grid), so the
+       * workspace reads as the same place as the landing and sign-in
+       * pages. No vignette, as on sign-in: it is tuned for the always-dark
+       * landing and would muddy the light theme. */}
+      <EntryBackdrop vignette={false} />
       <aside
         className={cn(
-          "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-border bg-card transition-[width] duration-200 md:flex print:hidden",
+          "sticky top-0 hidden h-screen shrink-0 flex-col bg-card transition-[width] duration-200 md:flex print:hidden",
           collapsed ? "w-[72px]" : "w-64",
         )}
       >
         <div
           className={cn(
-            "flex h-16 items-center border-b border-border",
+            "flex h-16 items-center",
             collapsed ? "justify-center px-2" : "px-5",
           )}
         >
@@ -179,7 +185,7 @@ export function AppShell() {
           <NavItems collapsed={collapsed} />
         </nav>
 
-        <div className="flex flex-col gap-2 border-t border-border p-3">
+        <div className="flex flex-col gap-2 p-3">
           <button
             type="button"
             onClick={toggleCollapsed}
@@ -232,8 +238,9 @@ export function AppShell() {
        * `min-width: auto`, which means this column refuses to shrink below
        * its content's intrinsic minimum — so on a phone every
        * authenticated page scrolled sideways (Sprint 9K.6). Zeroing it
-       * hands overflow back to the children built for it. */}
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+       * hands overflow back to the children built for it. `relative`
+       * lifts the column above the fixed `EntryBackdrop`. */}
+      <div className="relative flex min-h-screen min-w-0 flex-1 flex-col">
         {/* Floating chrome, not a fixed strip: content scrolls beneath
             it and fades out under a short gradient rather than being
             cut off by a 1px rule. `scroll-edge-chrome` supplies the
@@ -269,15 +276,11 @@ export function AppShell() {
           </div>
         </header>
 
-        <nav className="flex items-center gap-1 overflow-x-auto border-b border-border bg-card px-4 py-2 md:hidden print:hidden">
+        <nav className="flex items-center gap-1 overflow-x-auto bg-card px-4 py-2 md:hidden print:hidden">
           <NavItems compact />
         </nav>
 
         <main className="relative flex-1 p-4 md:p-8">
-          <div
-            aria-hidden="true"
-            className="app-grid-surface pointer-events-none absolute inset-0 opacity-60 print:hidden"
-          />
           <div className="relative mx-auto w-full max-w-[1400px]">
             <RoutedPage />
           </div>

@@ -50,8 +50,7 @@ export function ResearchPrompt() {
   return (
     <motion.div initial="hidden" animate="visible" variants={fadeUp} className="flex flex-col gap-8">
       <div className="max-w-2xl">
-        <p className="text-label uppercase text-muted-foreground">Research</p>
-        <h1 className="mt-1 font-display text-display">Ask your knowledge base</h1>
+        <h1 className="font-display text-display">Ask your knowledge base</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           AIKDAP retrieves, reranks and grounds every answer in your own documents — and declines
           to answer when the evidence isn't there.
@@ -59,7 +58,6 @@ export function ResearchPrompt() {
       </div>
 
       <Card className="overflow-hidden">
-        <div className="h-1 w-full bg-gradient-to-r from-primary via-ai to-primary/30" />
         <CardContent className="p-6">
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             <div className="flex flex-col gap-2">
@@ -102,7 +100,7 @@ export function ResearchPrompt() {
               </p>
             )}
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Sparkles className="h-3.5 w-3.5 text-ai" />
                 Answers are grounded in this project's documents only

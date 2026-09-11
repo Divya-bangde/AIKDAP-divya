@@ -67,7 +67,7 @@ export function ActiveWorkToast() {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: 48 }}
           transition={{ type: "spring", stiffness: 320, damping: 30 }}
-          className="fixed bottom-4 right-4 z-40 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-border bg-card/85 p-3 shadow-float backdrop-blur-md print:hidden"
+          className="fixed bottom-4 right-4 z-40 w-[min(22rem,calc(100vw-2rem))] rounded-card bg-card/85 p-3 shadow-float backdrop-blur-md print:hidden"
         >
           <div className="mb-2 flex items-center justify-between gap-3 px-1">
             <div className="flex items-center gap-2">

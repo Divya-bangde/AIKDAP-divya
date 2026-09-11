@@ -11,10 +11,11 @@
  * One palette, defined once here as HSL channel triplets and consumed
  * through Tailwind tokens — never as hardcoded colours in components.
  *
- * The aesthetic target is a technical intelligence console: calm,
- * layered, precise. Depth comes from three deliberate surface levels
- * plus hairline borders, not from glass or glow. Colour is used
- * sparingly so that when something IS coloured, it means something.
+ * The aesthetic target follows Apple's bento language: modular,
+ * borderless cards with large radii floating on a light-gray canvas.
+ * Depth comes from soft, highly diffused shadows, and whitespace does
+ * the separating that divider lines used to. Colour is used sparingly
+ * so that when something IS coloured, it means something.
  *
  * Accessibility note (do not regress): `--success` and `--warning`
  * were darkened in Sprint 9K.1 after axe-core measured the original
@@ -25,7 +26,7 @@
     /* Base canvas. Slightly cool and off-white rather than pure white,
      * so that white cards read as raised surfaces without needing a
      * heavy shadow. */
-    --background: 220 24% 97%;
+    --background: 225 14% 95.5%;
     --foreground: 222 47% 11%;
 
     /* Three surface levels, used consistently:
@@ -52,6 +53,12 @@
 
     --primary: 243 75% 59%;
     --primary-foreground: 0 0% 100%;
+
+    /* The brand mark's ink tile (`AikdapMark`). Deliberately absent from
+     * the dark theme: a logo keeps one colour everywhere. On a dark
+     * canvas the tile gets its edge from a rim, not a lighter fill. */
+    --brand-mark: 222 47% 11%;
+    --brand-mark-foreground: 0 0% 100%;
 
     --secondary: 220 18% 94%;
     --secondary-foreground: 222 47% 11%;
@@ -84,16 +91,27 @@
     --input: 220 16% 88%;
     --ring: 243 75% 59%;
 
-    --radius: 0.75rem;
+    --radius: 0.875rem;
 
-    /* Elevation is a theme concern, not a fixed constant: on a light
-     * canvas depth comes from soft dark shadows, on a dark canvas it
-     * comes from deeper, tighter shadows plus lighter surfaces. Defined
-     * here as whole shadow strings so Tailwind's `shadow-*` utilities
-     * resolve per theme rather than baking one theme's values in. */
-    --shadow-subtle: 0 1px 2px 0 hsl(222 47% 11% / 0.04), 0 1px 3px 0 hsl(222 47% 11% / 0.03);
-    --shadow-raised: 0 2px 4px -1px hsl(222 47% 11% / 0.05), 0 8px 16px -4px hsl(222 47% 11% / 0.06);
-    --shadow-float: 0 8px 24px -6px hsl(222 47% 11% / 0.12), 0 16px 48px -12px hsl(222 47% 11% / 0.10);
+    /* Elevation is a theme concern, not a fixed constant. With card
+     * borders gone, these shadows are what separate a white card from
+     * the gray canvas, so each pairs a tight contact shadow with a wide,
+     * very soft ambient one — the card reads as floating slightly, not
+     * as outlined. Defined as whole strings so Tailwind's `shadow-*`
+     * utilities resolve per theme. */
+    --shadow-subtle: 0 1px 2px hsl(222 30% 20% / 0.04), 0 6px 20px -6px hsl(222 30% 20% / 0.07);
+    --shadow-raised: 0 2px 6px hsl(222 30% 20% / 0.05), 0 18px 44px -14px hsl(222 30% 20% / 0.14);
+    --shadow-float: 0 4px 12px hsl(222 30% 20% / 0.06), 0 28px 70px -18px hsl(222 30% 20% / 0.2);
+
+    /* A spring in CSS: `linear()` samples a damped oscillation (about
+     * 16% overshoot), so a released press settles with a small bounce.
+     * Browsers without `linear()` treat the declaration as invalid and
+     * fall back to `ease`. */
+    --ease-spring: linear(
+      0, 0.009, 0.035 2.1%, 0.141, 0.281 6.7%, 0.723 12.9%, 0.938 16.7%, 1.017, 1.077, 1.121,
+      1.149 24.3%, 1.159, 1.163, 1.161, 1.154 29.9%, 1.129 32.8%, 1.051 39.6%, 1.017 43.1%,
+      0.991, 0.977 51%, 0.974 53.8%, 0.975 57.1%, 0.997 69.8%, 1.003 76.9%, 1.004 83.8%, 1
+    );
   }
 
   /* Dark theme.
@@ -109,48 +127,55 @@
    * indigo = selection/navigation, cyan = active model processing,
    * green = completed, amber = warning, red = error. Cyan is never
    * used for "selected" or "done". */
-  .dark {
-    --background: 224 47% 5%;
-    --foreground: 210 25% 96%;
+  /* Screen only: paper is white, so print always takes the light
+   * palette — otherwise a dark-theme PDF export is pale text on white. */
+  @media screen {
+    .dark {
+      --background: 224 47% 5%;
+      --foreground: 210 25% 96%;
 
-    --card: 223 42% 8%;
-    --card-foreground: 210 25% 96%;
-    --elevated: 222 38% 11%;
-    --sunken: 225 45% 6.5%;
+      --card: 223 42% 8%;
+      --card-foreground: 210 25% 96%;
+      --elevated: 222 38% 11%;
+      --sunken: 225 45% 6.5%;
 
-    --primary: 243 80% 70%;
-    --primary-foreground: 224 47% 6%;
+      --primary: 243 80% 70%;
+      --primary-foreground: 224 47% 6%;
 
-    --secondary: 222 26% 15%;
-    --secondary-foreground: 210 25% 96%;
+      --secondary: 222 26% 15%;
+      --secondary-foreground: 210 25% 96%;
 
-    --muted: 222 26% 15%;
-    --muted-foreground: 218 14% 68%;
+      --muted: 222 26% 15%;
+      --muted-foreground: 218 14% 68%;
 
-    --accent: 243 38% 19%;
-    --accent-foreground: 236 92% 88%;
+      --accent: 243 38% 19%;
+      --accent-foreground: 236 92% 88%;
 
-    --ai: 187 88% 56%;
-    --ai-foreground: 224 47% 6%;
-    --ai-soft: 190 62% 13%;
+      --ai: 187 88% 56%;
+      --ai-foreground: 224 47% 6%;
+      --ai-soft: 190 62% 13%;
 
-    --success: 152 52% 48%;
-    --success-foreground: 224 47% 6%;
+      --success: 152 52% 48%;
+      --success-foreground: 224 47% 6%;
 
-    --warning: 38 92% 58%;
-    --warning-foreground: 224 47% 6%;
+      --warning: 38 92% 58%;
+      --warning-foreground: 224 47% 6%;
 
-    --destructive: 0 72% 62%;
-    --destructive-foreground: 224 47% 6%;
+      --destructive: 0 72% 62%;
+      --destructive-foreground: 224 47% 6%;
 
-    --border: 222 24% 16%;
-    --border-strong: 222 20% 27%;
-    --input: 222 24% 19%;
-    --ring: 243 80% 70%;
+      --border: 222 24% 16%;
+      --border-strong: 222 20% 27%;
+      --input: 222 24% 19%;
+      --ring: 243 80% 70%;
 
-    --shadow-subtle: 0 1px 2px 0 hsl(224 60% 2% / 0.5), 0 1px 3px 0 hsl(224 60% 2% / 0.4);
-    --shadow-raised: 0 2px 6px -1px hsl(224 60% 2% / 0.6), 0 10px 20px -6px hsl(224 60% 2% / 0.55);
-    --shadow-float: 0 10px 30px -8px hsl(224 60% 2% / 0.75), 0 20px 60px -16px hsl(224 60% 2% / 0.65);
+      /* On a near-black canvas a shadow alone cannot separate a surface,
+       * so each level carries a faint 1px edge (a spread-only shadow, not
+       * a border) above its ambient shadow. */
+      --shadow-subtle: 0 0 0 1px hsl(222 24% 14%), 0 8px 24px -12px hsl(224 60% 2% / 0.7);
+      --shadow-raised: 0 0 0 1px hsl(222 24% 17%), 0 16px 40px -12px hsl(224 60% 2% / 0.75);
+      --shadow-float: 0 0 0 1px hsl(222 24% 18%), 0 24px 64px -16px hsl(224 60% 2% / 0.8);
+    }
   }
 
   * {
@@ -175,18 +200,13 @@
 
   body {
     @apply bg-background font-sans text-foreground antialiased;
-    /* Inter's alternate glyph set: single-storey `a` off, straight-tail
-     * `l`, open `4`, single-storey `g`. These are the forms that keep
-     * `l` and `1` distinguishable in chunk ids and model names — a
-     * legibility choice, not a stylistic one. */
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     text-rendering: optimizeLegibility;
+    caret-color: hsl(var(--primary));
+    scrollbar-color: hsl(var(--border-strong)) transparent;
   }
 
-  /* The display face is applied by role, never globally. Anything set
-   * in it is brand voice; everything else is interface. */
-  .font-display {
-    font-feature-settings: normal;
+  ::selection {
+    background-color: hsl(var(--primary) / 0.18);
   }
 
   /* Every measurement in this product (scores, ranks, counts, latency)
@@ -195,6 +215,36 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+
+  /* Icon stroke follows the weight of the text around it, the way SF
+   * Symbols match their label: each weight class sets a custom property
+   * that inherits down to any icon inside it (applied by `.lucide`
+   * below). */
+  .font-normal {
+    --icon-stroke: 1.5;
+  }
+
+  .font-medium {
+    --icon-stroke: 1.75;
+  }
+
+  .font-semibold,
+  .text-section,
+  .text-title,
+  .text-display {
+    --icon-stroke: 2;
+  }
+
+  .font-bold {
+    --icon-stroke: 2.25;
+  }
+}
+
+/* Deliberately outside `@layer`: Tailwind drops layered rules whose class
+ * never appears in source, and lucide-react adds `.lucide` only at
+ * runtime. CSS `stroke-width` overrides lucide's presentation attribute. */
+.lucide {
+  stroke-width: var(--icon-stroke, 1.75);
 }
 
 @layer components {
@@ -221,19 +271,27 @@
    * and this component class have equal specificity and source order
    * decides — utilities are emitted last and would win, restoring the
    * transform-less property list this class exists to fix. */
+  /* Colour responds in 150ms; transform gets its own spring. Pressing
+   * in is a quick 100ms ease-out (feedback lands with the finger);
+   * releasing hands back to the base rule, so the control springs back
+   * with a small overshoot rather than snapping. */
   .press {
-    @apply transition-[color,background-color,border-color,box-shadow,opacity,transform] duration-150 ease-out;
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+    transition-duration: 150ms, 150ms, 150ms, 200ms, 150ms, 500ms;
+    transition-timing-function: ease-out, ease-out, ease-out, ease-out, ease-out, var(--ease-spring);
   }
 
   .press:active:not(:disabled):not([aria-disabled="true"]) {
-    @apply scale-[0.97] duration-100;
+    transform: scale(0.97);
+    transition-duration: 150ms, 150ms, 150ms, 200ms, 150ms, 100ms;
+    transition-timing-function: ease-out;
   }
 
   /* The press is a pointer affordance. Under reduced motion the colour
    * and shadow response still fires; only the travel is dropped. */
   @media (prefers-reduced-motion: reduce) {
     .press:active:not(:disabled):not([aria-disabled="true"]) {
-      @apply scale-100;
+      transform: none;
     }
   }
 
@@ -285,39 +343,21 @@
     );
   }
 
-  /* The shell's background texture: a very low-contrast grid that
-   * gives large empty areas some structure without becoming a visible
-   * pattern. Pure CSS — no image, no canvas, no runtime cost.
-   *
-   * The fade is a top-to-bottom linear mask rather than a radial one:
-   * a radial ellipse sized in percentages produces a visible elliptical
-   * seam on wide or tall containers (it did, on both the login panel
-   * and the dashboard, in the Sprint 9K.2 browser pass). A linear fade
-   * has no edge to notice at any aspect ratio. */
-  .app-grid-surface {
-    background-image:
-      linear-gradient(to right, hsl(var(--border) / 0.45) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(var(--border) / 0.45) 1px, transparent 1px);
-    background-size: 44px 44px;
-    -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 55%);
-    mask-image: linear-gradient(to bottom, #000 0%, transparent 55%);
-  }
-
   /* ---- Cinematic entry (Sprint 9K.3) --------------------------------
    *
-   * These three classes belong to the landing page only. They are
-   * deliberately heavier than anything in the application shell: the
-   * entry screen is a brand moment and is allowed presence the working
-   * UI is not. All are pure CSS/SVG — no canvas, no WebGL, no runtime
-   * cost beyond compositing. */
+   * Built for the landing page, and also the backdrop behind the
+   * sign-in screen and the application shell (via `EntryBackdrop`), so
+   * every page sits on one continuous surface. The vignette stays
+   * landing-only. All are pure CSS/SVG — no canvas, no WebGL, no
+   * runtime cost beyond compositing. */
 
   /* A fine structural grid, fading out toward the edges so it reads as
    * depth rather than as wallpaper. */
   .landing-grid {
     background-image:
-      linear-gradient(to right, hsl(var(--foreground) / 0.055) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(var(--foreground) / 0.055) 1px, transparent 1px);
-    background-size: 64px 64px;
+      linear-gradient(to right, hsl(var(--foreground) / 0.02) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--foreground) / 0.02) 1px, transparent 1px);
+    background-size: 20px 20px;
     -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 45%, #000 20%, transparent 78%);
     mask-image: radial-gradient(ellipse 90% 70% at 50% 45%, #000 20%, transparent 78%);
   }
@@ -604,5 +644,37 @@
   :focus-visible {
     outline: 2px solid hsl(var(--foreground));
     outline-offset: 2px;
+  }
+}
+
+/* Print — which is also "Export → PDF": the browser's print dialog,
+ * saved as PDF. The page prints as a document: the light palette
+ * whatever the screen theme (the dark tokens are screen-only, above),
+ * no elevation, and no block split across a page break. Chrome and
+ * controls opt out with `print:hidden`, the shared `Button` and
+ * `TabsList` included — actions and navigation mean nothing on paper. */
+@media print {
+  @page {
+    margin: 16mm;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  figure,
+  pre,
+  table,
+  li {
+    break-inside: avoid;
+  }
+
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
   }
 }

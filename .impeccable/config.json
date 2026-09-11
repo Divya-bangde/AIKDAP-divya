@@ -38,6 +38,27 @@
         ],
         "createdAt": "2026-09-04T17:44:55.716Z",
         "reason": "matches AIKDAP's existing shipped typeface, see frontend/src/styles/fonts.css"
+      },
+      {
+        "rule": "overused-font",
+        "value": "geist",
+        "createdAt": "2026-09-11T19:34:53.796Z",
+        "reason": "user requested Geist by Vercel in chat and approved Geist for every role (option 1)"
+      },
+      {
+        "rule": "overused-font",
+        "value": "geist mono",
+        "createdAt": "2026-09-11T19:34:53.869Z",
+        "reason": "companion to the user-requested Geist family, used only for data values (model ids, scores); part of the approved font plan"
+      },
+      {
+        "rule": "codex-grid-background",
+        "value": "*",
+        "files": [
+          "frontend/src/index.css"
+        ],
+        "createdAt": "2026-09-11T20:43:21.797Z",
+        "reason": "user confirmed: asked for the landing page's grid backdrop across the app in both themes (2026-09-12)"
       }
     ]
   }

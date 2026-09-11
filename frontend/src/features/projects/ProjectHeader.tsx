@@ -89,8 +89,8 @@ export function ProjectHeader({
   const ids = projectLayoutIds(project.id);
 
   return (
-    <div className="flex flex-col gap-4 border-b border-border pb-6">
-      <div className="flex items-start justify-between gap-4">
+    <div className="flex flex-col gap-4 pb-2">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-4">
           {/* Shares `layoutId` with the project card on /projects, so
            * arriving here animates that card's icon and title into
@@ -120,7 +120,7 @@ export function ProjectHeader({
             </p>
           </div>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
           <Button onClick={startResearch}>
             <Search className="h-4 w-4" />
             Start Research
@@ -148,9 +148,9 @@ export function ProjectHeader({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
               transition={{ type: "spring", stiffness: 380, damping: 30 }}
-              className="pointer-events-auto w-full max-w-md overflow-hidden rounded-xl border border-warning/50 bg-card shadow-float"
+              className="pointer-events-auto w-full max-w-md overflow-hidden rounded-card bg-card shadow-float"
             >
-              <div className="flex items-start gap-3 bg-warning/15 p-4">
+              <div className="flex items-start gap-3 bg-warning/15 p-5">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground">{warning.message}</p>

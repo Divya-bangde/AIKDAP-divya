@@ -50,7 +50,7 @@ export function FollowUpPrompt({ runId, projectId }: { runId: string; projectId:
   }
 
   return (
-    <Card>
+    <Card className="print:hidden">
       <CardContent className="p-5">
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <Label htmlFor={fieldId}>Ask a follow-up</Label>

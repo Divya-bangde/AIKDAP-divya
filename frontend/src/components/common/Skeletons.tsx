@@ -50,11 +50,11 @@ function Loading({ label, heading }: { label: string; heading?: string }) {
 }
 
 /** Mirrors `ProjectCard` — icon tile, badge, title, two description
- * lines, a stat row, and the bordered footer. */
+ * lines, a stat row, and the footer. */
 export function ProjectCardSkeleton() {
   return (
     <Card aria-hidden="true" className="h-full">
-      <CardContent className="flex h-full flex-col gap-4 p-5">
+      <CardContent className="flex h-full flex-col gap-4 p-6">
         <div className="flex items-start justify-between gap-3">
           <Skeleton className="h-10 w-10 rounded-lg" />
           <Skeleton className="h-5 w-16 rounded-full" />
@@ -68,7 +68,7 @@ export function ProjectCardSkeleton() {
           <Skeleton className="h-3 w-24" />
           <Skeleton className="h-3 w-28" />
         </div>
-        <div className="flex items-center justify-between border-t border-border pt-3">
+        <div className="flex items-center justify-between pt-1">
           <Skeleton className="h-3 w-20" />
           <Skeleton className="h-3 w-24" />
         </div>
@@ -98,7 +98,7 @@ export function ProjectWorkspaceSkeleton() {
     <>
       <Loading label="Loading project workspace" heading="Project workspace" />
       <div aria-hidden="true" className="flex flex-col gap-8">
-        <div className="flex flex-col gap-4 border-b border-border pb-6">
+        <div className="flex flex-col gap-4 pb-2">
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 items-start gap-4">
               <Skeleton className="h-12 w-12 rounded-xl" />
@@ -113,16 +113,16 @@ export function ProjectWorkspaceSkeleton() {
         </div>
 
         <div className="flex flex-col gap-6">
-          <div className="flex gap-1 border-b border-border pb-2.5">
-            <Skeleton className="h-5 w-20" />
-            <Skeleton className="h-5 w-24" />
-            <Skeleton className="h-5 w-20" />
+          <div className="flex w-fit gap-1 rounded-full bg-secondary p-1">
+            <Skeleton className="h-8 w-24 rounded-full" />
+            <Skeleton className="h-8 w-28 rounded-full" />
+            <Skeleton className="h-8 w-24 rounded-full" />
           </div>
           <div>
             <Skeleton className="mb-3 h-4 w-32" />
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               {[0, 1, 2, 3].map((i) => (
-                <div key={i} className="rounded-lg border border-border bg-sunken p-4">
+                <div key={i} className="rounded-card bg-card p-6 shadow-subtle">
                   <Skeleton className="h-2.5 w-16" />
                   <Skeleton className="mt-2.5 h-7 w-10" />
                   <Skeleton className="mt-2 h-2 w-14" />
@@ -180,7 +180,7 @@ export function ResearchRunSkeleton() {
       <Loading label="Loading research run" heading="Research run" />
       <div aria-hidden="true" className="flex flex-col gap-6">
         <Card className="overflow-hidden">
-          <div className="flex flex-col gap-3 border-b border-border bg-sunken/50 p-6">
+          <div className="flex flex-col gap-3 p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <Skeleton className="h-2.5 w-28" />
@@ -189,7 +189,7 @@ export function ResearchRunSkeleton() {
               <Skeleton className="h-5 w-24 shrink-0 rounded-full" />
             </div>
           </div>
-          <CardContent className="pt-6">
+          <CardContent>
             <Skeleton className="mb-5 h-2.5 w-36" />
             <ol className="flex flex-col">
               {[0, 1, 2, 3].map((i, index, all) => (

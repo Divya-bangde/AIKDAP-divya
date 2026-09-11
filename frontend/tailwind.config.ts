@@ -72,36 +72,21 @@ export default {
         },
       },
       borderRadius: {
+        // Bento surfaces — cards, dialogs, floating panels. Deliberately
+        // its own token rather than `--radius`, which sizes controls:
+        // a 24px button or input reads as a toy.
+        card: "1.5rem",
         lg: "var(--radius)",
         md: "calc(var(--radius) - 4px)",
         sm: "calc(var(--radius) - 8px)",
       },
       fontFamily: {
-        // Interface and prose. Inter is chosen because it disappears —
-        // at 12–14px, next to scores and chunk ids, legibility beats
-        // personality.
-        sans: [
-          "Inter Variable",
-          "ui-sans-serif",
-          "system-ui",
-          "-apple-system",
-          "Segoe UI",
-          "sans-serif",
-        ],
-        // Display. Space Grotesk carries the brand at large sizes; it
-        // is deliberately NOT the body face, because its character
-        // becomes noise below ~20px.
-        display: [
-          "Space Grotesk Variable",
-          "Inter Variable",
-          "ui-sans-serif",
-          "system-ui",
-          "sans-serif",
-        ],
-        // System mono only — no webfont download. Used for machine
-        // values (model ids, chunk references, scores) so they read as
-        // data rather than prose.
-        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
+        // One family for every role (see `styles/fonts.css`). `display`
+        // stays a separate key so large type keeps a role marker, even
+        // though it resolves to the same face.
+        sans: ["Geist Variable", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        display: ["Geist Variable", "ui-sans-serif", "system-ui", "-apple-system", "sans-serif"],
+        mono: ["Geist Mono Variable", "ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
       },
       fontSize: {
         /* A hierarchy, not a size ramp (Sprint 9K.4).
@@ -119,7 +104,7 @@ export default {
          * are unchanged in role from 9K.2. */
         hero: [
           "clamp(3.5rem, 11vw, 8rem)",
-          { lineHeight: "0.88", letterSpacing: "-0.045em", fontWeight: "500" },
+          { lineHeight: "0.88", letterSpacing: "-0.04em", fontWeight: "500" },
         ],
         editorial: [
           "clamp(2.25rem, 5.6vw, 4rem)",
@@ -141,10 +126,17 @@ export default {
         // marketing page is different from scanning posture in a tool.
         lede: ["clamp(1rem, 1.35vw, 1.1875rem)", { lineHeight: "1.62", letterSpacing: "-0.008em" }],
 
-        display: ["2.5rem", { lineHeight: "1.1", letterSpacing: "-0.03em", fontWeight: "600" }],
-        title: ["1.5rem", { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "600" }],
-        section: ["1rem", { lineHeight: "1.35", letterSpacing: "-0.01em", fontWeight: "600" }],
-        label: ["0.6875rem", { lineHeight: "1.2", letterSpacing: "0.08em", fontWeight: "600" }],
+        // The application's scale. Headlines are heavy and tight; the
+        // two body sizes below are loose and slightly open, so the
+        // contrast between a heading and its copy is stark.
+        display: ["2.75rem", { lineHeight: "1.05", letterSpacing: "-0.035em", fontWeight: "700" }],
+        title: ["1.625rem", { lineHeight: "1.15", letterSpacing: "-0.025em", fontWeight: "650" }],
+        section: ["1.0625rem", { lineHeight: "1.35", letterSpacing: "-0.015em", fontWeight: "600" }],
+        // 12px floor: Geist is less hinted than Inter, and 11px went soft
+        // on 1080p Windows displays.
+        label: ["0.75rem", { lineHeight: "1.25", letterSpacing: "0.05em", fontWeight: "600" }],
+        sm: ["0.875rem", { lineHeight: "1.375rem", letterSpacing: "0.005em" }],
+        xs: ["0.75rem", { lineHeight: "1.125rem", letterSpacing: "0.01em" }],
         // Section markers on the entry experience ("01 / THE PROBLEM").
         // Very wide tracking is what makes small uppercase read as a
         // deliberate index rather than as shouting.

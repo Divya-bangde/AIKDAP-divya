@@ -56,17 +56,20 @@ export const fastTransition: Transition = { duration: duration.fast, ease };
  * Three numbers describing a physics model are not readable; two
  * describing the felt result are.
  *
- * `bounce: 0` everywhere is deliberate. Overshoot is only honest when
- * a gesture carried momentum into the animation — a flick or a throw.
- * This product has no drag interactions at all, so nothing here ever
- * arrives with momentum, and bounce would be decoration pretending to
- * be physics. */
+ * Surfaces that move by themselves — drawers, dialogs, layout
+ * transitions — stay critically damped (`bounce: 0`): nothing pushed
+ * them, so overshoot would read as a glitch. Direct touch is the
+ * exception: a card under the pointer or a press being released gets a
+ * small bounce, so the response feels physical rather than timed. */
 
 /** The default: critically damped, no overshoot. */
 export const spring: Transition = { type: "spring", bounce: 0, duration: 0.35 };
 
 /** Same shape, for small or frequently repeated state changes. */
 export const springFast: Transition = { type: "spring", bounce: 0, duration: 0.25 };
+
+/** Direct-touch feedback: hover and press on cards and tiles. */
+export const springTouch: Transition = { type: "spring", bounce: 0.35, duration: 0.4 };
 
 /** Shared-layout spring, used for the project card → workspace
  * transition and the active-nav indicator. Spring rather than duration
@@ -235,13 +238,14 @@ export const statusChange: Variants = {
 /** Standard interactive feedback for cards and tiles. Applied via
  * `whileHover`/`whileTap` so it never affects layout. */
 export const hoverLift = {
-  whileHover: { y: -2, transition: fastTransition },
+  whileHover: { y: -3, transition: springTouch },
   /* Press reads at 0.97, not 0.995. Half a percent is arithmetic, not
    * feedback — it was below the threshold where anyone could see it,
    * which made every card in the product feel dead on touch. Motion
    * applies `whileTap` on pointer-DOWN, so the response lands with the
    * press rather than waiting for the release to be classified as a
-   * click. 100ms out, matching the buttons. */
+   * click. 100ms out, matching the buttons; the release springs back
+   * on `whileHover`'s `springTouch`. */
   whileTap: { y: 0, scale: 0.97, transition: { duration: 0.1, ease: "easeOut" } },
   /* Motion gives any element carrying `whileTap` a `tabIndex` of 0, on
    * the reasonable assumption that a thing with press feedback is a

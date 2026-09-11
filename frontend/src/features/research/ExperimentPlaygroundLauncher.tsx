@@ -91,7 +91,7 @@ export function ExperimentPlaygroundLauncher({ asset }: { asset: AssetRead }) {
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         {hasUnderstanding && (
-          <div className="rounded-md border border-border bg-sunken p-3">
+          <div className="rounded-md bg-sunken p-3">
             <p className="text-sm text-muted-foreground">
               Build a reviewable experiment plan from this document's stored research
               understanding -- variables, equations, and evaluation metrics it already found.

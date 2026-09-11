@@ -175,6 +175,6 @@ describe("ResearchRunView polling (Phase 19)", () => {
       ),
     ).toBeInTheDocument();
     // A failed run must never render the success result card.
-    expect(screen.queryByText("Research Result")).not.toBeInTheDocument();
+    expect(screen.queryByText("Grounded Intelligence")).not.toBeInTheDocument();
   });
 });

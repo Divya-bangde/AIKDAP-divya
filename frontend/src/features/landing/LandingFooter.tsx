@@ -121,7 +121,7 @@ export function LandingFooter() {
             {STACK.map((item) => (
               <li
                 key={item}
-                className="rounded-md border border-border/70 px-2 py-1 font-mono text-[11px] text-muted-foreground"
+                className="rounded-md border border-border/70 px-2 py-1 font-mono text-xs text-muted-foreground"
               >
                 {item}
               </li>

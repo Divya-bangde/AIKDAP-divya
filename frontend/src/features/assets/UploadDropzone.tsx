@@ -85,7 +85,7 @@ export function UploadDropzone({ projectId }: { projectId: string }) {
   const uploadCount = uploadMutation.variables?.length ?? 0;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2 print:hidden">
       {/* No role/tabIndex/onClick on this wrapper: a native file input
        * nested inside a role="button" element is a real nested-interactive
        * violation (confirmed live with axe-core -- a negative tabindex or

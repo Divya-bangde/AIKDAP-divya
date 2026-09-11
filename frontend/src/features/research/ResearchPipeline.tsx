@@ -61,7 +61,7 @@ const LABEL_STYLE: Record<string, string> = {
 export function ResearchPipeline({ steps }: { steps: ResearchStepRead[] }) {
   if (steps.length === 0) {
     return (
-      <div className="flex items-center gap-3 rounded-lg border border-border bg-sunken p-4">
+      <div className="flex items-center gap-3 rounded-lg bg-sunken p-4">
         <Loader2 className="h-4 w-4 animate-spin text-ai" />
         <p className="text-sm text-muted-foreground">Waiting for the pipeline to start…</p>
       </div>
@@ -116,7 +116,7 @@ export function ResearchPipeline({ steps }: { steps: ResearchStepRead[] }) {
                   <p className="text-sm font-medium leading-tight">{presentation.title}</p>
                   <div className="flex items-center gap-3">
                     {step.duration_ms !== null && step.duration_ms !== undefined && (
-                      <span className="tabular font-mono text-[10px] text-muted-foreground">
+                      <span className="tabular font-mono text-xs text-muted-foreground">
                         {step.duration_ms} ms
                       </span>
                     )}
@@ -151,8 +151,8 @@ export function ResearchPipeline({ steps }: { steps: ResearchStepRead[] }) {
                 )}
 
                 <TechnicalDetails id={step.id} className="mt-2.5">
-                  <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-sunken p-3">
-                    <p className="font-mono text-[11px] text-muted-foreground">
+                  <div className="flex flex-col gap-2.5 rounded-lg bg-sunken p-3">
+                    <p className="font-mono text-xs text-muted-foreground">
                       {step.node_name} · {step.title}
                     </p>
 
@@ -167,12 +167,12 @@ export function ResearchPipeline({ steps }: { steps: ResearchStepRead[] }) {
                             key={metric.label}
                             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1"
                           >
-                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            <span className="text-xs uppercase tracking-wide text-muted-foreground">
                               {metric.label}
                             </span>
                             <span
                               className={cn(
-                                "text-[11px] font-medium text-foreground",
+                                "text-xs font-medium text-foreground",
                                 metric.mono ? "font-mono" : "tabular",
                               )}
                             >

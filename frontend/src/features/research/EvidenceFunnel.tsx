@@ -43,15 +43,15 @@ export function EvidenceFunnel({
       <CardContent className="p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-ai" />
+            <Filter className="h-4 w-4 text-muted-foreground" />
             <h3 className="text-section">Evidence funnel</h3>
           </div>
           {threshold !== undefined && (
-            <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-sunken px-2 py-1">
-              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-sunken px-2 py-1">
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">
                 Relevance threshold
               </span>
-              <span className="tabular text-[11px] font-medium">{threshold}</span>
+              <span className="tabular text-xs font-medium">{threshold}</span>
             </span>
           )}
         </div>
@@ -66,12 +66,12 @@ export function EvidenceFunnel({
             <motion.li key={stage.label} variants={staggerItem} className="flex items-center gap-3">
               <div className="w-36 shrink-0">
                 <p className="text-xs font-medium leading-tight">{stage.label}</p>
-                <p className="truncate text-[10px] leading-tight text-muted-foreground">
+                <p className="truncate text-xs leading-tight text-muted-foreground">
                   {stage.detail}
                 </p>
               </div>
 
-              <div className="h-7 flex-1 overflow-hidden rounded-md border border-border bg-sunken">
+              <div className="h-7 flex-1 overflow-hidden rounded-md bg-sunken">
                 {/* Driven by an inline transform + CSS transition rather
                  * than a Motion animation. This element is a leaf inside
                  * a variant-driven stagger tree, where a child's own
@@ -100,7 +100,7 @@ export function EvidenceFunnel({
         </motion.ol>
 
         {withheld !== undefined && withheld > 0 && (
-          <p className="mt-4 border-t border-border pt-3 text-xs text-muted-foreground">
+          <p className="mt-5 text-xs text-muted-foreground">
             <span className="font-medium text-warning">{withheld} simulated reference(s)</span>{" "}
             were retrieved but withheld from synthesis — they are placeholders from the mock web
             provider and contain no facts to ground an answer in.

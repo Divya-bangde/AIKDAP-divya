@@ -19,19 +19,12 @@ interface SummaryCardProps {
   tone?: "default" | "ai" | "success";
 }
 
+/** Icons stay monochrome unless the colour means something: only
+ * "success" (grounded, cited answers) earns its green. */
 const TONE: Record<string, string> = {
-  default: "bg-accent text-accent-foreground",
-  ai: "bg-ai-soft text-ai",
+  default: "bg-secondary text-foreground",
+  ai: "bg-secondary text-foreground",
   success: "bg-success/10 text-success",
-};
-
-/** A hairline of the tile's own tone across its top edge — enough to
- * differentiate the four tiles at a glance without colouring whole
- * cards, which would make the dashboard read as a traffic light. */
-const TONE_RULE: Record<string, string> = {
-  default: "bg-primary/50",
-  ai: "bg-ai/60",
-  success: "bg-success/60",
 };
 
 /** A command-centre metric tile. Renders "Unavailable" rather than a
@@ -54,11 +47,10 @@ export function SummaryCard({
      * a different surface rather than a taller one. */
     <motion.div {...hoverLift} className="h-full">
       <Card className="flex h-full flex-col overflow-hidden transition-shadow duration-200 hover:shadow-raised">
-        <span aria-hidden="true" className={cn("h-0.5 w-full", TONE_RULE[tone])} />
-        <CardContent className="flex flex-1 items-start gap-4 p-5">
+        <CardContent className="flex flex-1 items-start gap-4 p-6">
           <div
             className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
               TONE[tone],
             )}
           >

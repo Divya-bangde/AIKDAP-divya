@@ -48,7 +48,7 @@ export function DocumentAnalysisPanel({ asset }: { asset: AssetRead }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {!localUnderstanding ? (
-          <div className="flex flex-col gap-3 rounded-lg border border-border bg-sunken p-4">
+          <div className="flex flex-col gap-3 rounded-lg bg-sunken p-4">
             <p className="text-sm text-muted-foreground">
               Define a research goal to analyze this document for gaps and conflicts.
             </p>

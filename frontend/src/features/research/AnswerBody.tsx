@@ -38,7 +38,7 @@ function inlineNodes(
           type="button"
           onClick={() => onSelect(match.citation, match.index)}
           aria-label={`View evidence for citation ${marker[1]}`}
-          className="mx-0.5 inline-flex h-5 translate-y-[1px] items-center rounded border border-accent-foreground/20 bg-accent px-1.5 align-baseline font-mono text-[11px] font-semibold text-accent-foreground transition-colors hover:border-primary hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="mx-0.5 inline-flex h-5 translate-y-[1px] items-center rounded border border-accent-foreground/20 bg-accent px-1.5 align-baseline font-mono text-xs font-semibold text-accent-foreground transition-colors hover:border-primary hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {marker[1]}
         </button>

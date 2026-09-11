@@ -97,7 +97,7 @@ export function EvidenceGapPanel({
             {gaps.map((gap: ResearchGap, index: number) => (
               <li
                 key={index}
-                className="flex flex-col gap-1 rounded-lg border border-border bg-sunken p-3"
+                className="flex flex-col gap-1 rounded-lg bg-sunken p-3"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge domain="gapClassification" value={gap.classification} />
@@ -116,7 +116,7 @@ export function EvidenceGapPanel({
           />
         )}
 
-        <div className="flex flex-col gap-3 border-t border-border pt-4">
+        <div className="flex flex-col gap-3 pt-2">
           {!unsourcedMutation.data && (
             <Button
               type="button"

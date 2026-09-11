@@ -31,7 +31,7 @@ export function AiProfilePanel({ asset }: { asset: AssetRead }) {
       </CardHeader>
 
       <CardContent className="flex flex-col gap-5">
-        <div className="rounded-lg border border-border bg-sunken p-4">
+        <div className="rounded-lg bg-sunken p-4">
           <p className="mb-3 text-label uppercase text-muted-foreground">Ingestion pipeline</p>
           <ProcessingTimeline asset={asset} />
         </div>
@@ -115,7 +115,7 @@ export function AiProfilePanel({ asset }: { asset: AssetRead }) {
 
             <motion.div
               variants={staggerItem}
-              className="grid grid-cols-2 gap-4 border-t border-border pt-4 sm:grid-cols-3"
+              className="grid grid-cols-2 gap-4 pt-3 sm:grid-cols-3"
             >
               <Field label="Language">
                 <p className="text-sm">{profile.language ?? "Not provided"}</p>

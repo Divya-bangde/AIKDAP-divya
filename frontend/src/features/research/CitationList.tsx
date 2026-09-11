@@ -47,7 +47,7 @@ export function CitationList({
                 onClick={() => onSelect(citation, index)}
                 className="group flex w-full items-start gap-3 rounded-lg border border-transparent p-3 text-left transition-all duration-200 hover:border-border hover:bg-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <span className="tabular mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent font-mono text-[11px] font-semibold text-accent-foreground">
+                <span className="tabular mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent font-mono text-xs font-semibold text-accent-foreground">
                   {citation.id ?? index + 1}
                 </span>
 
@@ -72,7 +72,7 @@ export function CitationList({
                     </span>
                   )}
 
-                  <span className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] text-muted-foreground">
+                  <span className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground">
                     {citation.retrieval_rank !== undefined && (
                       <span>Retrieval rank: {citation.retrieval_rank}</span>
                     )}

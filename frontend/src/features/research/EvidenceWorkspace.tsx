@@ -123,7 +123,7 @@ function EvidenceCard({
         {citation.title ?? citation.file_name ?? "Untitled source"}
       </p>
       {citation.reference && (
-        <p className="truncate font-mono text-[11px] text-muted-foreground" title={citation.reference}>
+        <p className="truncate font-mono text-xs text-muted-foreground" title={citation.reference}>
           {citation.reference}
         </p>
       )}
@@ -232,7 +232,7 @@ export function EvidenceWorkspace({
           {/* LEFT: the tree. */}
           <nav
             aria-label="Claim and evidence tree"
-            className="flex flex-col gap-0.5 overflow-y-auto rounded-lg border border-border bg-sunken p-1.5 lg:max-h-[32rem]"
+            className="flex flex-col gap-0.5 overflow-y-auto rounded-lg bg-sunken p-1.5 lg:max-h-[32rem]"
           >
             <TreeRow depth={0} icon={<MessageSquareQuote className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}>
               <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground" title={query}>
@@ -283,7 +283,7 @@ export function EvidenceWorkspace({
                               </span>
                             )}
                             {sharedWith.length > 0 && (
-                              <Badge variant="outline" className="text-[10px]">
+                              <Badge variant="outline" className="text-xs">
                                 also cited by claim {sharedWith.map((i) => i + 1).join(", ")}
                               </Badge>
                             )}
@@ -321,7 +321,7 @@ export function EvidenceWorkspace({
                 <div className="flex items-start justify-between gap-3">
                   <p className="text-sm font-medium leading-relaxed text-foreground">{active.claim_text}</p>
                   <span
-                    className="flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-medium text-muted-foreground"
+                    className="flex shrink-0 items-center gap-1 whitespace-nowrap text-xs font-medium text-muted-foreground"
                     title={
                       active.attributed_to_primary
                         ? "Attributed to the primary source"
@@ -357,7 +357,7 @@ export function EvidenceWorkspace({
                 )}
 
                 {active.reason && (
-                  <p className="rounded-md border border-border bg-sunken p-2.5 text-xs leading-relaxed text-muted-foreground">
+                  <p className="rounded-md bg-sunken p-2.5 text-xs leading-relaxed text-muted-foreground">
                     {active.reason}
                   </p>
                 )}

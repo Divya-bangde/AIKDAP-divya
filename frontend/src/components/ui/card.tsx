@@ -6,10 +6,12 @@ export const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
+  /* Borderless: the soft shadow separates the card from the canvas.
+   * Users who ask the OS for more contrast get the edge back. */
   <div
     ref={ref}
     className={cn(
-      "rounded-lg border border-border bg-card text-card-foreground shadow-subtle",
+      "rounded-card bg-card text-card-foreground shadow-subtle contrast-more:border contrast-more:border-border-strong",
       className,
     )}
     {...props}
